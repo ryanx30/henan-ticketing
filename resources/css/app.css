@@ -1,0 +1,37 @@
+@font-face {
+  font-family: "TT Commons";
+  src: url("/fonts/tt-commons/TTCommons-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "TT Commons";
+  src: url("/fonts/tt-commons/TTCommons-Medium.otf") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "TT Commons";
+  src: url("/fonts/tt-commons/TTCommons-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    html {
+        font-family: "TT Commons", ui-sans-serif, system-ui, sans-serif;
+    }
+
+    body {
+        font-family: "TT Commons", ui-sans-serif, system-ui, sans-serif;
+    }
+}
