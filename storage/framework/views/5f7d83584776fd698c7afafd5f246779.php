@@ -1,5 +1,14 @@
-<x-app-layout>
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+<?php if (isset($component)) { $__componentOriginal9ac128a9029c0e4701924bd2d73d7f54 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal9ac128a9029c0e4701924bd2d73d7f54 = $attributes; } ?>
+<?php $component = App\View\Components\AppLayout::resolve([] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('app-layout'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\App\View\Components\AppLayout::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes([]); ?>
+    <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
 
     <div
         x-data="dashboardItPage()"
@@ -10,19 +19,19 @@
 
         <div class="grid grid-cols-12 gap-6">
 
-            {{-- LEFT KPI COLUMN --}}
+            
             <div class="col-span-12 lg:col-span-3">
                 <div class="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
                     <div class="space-y-5">
 
-                        {{-- Total Tickets --}}
+                        
                         <div class="min-h-[132px] rounded-sm border border-slate-200 bg-white px-4 py-4 shadow-lg">
                             <div class="flex items-start justify-between gap-3">
                                 <div>
                                     <div class="text-[28px] font-bold leading-none text-slate-900" x-text="formatNumber(kpi.total.value)"></div>
                                     <div class="mt-1 text-[16px] text-slate-700">Total Tickets</div>
                                 </div>
-                                <img src="{{ asset('images/icons/total.png') }}" alt="Total Tickets" class="h-10 w-10 object-contain opacity-90" />
+                                <img src="<?php echo e(asset('images/icons/total.png')); ?>" alt="Total Tickets" class="h-10 w-10 object-contain opacity-90" />
                             </div>
 
                             <div class="mt-5 space-y-1.5 text-[16px] text-slate-700">
@@ -38,14 +47,14 @@
                             </div>
                         </div>
 
-                        {{-- New Tickets --}}
+                        
                         <div class="min-h-[132px] rounded-sm border border-slate-200 bg-white px-4 py-4 shadow-lg">
                             <div class="flex items-start justify-between">
                                 <div>
                                     <div class="text-[28px] font-bold leading-none text-slate-900" x-text="formatNumber(kpi.new.value)"></div>
                                     <div class="mt-1 text-[16px] text-slate-700">New Tickets</div>
                                 </div>
-                                <img src="{{ asset('images/icons/new.png') }}" alt="New Tickets" class="h-10 w-10 object-contain opacity-90" />
+                                <img src="<?php echo e(asset('images/icons/new.png')); ?>" alt="New Tickets" class="h-10 w-10 object-contain opacity-90" />
                             </div>
 
                             <div class="mt-5 space-y-1.5 text-[16px] text-slate-700">
@@ -60,14 +69,14 @@
                             </div>
                         </div>
 
-                        {{-- On Going --}}
+                        
                         <div class="min-h-[132px] rounded-sm border border-slate-200 bg-white px-4 py-4 shadow-lg">
                             <div class="flex items-start justify-between">
                                 <div>
                                     <div class="text-[28px] font-bold leading-none text-slate-900" x-text="formatNumber(kpi.in_progress.value)"></div>
                                     <div class="mt-1 text-[16px] text-slate-700">On Going</div>
                                 </div>
-                                <img src="{{ asset('images/icons/ongoing.png') }}" alt="On Going" class="h-10 w-10 object-contain opacity-90" />
+                                <img src="<?php echo e(asset('images/icons/ongoing.png')); ?>" alt="On Going" class="h-10 w-10 object-contain opacity-90" />
                             </div>
 
                             <div class="mt-5 space-y-1.5 text-[16px] text-slate-700">
@@ -82,14 +91,14 @@
                             </div>
                         </div>
 
-                        {{-- Resolved --}}
+                        
                         <div class="min-h-[132px] rounded-sm border border-slate-200 bg-white px-4 py-4 shadow-lg">
                             <div class="flex items-start justify-between">
                                 <div>
                                     <div class="text-[28px] font-bold leading-none text-slate-900" x-text="formatNumber(kpi.resolved.value)"></div>
                                     <div class="mt-1 text-[16px] text-slate-700">Resolved</div>
                                 </div>
-                                <img src="{{ asset('images/icons/resolved.png') }}" alt="Resolved" class="h-10 w-10 object-contain opacity-90" />
+                                <img src="<?php echo e(asset('images/icons/resolved.png')); ?>" alt="Resolved" class="h-10 w-10 object-contain opacity-90" />
                             </div>
 
                             <div class="mt-5 space-y-1.5 text-[16px] text-slate-700">
@@ -104,7 +113,7 @@
                             </div>
                         </div>
 
-                        {{-- SLA Risk --}}
+                        
                         <div class="overflow-hidden rounded-sm border border-slate-200 shadow-lg">
                             <div class="min-h-[74px] bg-red-600 px-4 py-4 text-white">
                                 <div class="flex items-start justify-between">
@@ -112,7 +121,7 @@
                                         <div class="text-[28px] font-bold leading-none" x-text="formatNumber(kpi.sla_risk.value)"></div>
                                         <div class="mt-1 text-[16px]">SLA Risk</div>
                                     </div>
-                                    <img src="{{ asset('images/icons/sla.png') }}" alt="SLA Risk" class="h-10 w-10 object-contain" />
+                                    <img src="<?php echo e(asset('images/icons/sla.png')); ?>" alt="SLA Risk" class="h-10 w-10 object-contain" />
                                 </div>
                             </div>
 
@@ -130,7 +139,7 @@
                     </div>
                 </div>
 
-                {{-- Status Legend --}}
+                
                 <div class="mt-3 rounded-md border border-slate-200 bg-white p-4 shadow-lg">
                     <div class="mb-3 text-sm font-semibold text-slate-800">Status Legend</div>
 
@@ -158,13 +167,13 @@
                 </div>
             </div>
 
-            {{-- RIGHT MAIN --}}
+            
             <div class="col-span-12 lg:col-span-9 space-y-6 bg-white rounded shadow p-4">
 
-                {{-- Top Cases + Chart --}}
+                
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-                    {{-- Top Cases Table --}}
+                    
                     <div class="bg-white rounded shadow overflow-hidden">
                         <div class="px-4 py-3 border-b bg-slate-50 font-semibold">
                             Top Cases (All Team)
@@ -206,7 +215,7 @@
                         </div>
                     </div>
 
-                    {{-- Trend Chart --}}
+                    
                     <div class="bg-white rounded shadow overflow-hidden">
                         <div class="px-4 py-3 border-b bg-slate-50 font-semibold">
                             Tickets Trend (Last 7 days)
@@ -224,11 +233,11 @@
                     </div>
                 </div>
 
-                {{-- My Queue --}}
+                
                 <div class="bg-white rounded shadow overflow-hidden">
                     <div class="px-4 py-3 flex items-center justify-between border-b bg-slate-50">
                         <div class="font-semibold">My Queue</div>
-                        <a href="{{ route('it.my-queue') }}" class="text-sm underline text-gray-600">Open</a>
+                        <a href="<?php echo e(route('it.my-queue')); ?>" class="text-sm underline text-gray-600">Open</a>
                     </div>
 
                     <div class="overflow-x-auto">
@@ -283,11 +292,11 @@
                     </div>
                 </div>
 
-                {{-- Team Queue (New) --}}
+                
                 <div class="bg-white rounded shadow overflow-hidden">
                     <div class="px-4 py-3 flex items-center justify-between border-b bg-slate-50">
                         <div class="font-semibold">Team Queue (New)</div>
-                        <a href="{{ route('it.team-queue') }}" class="text-sm underline text-gray-600">Open</a>
+                        <a href="<?php echo e(route('it.team-queue')); ?>" class="text-sm underline text-gray-600">Open</a>
                     </div>
 
                     <div class="overflow-x-auto">
@@ -719,4 +728,13 @@
             }
         }
     </script>
-</x-app-layout>
+ <?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal9ac128a9029c0e4701924bd2d73d7f54)): ?>
+<?php $attributes = $__attributesOriginal9ac128a9029c0e4701924bd2d73d7f54; ?>
+<?php unset($__attributesOriginal9ac128a9029c0e4701924bd2d73d7f54); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal9ac128a9029c0e4701924bd2d73d7f54)): ?>
+<?php $component = $__componentOriginal9ac128a9029c0e4701924bd2d73d7f54; ?>
+<?php unset($__componentOriginal9ac128a9029c0e4701924bd2d73d7f54); ?>
+<?php endif; ?><?php /**PATH C:\laragon\www\henan-ticketing\resources\views/dashboard-it.blade.php ENDPATH**/ ?>

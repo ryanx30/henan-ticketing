@@ -24,6 +24,16 @@ class Ticket extends Model
         'claimed_at',
         'resolved_at',
         'closed_at',
+
+        // Create ticket extended fields
+        'client_name',
+        'client_contact',
+        'client_email',
+        'platform_type',
+        'amount',
+        'flow_type',
+        'request_time',
+        'internal_notes',
     ];
 
     protected $casts = [
@@ -31,6 +41,7 @@ class Ticket extends Model
         'claimed_at' => 'datetime',
         'resolved_at' => 'datetime',
         'closed_at' => 'datetime',
+        'request_time' => 'datetime',
     ];
 
     public function creator()
@@ -51,5 +62,10 @@ class Ticket extends Model
     public function resolverMessages()
     {
         return $this->hasMany(\App\Models\ResolverMessage::class)->latest();
+    }
+
+    public function attachments()
+    {
+        return $this->hasMany(\App\Models\TicketAttachment::class)->latest();
     }
 }

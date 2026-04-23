@@ -39,8 +39,8 @@ class NavigationApiController extends BaseApiController
             [
                 'key' => 'case-analytics',
                 'label' => 'Case Analytics',
-                'href' => '#',
-                'active' => false,
+                'href' => route('case-analytics.index'),
+                'active' => request()->routeIs('case-analytics.index'),
                 'icon' => 'analytics',
                 'section' => 'top',
                 'show' => in_array($role, ['it', 'admin'], true),
@@ -93,8 +93,8 @@ class NavigationApiController extends BaseApiController
             [
                 'key' => 'reports',
                 'label' => 'Reports',
-                'href' => '#',
-                'active' => false,
+                'href' => route('reports.index'),
+                'active' => request()->routeIs('reports.index'),
                 'icon' => 'reports',
                 'section' => 'bottom',
                 'show' => true,

@@ -27,6 +27,18 @@ class TicketPageController extends Controller
         return view('tickets.create');
     }
 
+    // Render detail ticket page
+    public function show(Request $request, Ticket $ticket)
+    {
+        if (!in_array($request->user()->role, ['cs', 'it', 'admin'], true)) {
+            abort(403);
+        }
+
+        return view('tickets.detail', [
+            'ticketId' => $ticket->id,
+        ]);
+    }
+
     // Render edit/open ticket page
     public function edit(Request $request, Ticket $ticket)
     {

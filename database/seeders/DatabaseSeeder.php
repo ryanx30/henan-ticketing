@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\User;
+use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
@@ -12,16 +12,34 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // 1) Buat admin dari seeder khusus
-        $this->call(
+        // 1) Admin utama
+        $this->call([
             AdminUserSeeder::class,
+        ]);
+
+        // 2) User dummy CS
+        User::updateOrCreate(
+            ['email' => 'cs@example.com'],
+            [
+                'name' => 'Test CS',
+                'role' => 'cs',
+                'password' => bcrypt('password'),
+            ]
         );
 
-        // 2) Buat 1 user testing (misal role CS)
-        User::factory()->create([
-            'name'  => 'Test User',
-            'email' => 'test@example.com',
-            'role'  => 'cs',
+        // 3) User dummy IT
+        User::updateOrCreate(
+            ['email' => 'it@example.com'],
+            [
+                'name' => 'Test IT',
+                'role' => 'it',
+                'password' => bcrypt('password'),
+            ]
+        );
+
+        // 4) Seeder ticket random
+        $this->call([
+            TicketSeeder::class,
         ]);
     }
 }

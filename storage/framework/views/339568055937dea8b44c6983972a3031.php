@@ -33,6 +33,8 @@
             </main>
         </div>
     </div>
+
+    <?php echo $__env->yieldPushContent('scripts'); ?>
 </body>
 
 </html><?php /**PATH C:\laragon\www\henan-ticketing\resources\views/layouts/app.blade.php ENDPATH**/ ?>

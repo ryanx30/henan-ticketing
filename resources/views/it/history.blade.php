@@ -29,7 +29,8 @@
                 <input type="hidden" id="date_to" x-model="filters.date_to">
 
                 {{-- Date Range Visual Trigger --}}
-                <div id="dateRangeTrigger"
+                <div
+                    id="dateRangeTrigger"
                     class="relative flex h-8 w-60 shrink-0 cursor-pointer items-center justify-between gap-2 rounded-md border border-slate-300 bg-white px-3 hover:border-slate-400">
                     <span id="dateRangeLabel" class="truncate text-sm text-slate-700" x-text="dateLabel()"></span>
                     <svg class="h-4 w-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -39,16 +40,38 @@
                 </div>
 
                 {{-- Export --}}
-                <button
-                    type="button"
-                    style="display:inline-flex;height:32px;flex-shrink:0;align-items:center;justify-content:center;gap:8px;border-radius:6px;background-color:#2f88d8;padding:0 16px;font-size:14px;font-weight:500;color:#ffffff;white-space:nowrap;border:none;cursor:pointer;"
-                    onmouseover="this.style.backgroundColor='#2878c3'"
-                    onmouseout="this.style.backgroundColor='#2f88d8'">
-                    Export Data
-                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                </button>
+                <div class="relative" @click.outside="exportOpen = false">
+                    <button
+                        type="button"
+                        @click="exportOpen = !exportOpen"
+                        style="display:inline-flex;height:32px;flex-shrink:0;align-items:center;justify-content:center;gap:8px;border-radius:6px;background-color:#2f88d8;padding:0 16px;font-size:14px;font-weight:500;color:#ffffff;white-space:nowrap;border:none;cursor:pointer;"
+                        onmouseover="this.style.backgroundColor='#2878c3'"
+                        onmouseout="this.style.backgroundColor='#2f88d8'">
+                        Export Data
+                        <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    <div
+                        x-show="exportOpen"
+                        x-transition
+                        class="absolute right-0 z-50 mt-2 w-36 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
+                        style="display:none;">
+                        <button
+                            type="button"
+                            @click="exportData('csv')"
+                            class="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+                            Export CSV
+                        </button>
+                        <button
+                            type="button"
+                            @click="exportData('pdf')"
+                            class="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+                            Export PDF
+                        </button>
+                    </div>
+                </div>
             </div>
         </form>
 
@@ -120,7 +143,7 @@
                                 </td>
                                 <td class="px-6 py-2">
                                     <div class="flex items-center justify-end gap-3 text-slate-500">
-                                        <a href="{{ route('it.team-queue') }}" class="hover:text-slate-800 transition-colors" title="View">
+                                        <a :href="`/tickets/${t.id}`" class="hover:text-slate-800 transition-colors" title="View">
                                             <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
                                                 <circle cx="12" cy="12" r="3" />
@@ -162,9 +185,12 @@
 
     <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
     <script>
+        const historyExportUrl = "/api/it/history/export";
+
         function historyPage() {
             return {
                 loading: false,
+                exportOpen: false,
                 tickets: [],
                 meta: {
                     current_page: 1,
@@ -183,6 +209,8 @@
                 },
 
                 init() {
+                    window.historyPageRef = this;
+
                     const params = new URLSearchParams(window.location.search);
                     this.filters.q = params.get('q') || '';
                     this.filters.date_from = params.get('date_from') || '';
@@ -200,23 +228,28 @@
                     const el = document.getElementById('page-alert');
                     el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
                     el.textContent = message;
+
                     if (type === 'success') {
                         el.classList.add('bg-green-100', 'text-green-800');
                     } else {
                         el.classList.add('bg-red-100', 'text-red-800');
                     }
+
                     setTimeout(() => el.classList.add('hidden'), 3000);
                 },
 
                 buildQuery() {
                     const params = new URLSearchParams();
+
                     if (this.filters.q) params.set('q', this.filters.q);
                     if (this.filters.date_from) params.set('date_from', this.filters.date_from);
                     if (this.filters.date_to) params.set('date_to', this.filters.date_to);
+
                     params.set('sort_by', this.filters.sort_by);
                     params.set('sort_dir', this.filters.sort_dir);
                     params.set('per_page', this.filters.per_page);
                     params.set('page', this.filters.page);
+
                     return params;
                 },
 
@@ -242,6 +275,15 @@
                         this.filters.sort_dir = 'asc';
                     }
                     this.applyFilters();
+                },
+
+                exportData(format) {
+                    this.exportOpen = false;
+
+                    const params = this.buildQuery();
+                    params.set('format', format);
+
+                    window.open(`${historyExportUrl}?${params.toString()}`, '_blank');
                 },
 
                 async loadHistory() {
@@ -286,16 +328,40 @@
                     }
 
                     let html = '';
+
+                    if (this.meta.current_page > 1) {
+                        html += `
+                            <button
+                                type="button"
+                                onclick="window.historyPageRef.goToPage(${this.meta.current_page - 1})"
+                                class="px-3 py-1 border rounded text-sm bg-white text-slate-700 hover:bg-slate-50">
+                                ‹
+                            </button>
+                        `;
+                    }
+
                     for (let i = 1; i <= this.meta.last_page; i++) {
                         html += `
                             <button
                                 type="button"
-                                onclick="document.getElementById('it-history-page').__x.$data.goToPage(${i})"
+                                onclick="window.historyPageRef.goToPage(${i})"
                                 class="px-3 py-1 border rounded text-sm ${i === this.meta.current_page ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 hover:bg-slate-50'}">
                                 ${i}
                             </button>
                         `;
                     }
+
+                    if (this.meta.current_page < this.meta.last_page) {
+                        html += `
+                            <button
+                                type="button"
+                                onclick="window.historyPageRef.goToPage(${this.meta.current_page + 1})"
+                                class="px-3 py-1 border rounded text-sm bg-white text-slate-700 hover:bg-slate-50">
+                                ›
+                            </button>
+                        `;
+                    }
+
                     container.innerHTML = html;
                 },
 
@@ -307,6 +373,8 @@
                 },
 
                 formatHumanDate(value) {
+                    if (!value) return '-';
+
                     const date = new Date(value);
                     return date.toLocaleDateString('en-US', {
                         year: 'numeric',
@@ -344,7 +412,8 @@
                                 shortcuts.className = 'lp-shortcuts';
 
                                 const today = new Date();
-                                const items = [{
+                                const items = [
+                                    {
                                         label: 'Today',
                                         from: today,
                                         to: today
@@ -469,13 +538,13 @@
 
                 durationText(t) {
                     const start = t.created_at ? new Date(t.created_at) : null;
-                    const end = t.resolved_at ?
-                        new Date(t.resolved_at) :
-                        t.closed_at ?
-                        new Date(t.closed_at) :
-                        t.updated_at ?
-                        new Date(t.updated_at) :
-                        null;
+                    const end = t.resolved_at
+                        ? new Date(t.resolved_at)
+                        : t.closed_at
+                            ? new Date(t.closed_at)
+                            : t.updated_at
+                                ? new Date(t.updated_at)
+                                : null;
 
                     if (!start || !end) return '-';
 
@@ -490,8 +559,10 @@
                 },
 
                 slaBadge(t) {
-                    if (!t.sla_deadline_at || !t.resolved_at) return '';
-                    return new Date(t.resolved_at) <= new Date(t.sla_deadline_at) ? 'Met' : 'Breached';
+                    const finishedAt = t.resolved_at || t.closed_at;
+                    if (!t.sla_deadline_at || !finishedAt) return '';
+
+                    return new Date(finishedAt) <= new Date(t.sla_deadline_at) ? 'Met' : 'Breached';
                 }
             }
         }
@@ -536,8 +607,8 @@
             padding: 8px 16px;
         }
 
-        .litepicker .month-item-header div>.month-item-name,
-        .litepicker .month-item-header div>.month-item-year {
+        .litepicker .month-item-header div > .month-item-name,
+        .litepicker .month-item-header div > .month-item-year {
             color: #0f172a;
             font-weight: 600;
         }

@@ -166,29 +166,61 @@
                             <div class="mb-3 text-xl font-semibold">Today's Focus</div>
 
                             <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
-                                <div class="relative rounded-xl bg-gradient-to-r from-red-600 to-red-800 p-4 text-white shadow-lg">
-                                    <span class="absolute -right-2 -top-2 rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-800 shadow" x-text="focus.sla"></span>
+                                <a
+                                    :href="focusLink('sla_risk')"
+                                    class="group relative rounded-xl bg-gradient-to-r from-red-600 to-red-800 p-4 text-white shadow-lg transition-all duration-200 hover:-translate-y-[2px] hover:shadow-xl hover:brightness-110"
+                                    title="View SLA Risk Tickets">
+                                    <span class="absolute -right-2 -top-2 rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-800 shadow"
+                                        x-text="focus.sla"></span>
                                     <div class="text-lg text-center font-bold leading-tight">SLA &lt; 30m</div>
                                     <div class="text-lg text-center font-bold leading-tight">(Critical - Act Now)</div>
-                                </div>
 
-                                <div class="relative rounded-xl bg-gradient-to-r from-orange-400 to-orange-600 p-4 text-white shadow-lg">
-                                    <span class="absolute -right-2 -top-2 rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-800 shadow" x-text="focus.due_today"></span>
+                                    <div class="mt-3 text-center text-xs font-medium text-white/90 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                                        Click to view tickets
+                                    </div>
+                                </a>
+
+                                <a
+                                    :href="focusLink('due_today')"
+                                    class="group relative rounded-xl bg-gradient-to-r from-orange-400 to-orange-600 p-4 text-white shadow-lg transition-all duration-200 hover:-translate-y-[2px] hover:shadow-xl hover:brightness-105"
+                                    title="View Tickets Due Today">
+                                    <span class="absolute -right-2 -top-2 rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-800 shadow"
+                                        x-text="focus.due_today"></span>
                                     <div class="text-lg text-center font-bold leading-tight">Due Today</div>
                                     <div class="text-lg text-center font-bold leading-tight">(Clear Before EOD)</div>
-                                </div>
 
-                                <div class="relative rounded-xl bg-gradient-to-r from-yellow-400 to-yellow-500 p-4 text-white shadow-lg">
-                                    <span class="absolute -right-2 -top-2 rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-800 shadow" x-text="focus.pending_user"></span>
+                                    <div class="mt-3 text-center text-xs font-medium text-white/90 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                                        Click to view tickets
+                                    </div>
+                                </a>
+
+                                <a
+                                    :href="focusLink('pending_user')"
+                                    class="group relative rounded-xl bg-gradient-to-r from-yellow-400 to-yellow-500 p-4 text-white shadow-lg transition-all duration-200 hover:-translate-y-[2px] hover:shadow-xl hover:brightness-105"
+                                    title="View Pending User Tickets">
+                                    <span class="absolute -right-2 -top-2 rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-800 shadow"
+                                        x-text="focus.pending_user"></span>
                                     <div class="text-lg text-center font-bold leading-tight">Pending User</div>
                                     <div class="text-lg text-center font-bold leading-tight">(Follow up)</div>
-                                </div>
 
-                                <div class="relative rounded-xl bg-gradient-to-r from-sky-400 to-blue-700 p-4 text-white shadow-lg">
-                                    <span class="absolute -right-2 -top-2 rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-800 shadow" x-text="focus.reopened"></span>
+                                    <div class="mt-3 text-center text-xs font-medium text-white/90 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                                        Click to view tickets
+                                    </div>
+                                </a>
+
+                                <a
+                                    :href="focusLink('reopened')"
+                                    class="group relative rounded-xl bg-gradient-to-r from-sky-400 to-blue-700 p-4 text-white shadow-lg transition-all duration-200 hover:-translate-y-[2px] hover:shadow-xl hover:brightness-105"
+                                    title="View Reopened Tickets">
+                                    <span class="absolute -right-2 -top-2 rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-800 shadow"
+                                        x-text="focus.reopened"></span>
                                     <div class="text-lg text-center font-bold leading-tight">Reopened</div>
                                     <div class="text-lg text-center font-bold leading-tight">(Review & Resolve)</div>
-                                </div>
+
+                                    <div class="mt-3 text-center text-xs font-medium text-white/90 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                                        Click to view tickets
+                                    </div>
+                                </a>
                             </div>
 
                             <div class="mt-4 text-md font-semibold">Quick Actions:</div>
@@ -272,21 +304,21 @@
                                             <tr class="border-b">
                                                 <td class="px-3 py-2">
                                                     <span class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
-                                                          :class="priorityBadgeClass(t.priority)"
-                                                          x-text="ucfirst(t.priority)"></span>
+                                                        :class="priorityBadgeClass(t.priority)"
+                                                        x-text="ucfirst(t.priority)"></span>
                                                 </td>
                                                 <td class="font-mono px-3" x-text="'#T-' + (t.ticket_code ?? t.id)"></td>
                                                 <td class="max-w-[260px] truncate px-3" x-text="t.title"></td>
                                                 <td class="px-3 uppercase" x-text="t.team"></td>
                                                 <td class="px-3">
                                                     <span class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
-                                                          :class="statusBadgeClass(t.status)"
-                                                          x-text="statusLabel(t.status)"></span>
+                                                        :class="statusBadgeClass(t.status)"
+                                                        x-text="statusLabel(t.status)"></span>
                                                 </td>
                                                 <td class="w-[140px] px-3">
                                                     <div class="flex justify-center">
                                                         <span class="inline-block w-[110px] font-mono tabular-nums text-slate-800"
-                                                              x-text="slaCountdown(t.sla_deadline_at)"></span>
+                                                            x-text="slaCountdown(t.sla_deadline_at)"></span>
                                                     </div>
                                                 </td>
                                                 <td class="px-3 text-right">
@@ -346,8 +378,8 @@
                                                 <td class="space-x-2 px-3 text-right">
                                                     <a :href="`/resolver-inbox/${m.id}`" class="rounded border bg-slate-100 px-3 py-1 text-xs">Open</a>
                                                     <button type="button"
-                                                            @click="copyText(m.subject || m.body || '')"
-                                                            class="rounded border bg-slate-100 px-3 py-1 text-xs">
+                                                        @click="copyText(m.subject || m.body || '')"
+                                                        class="rounded border bg-slate-100 px-3 py-1 text-xs">
                                                         Copy
                                                     </button>
                                                 </td>
@@ -372,11 +404,41 @@
                 timer: null,
 
                 kpi: {
-                    total: { value: 0, prev_month: 0, prev_year: 0, mom: {}, yoy: {} },
-                    new: { value: 0, prev_month: 0, prev_year: 0, mom: {}, yoy: {} },
-                    in_progress: { value: 0, prev_month: 0, prev_year: 0, mom: {}, yoy: {} },
-                    resolved: { value: 0, prev_month: 0, prev_year: 0, mom: {}, yoy: {} },
-                    sla_risk: { value: 0, prev_month: 0, prev_year: 0, mom: {}, yoy: {} },
+                    total: {
+                        value: 0,
+                        prev_month: 0,
+                        prev_year: 0,
+                        mom: {},
+                        yoy: {}
+                    },
+                    new: {
+                        value: 0,
+                        prev_month: 0,
+                        prev_year: 0,
+                        mom: {},
+                        yoy: {}
+                    },
+                    in_progress: {
+                        value: 0,
+                        prev_month: 0,
+                        prev_year: 0,
+                        mom: {},
+                        yoy: {}
+                    },
+                    resolved: {
+                        value: 0,
+                        prev_month: 0,
+                        prev_year: 0,
+                        mom: {},
+                        yoy: {}
+                    },
+                    sla_risk: {
+                        value: 0,
+                        prev_month: 0,
+                        prev_year: 0,
+                        mom: {},
+                        yoy: {}
+                    },
                 },
 
                 focus: {
@@ -456,6 +518,21 @@
                     this.applyFilters();
                 },
 
+                focusLink(type) {
+                    switch (type) {
+                        case 'sla_risk':
+                            return '/tickets?focus=sla_risk';
+                        case 'due_today':
+                            return '/tickets?focus=due_today';
+                        case 'pending_user':
+                            return '/tickets?status=waiting_info';
+                        case 'reopened':
+                            return '/tickets?focus=reopened';
+                        default:
+                            return '/tickets';
+                    }
+                },
+
                 async loadDashboard() {
                     this.loading = true;
 
@@ -532,22 +609,33 @@
 
                 statusBadgeClass(status) {
                     switch (status) {
-                        case 'new': return 'bg-gray-200 text-gray-800';
-                        case 'in_progress': return 'bg-amber-100 text-amber-700';
-                        case 'waiting_info': return 'bg-orange-100 text-orange-700';
-                        case 'resolved': return 'bg-green-100 text-green-700';
-                        case 'closed': return 'bg-sky-100 text-sky-700';
-                        default: return 'bg-slate-100 text-slate-700';
+                        case 'new':
+                            return 'bg-gray-200 text-gray-800';
+                        case 'in_progress':
+                            return 'bg-amber-100 text-amber-700';
+                        case 'waiting_info':
+                            return 'bg-orange-100 text-orange-700';
+                        case 'resolved':
+                            return 'bg-green-100 text-green-700';
+                        case 'closed':
+                            return 'bg-sky-100 text-sky-700';
+                        default:
+                            return 'bg-slate-100 text-slate-700';
                     }
                 },
 
                 priorityBadgeClass(priority) {
                     switch (priority) {
-                        case 'critical': return 'bg-red-100 text-red-700';
-                        case 'high': return 'bg-pink-100 text-pink-700';
-                        case 'medium': return 'bg-amber-100 text-amber-700';
-                        case 'low': return 'bg-green-100 text-green-700';
-                        default: return 'bg-slate-100 text-slate-700';
+                        case 'critical':
+                            return 'bg-red-100 text-red-700';
+                        case 'high':
+                            return 'bg-pink-100 text-pink-700';
+                        case 'medium':
+                            return 'bg-amber-100 text-amber-700';
+                        case 'low':
+                            return 'bg-green-100 text-green-700';
+                        default:
+                            return 'bg-slate-100 text-slate-700';
                     }
                 },
 
