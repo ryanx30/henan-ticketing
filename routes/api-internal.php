@@ -5,10 +5,14 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\DashboardApiController;
 use App\Http\Controllers\Api\NavigationApiController;
 use App\Http\Controllers\Api\TicketApiController;
+use App\Http\Controllers\Api\ClientApiController;
 use App\Http\Controllers\Api\ITQueueApiController;
 use App\Http\Controllers\Api\ResolverInboxApiController;
 use App\Http\Controllers\Api\ReportsApiController;
 use App\Http\Controllers\Api\CaseAnalyticsApiController;
+use App\Http\Controllers\Api\AdminUserApiController;
+use App\Http\Controllers\Api\AdminMasterDataApiController;
+use App\Http\Controllers\Api\AdminAuditLogApiController;
 
 /*
 |--------------------------------------------------------------------------
@@ -37,13 +41,13 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::get('/sidebar', [DashboardApiController::class, 'index']);
 
     // Reports
-    Route::middleware('role:cs,it,admin')->group(function () {
+    Route::middleware('role:cs,it,admin,supervisor')->group(function () {
         Route::get('/reports', [ReportsApiController::class, 'index']);
         Route::get('/reports/export', [ReportsApiController::class, 'export']);
     });
 
-    // Tickets - list/create/update/delete for CS/Admin
-    Route::middleware('role:cs,admin')->group(function () {
+    // Tickets - list/create/update/delete for CS/Admin/Supervisor
+    Route::middleware('role:cs,admin,supervisor')->group(function () {
         Route::get('/tickets', [TicketApiController::class, 'index']);
         Route::post('/tickets', [TicketApiController::class, 'store']);
         Route::patch('/tickets/{ticket}', [TicketApiController::class, 'update']);
@@ -51,16 +55,24 @@ Route::middleware(['web', 'auth'])->group(function () {
 
         Route::get('/tickets-similar', [TicketApiController::class, 'similar']);
         Route::get('/tickets-client-history', [TicketApiController::class, 'clientHistory']);
+
+        // Ticket form options from master data
+        Route::get('/ticket-form/options', [TicketApiController::class, 'formOptions']);
+        Route::get('/ticket-form/issue-types', [TicketApiController::class, 'issueTypesByCategory']);
+
+        // Client directory suggestions for Create Ticket autofill
+        Route::get('/clients/suggest', [ClientApiController::class, 'suggest']);
+        Route::get('/clients/{client}/history', [ClientApiController::class, 'history']);
     });
 
-    // Ticket detail endpoints for CS / IT / Admin
-    Route::middleware('role:cs,it,admin')->group(function () {
+    // Ticket detail endpoints for CS / IT / Admin / Supervisor
+    Route::middleware('role:cs,it,admin,supervisor')->group(function () {
         Route::get('/tickets/{ticket}', [TicketApiController::class, 'show']);
         Route::get('/tickets/{ticket}/similar', [TicketApiController::class, 'similarByTicket']);
     });
 
     // IT Queue
-    Route::middleware('role:it,admin')->group(function () {
+    Route::middleware('role:it,admin,supervisor')->group(function () {
         Route::get('/it/my-queue', [ITQueueApiController::class, 'myQueue']);
         Route::get('/it/team-queue', [ITQueueApiController::class, 'teamQueue']);
         Route::get('/it/history', [ITQueueApiController::class, 'history']);
@@ -71,7 +83,7 @@ Route::middleware(['web', 'auth'])->group(function () {
     });
 
     // Resolver Inbox
-    Route::middleware('role:cs,it,admin')->group(function () {
+    Route::middleware('role:cs,it,admin,supervisor')->group(function () {
         Route::get('/resolver-inbox', [ResolverInboxApiController::class, 'index']);
         Route::get('/resolver-inbox/{resolverMessage}', [ResolverInboxApiController::class, 'show']);
         Route::post('/resolver-inbox', [ResolverInboxApiController::class, 'store']);
@@ -79,9 +91,37 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::delete('/resolver-inbox/{resolverMessage}', [ResolverInboxApiController::class, 'destroy']);
     });
 
-    // Case Analytics - only for IT/Admin
-    Route::middleware('role:it,admin')->group(function () {
+    // Case Analytics - IT/Admin/Supervisor
+    Route::middleware('role:it,admin,supervisor')->group(function () {
         Route::get('/case-analytics', [CaseAnalyticsApiController::class, 'index'])
             ->name('api.case_analytics.index');
+        Route::get('/case-analytics/export', [CaseAnalyticsApiController::class, 'export'])
+            ->name('api.case_analytics.export');
+    });
+
+    // Admin - Users (admin only)
+    Route::middleware('role:admin')->prefix('admin')->group(function () {
+        Route::get('/users', [AdminUserApiController::class, 'index']);
+        Route::get('/users/{user}', [AdminUserApiController::class, 'show']);
+        Route::post('/users', [AdminUserApiController::class, 'store']);
+        Route::patch('/users/{user}', [AdminUserApiController::class, 'update']);
+        Route::patch('/users/{user}/status', [AdminUserApiController::class, 'toggleStatus']);
+    });
+
+    // Admin - Master Data
+    Route::middleware('role:admin,supervisor')->prefix('admin/master-data')->group(function () {
+        Route::get('/', [AdminMasterDataApiController::class, 'index']);
+    });
+
+    Route::middleware('role:admin')->prefix('admin/master-data')->group(function () {
+        Route::post('/{type}', [AdminMasterDataApiController::class, 'store']);
+        Route::patch('/{type}/{id}', [AdminMasterDataApiController::class, 'update']);
+        Route::delete('/{type}/{id}', [AdminMasterDataApiController::class, 'destroy']);
+    });
+
+    // Admin - Audit Logs (admin only)
+    Route::middleware('role:admin')->prefix('admin')->group(function () {
+        Route::get('/audit-logs', [AdminAuditLogApiController::class, 'index']);
+        Route::get('/audit-logs/export', [AdminAuditLogApiController::class, 'export']);
     });
 });

@@ -18,14 +18,14 @@
                 <button type="button" class="relative text-slate-500 hover:text-slate-700">
                     <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                         <path stroke-linecap="round" stroke-linejoin="round"
-                              d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5" />
+                            d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5" />
                         <path stroke-linecap="round" stroke-linejoin="round"
-                              d="M9 17a3 3 0 0 0 6 0" />
+                            d="M9 17a3 3 0 0 0 6 0" />
                     </svg>
 
                     <template x-if="notificationCount > 0">
                         <span class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 text-[11px] leading-[18px] text-center rounded-full bg-red-600 text-white"
-                              x-text="notificationCount">
+                            x-text="notificationCount">
                         </span>
                     </template>
                 </button>
@@ -55,7 +55,7 @@
                             Profile
                         </a>
 
-                        <form :action="logoutUrl" method="POST">
+                        <form action="<?php echo e(route('logout')); ?>" method="POST">
                             <?php echo csrf_field(); ?>
                             <button type="submit" class="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
                                 Log Out
@@ -68,14 +68,14 @@
             <!-- Hamburger (mobile) -->
             <div class="-me-2 flex items-center sm:hidden">
                 <button @click="open = !open"
-                        class="inline-flex items-center justify-center p-2 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 focus:outline-none transition">
+                    class="inline-flex items-center justify-center p-2 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 focus:outline-none transition">
                     <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
                         <path :class="{'hidden': open, 'inline-flex': !open}"
-                              class="inline-flex" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M4 6h16M4 12h16M4 18h16" />
+                            class="inline-flex" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6h16M4 12h16M4 18h16" />
                         <path :class="{'hidden': !open, 'inline-flex': open}"
-                              class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M6 18L18 6M6 6l12 12" />
+                            class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
                     </svg>
                 </button>
             </div>
@@ -106,7 +106,7 @@
                     Profile
                 </a>
 
-                <form :action="logoutUrl" method="POST">
+                <form action="<?php echo e(route('logout')); ?>" method="POST">
                     <?php echo csrf_field(); ?>
                     <button type="submit" class="block w-full text-left px-3 py-2 rounded-md text-sm text-slate-700 hover:bg-slate-50">
                         Log Out
@@ -130,7 +130,6 @@
                 notificationCount: 0,
                 menus: [],
                 profileUrl: '#',
-                logoutUrl: '#',
 
                 async init() {
                     await this.loadNavigation();
@@ -158,7 +157,6 @@
                         this.notificationCount = data.notification_count || 0;
                         this.menus = data.menus || [];
                         this.profileUrl = data.profile_url || '#';
-                        this.logoutUrl = data.logout_url || '#';
                     } catch (error) {
                         console.error('Navigation load failed:', error);
                     }

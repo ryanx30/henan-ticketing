@@ -9,7 +9,7 @@ class ITQueuePageController extends Controller
     // Render my queue page
     public function myQueue(Request $request)
     {
-        if (!in_array($request->user()->role, ['it', 'admin'], true)) {
+        if (!in_array($request->user()->role, ['it', 'admin', 'supervisor'], true)) {
             abort(403);
         }
 
@@ -19,7 +19,7 @@ class ITQueuePageController extends Controller
     // Render team queue page
     public function teamQueue(Request $request)
     {
-        if (!in_array($request->user()->role, ['it', 'admin'], true)) {
+        if (!in_array($request->user()->role, ['it', 'admin', 'supervisor'], true)) {
             abort(403);
         }
 
@@ -29,7 +29,7 @@ class ITQueuePageController extends Controller
     // Render history page
     public function history(Request $request)
     {
-        if (!in_array($request->user()->role, ['it', 'admin'], true)) {
+        if (!in_array($request->user()->role, ['it', 'admin', 'supervisor'], true)) {
             abort(403);
         }
 
@@ -39,7 +39,7 @@ class ITQueuePageController extends Controller
     // Export can stay here for now if it still returns file download
     public function export(Request $request)
     {
-        if (!in_array($request->user()->role, ['it', 'admin'], true)) {
+        if (!in_array($request->user()->role, ['it', 'admin', 'supervisor'], true)) {
             abort(403);
         }
 

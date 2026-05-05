@@ -1,278 +1,268 @@
 <x-app-layout>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+
     <div
-        x-data="resolverInboxCompose()"
+        id="resolver-message-detail-page"
+        data-message-id="{{ $resolverMessage->id }}"
+        data-current-user-id="{{ auth()->id() }}"
+        data-is-it="{{ auth()->user()->role === 'it' ? '1' : '0' }}"
+        x-data="resolverMessageDetailPage()"
+        x-init="init()"
         class="min-h-screen bg-[#eef1f5] p-6">
-        <div class="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
 
-            {{-- Header --}}
-            <div class="mb-5 flex items-center justify-between">
-                <h1 class="text-2xl font-semibold text-slate-800">Pesan</h1>
+        <div id="page-alert" class="hidden mb-4 rounded p-3 text-sm"></div>
 
-                <div class="flex items-center gap-3 text-sm">
-                    <span class="text-slate-600">Filters:</span>
+        <div class="mx-auto max-w-6xl space-y-6">
+            {{-- Top bar --}}
+            <div class="flex items-center justify-between">
+                <div>
+                    <a
+                        href="{{ route('resolver-inbox.index') }}"
+                        class="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                        </svg>
+                        Back to Inbox
+                    </a>
 
-                    <select onchange="window.location=this.value" class="rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm">
-                        <option value="{{ route('resolver-inbox.index', array_merge(request()->query(), ['unread' => 'all'])) }}" {{ $unread === 'all' ? 'selected' : '' }}>All</option>
-                        <option value="{{ route('resolver-inbox.index', array_merge(request()->query(), ['unread' => 'unread'])) }}" {{ $unread === 'unread' ? 'selected' : '' }}>Unread</option>
-                    </select>
-
-                    <select onchange="window.location=this.value" class="rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm">
-                        <option value="{{ route('resolver-inbox.index', array_merge(request()->query(), ['priority' => 'all'])) }}" {{ $priority === 'all' ? 'selected' : '' }}>Priority</option>
-                        <option value="{{ route('resolver-inbox.index', array_merge(request()->query(), ['priority' => 'critical'])) }}" {{ $priority === 'critical' ? 'selected' : '' }}>Critical</option>
-                        <option value="{{ route('resolver-inbox.index', array_merge(request()->query(), ['priority' => 'high'])) }}" {{ $priority === 'high' ? 'selected' : '' }}>High</option>
-                        <option value="{{ route('resolver-inbox.index', array_merge(request()->query(), ['priority' => 'medium'])) }}" {{ $priority === 'medium' ? 'selected' : '' }}>Medium</option>
-                        <option value="{{ route('resolver-inbox.index', array_merge(request()->query(), ['priority' => 'low'])) }}" {{ $priority === 'low' ? 'selected' : '' }}>Low</option>
-                    </select>
-
-                    <select onchange="window.location=this.value" class="rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm">
-                        <option value="{{ route('resolver-inbox.index', array_merge(request()->query(), ['team' => 'all'])) }}" {{ $team === 'all' ? 'selected' : '' }}>Team</option>
-                        <option value="{{ route('resolver-inbox.index', array_merge(request()->query(), ['team' => 'it'])) }}" {{ $team === 'it' ? 'selected' : '' }}>IT</option>
-                        <option value="{{ route('resolver-inbox.index', array_merge(request()->query(), ['team' => 'finance'])) }}" {{ $team === 'finance' ? 'selected' : '' }}>Finance</option>
-                        <option value="{{ route('resolver-inbox.index', array_merge(request()->query(), ['team' => 'compliance'])) }}" {{ $team === 'compliance' ? 'selected' : '' }}>Compliance</option>
-                    </select>
-
-                    <select onchange="window.location=this.value" class="rounded-md border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm">
-                        <option value="{{ route('resolver-inbox.index', array_merge(request()->query(), ['date' => 'all'])) }}" {{ $date === 'all' ? 'selected' : '' }}>Date</option>
-                        <option value="{{ route('resolver-inbox.index', array_merge(request()->query(), ['date' => 'today'])) }}" {{ $date === 'today' ? 'selected' : '' }}>Today</option>
-                        <option value="{{ route('resolver-inbox.index', array_merge(request()->query(), ['date' => '7d'])) }}" {{ $date === '7d' ? 'selected' : '' }}>Last 7 Days</option>
-                        <option value="{{ route('resolver-inbox.index', array_merge(request()->query(), ['date' => '30d'])) }}" {{ $date === '30d' ? 'selected' : '' }}>Last 30 Days</option>
-                    </select>
+                    <h1 class="mt-2 text-2xl font-bold text-slate-900">Message Detail</h1>
+                    <p class="mt-1 text-sm text-slate-500">Detail pesan resolver inbox dan konteks ticket terkait.</p>
                 </div>
-            </div>
 
-            {{-- Compose Button --}}
-            <div class="mb-5">
                 <button
                     type="button"
-                    @click="openCompose()"
-                    class="inline-flex items-center gap-3 rounded-[22px] bg-sky-200 px-6 py-4 text-[18px] font-medium text-slate-800 shadow-md transition hover:shadow-lg">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 3.487a2.1 2.1 0 113.03 2.906L9.5 17l-4 1 1-4 10.362-10.513z" />
+                    @click="openReply()"
+                    class="inline-flex items-center gap-2 rounded-full bg-sky-200 px-5 py-3 text-sm font-semibold text-slate-800 shadow-md transition hover:shadow-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10M3 10l4-4M3 10l4 4M21 21a8 8 0 00-8-8H7" />
                     </svg>
-                    Compose
+                    Reply
                 </button>
             </div>
 
-            {{-- Messages Table --}}
-            <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-md">
-                <div class="bg-[#001a2c] px-6 py-4 text-2xl font-bold text-white">
-                    Messages
+            <template x-if="loading">
+                <div class="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-slate-500 shadow-sm">
+                    Loading message detail...
                 </div>
+            </template>
 
-                <div class="overflow-x-auto">
-                    <table class="w-full min-w-[1100px] text-sm">
-                        <thead class="bg-slate-200 text-slate-700">
-                            <tr>
-                                <th class="px-5 py-3 text-left font-semibold">Ticket</th>
-                                <th class="px-4 py-3 text-left font-semibold">Code</th>
-                                <th class="px-4 py-3 text-left font-semibold">Priority</th>
-                                <th class="px-4 py-3 text-left font-semibold">Description</th>
-                                <th class="px-4 py-3 text-right font-semibold">Time</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse($messages as $message)
-                            @php
-                            $priorityClass = match($message->ticket->priority) {
-                            'critical' => 'bg-red-500 text-white',
-                            'high' => 'bg-orange-400 text-white',
-                            'medium' => 'bg-yellow-400 text-slate-900',
-                            'low' => 'bg-slate-300 text-slate-800',
-                            default => 'bg-slate-300 text-slate-800',
-                            };
-                            @endphp
+            <template x-if="!loading && !message.id">
+                <div class="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-slate-500 shadow-sm">
+                    Message not found.
+                </div>
+            </template>
 
-                            <tr
-                                class="group cursor-pointer border-t border-slate-200 odd:bg-white even:bg-slate-100 hover:bg-slate-50"
-                                data-open-url="{{ route('resolver-inbox.show', $message->id) }}"
-                                @click="window.location = $el.dataset.openUrl">
-                                <td class="px-5 py-4 font-medium text-slate-800">
-                                    #T-{{ $message->ticket->ticket_code ?? $message->ticket->id }}
-                                </td>
+            <div x-show="!loading && message.id" class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                {{-- Left content --}}
+                <div class="space-y-6 lg:col-span-2">
+                    {{-- Main message --}}
+                    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <div class="border-b border-slate-200 px-6 py-4">
+                            <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                                <div>
+                                    <h2 class="text-xl font-bold text-slate-900" x-text="displayMessageTitle()"></h2>
 
-                                <td class="px-4 py-4">
-                                    @if(!$message->is_read && $message->to_user_id === auth()->id())
-                                    <span class="inline-flex rounded-md bg-slate-300 px-3 py-1 text-xs font-bold text-white">
-                                        NEW
-                                    </span>
-                                    @endif
-                                </td>
+                                    <div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                                        <span>Ticket:</span>
+                                        <a
+                                            :href="message.ticket ? ticketUrl(message.ticket.id) : '#'"
+                                            class="font-mono font-semibold text-slate-700 hover:text-blue-600 hover:underline"
+                                            x-text="ticketLabel(message.ticket)">
+                                        </a>
 
-                                <td class="px-4 py-4">
-                                    <span class="inline-flex rounded-full px-3 py-1 text-xs font-bold {{ $priorityClass }}">
-                                        {{ ucfirst($message->ticket->priority) }}
-                                    </span>
-                                </td>
+                                        <span>•</span>
+                                        <span>From:</span>
+                                        <span class="font-medium text-slate-700" x-text="message.sender?.name || '-'"></span>
 
-                                <td class="px-4 py-4 text-base text-slate-800">
-                                    {{ \Illuminate\Support\Str::limit($message->subject ?: $message->body, 70) }}
-                                </td>
-
-                                <td class="px-4 py-4 text-right">
-                                    <div class="relative flex justify-end">
-                                        <div class="group-hover:hidden text-slate-600">
-                                            {{ $message->created_at->format('H:i') }}
-                                        </div>
-
-                                        <div class="hidden items-center gap-3 group-hover:flex">
-                                            {{-- Reply --}}
-                                            <button
-                                                type="button"
-                                                data-ticket-id="{{ $message->ticket_id }}"
-                                                data-to-user-id="{{ $message->from_user_id === auth()->id() ? $message->to_user_id : $message->from_user_id }}"
-                                                data-subject="{{ $message->subject ?: 'Reply for #' . ($message->ticket->ticket_code ?? $message->ticket->id) }}"
-                                                onclick="event.stopPropagation(); window.dispatchEvent(new CustomEvent('reply-message', {
-        detail: {
-            ticketId: this.dataset.ticketId,
-            toUserId: this.dataset.toUserId,
-            subject: this.dataset.subject
-        }
-    }));"
-                                                class="text-slate-500 hover:text-slate-800"
-                                                title="Reply">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10M3 10l4-4M3 10l4 4M21 21a8 8 0 00-8-8H7" />
-                                                </svg>
-                                            </button>
-
-                                            {{-- Mark as read --}}
-                                            @if(!$message->is_read && $message->to_user_id === auth()->id())
-                                            <form method="POST" action="{{ route('resolver-inbox.read', $message->id) }}" onclick="event.stopPropagation();">
-                                                @csrf
-                                                @method('PATCH')
-                                                <button type="submit" class="text-slate-500 hover:text-slate-800" title="Mark as Read">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                                                    </svg>
-                                                </button>
-                                            </form>
-                                            @endif
-
-                                            {{-- Delete --}}
-                                            <form method="POST" action="{{ route('resolver-inbox.destroy', $message->id) }}" onclick="event.stopPropagation();" onsubmit="return confirm('Delete this message?')">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="text-slate-500 hover:text-red-600" title="Delete">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 7h12M9 7V5h6v2m-7 3v7m4-7v7m4-7v7M7 7l1 12h8l1-12" />
-                                                    </svg>
-                                                </button>
-                                            </form>
-                                        </div>
+                                        <span>•</span>
+                                        <span>To:</span>
+                                        <span class="font-medium text-slate-700" x-text="message.recipient?.name || '-'"></span>
                                     </div>
-                                </td>
-                            </tr>
-                            @empty
-                            <tr>
-                                <td colspan="5" class="px-5 py-10 text-center text-slate-500">
-                                    No messages found.
-                                </td>
-                            </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
 
-        {{-- Compose Modal --}}
-        <div
-            x-show="showCompose"
-            x-transition
-            class="fixed inset-0 z-50"
-            style="display: none;">
-            <div class="pointer-events-none absolute inset-0 bg-transparent"></div>
+                                    <div
+                                        class="mt-2 text-xs text-slate-400"
+                                        x-show="normalizedStoredSubject()">
+                                        Stored subject:
+                                        <span class="font-medium text-slate-500" x-text="normalizedStoredSubject()"></span>
+                                    </div>
+                                </div>
 
-            <div class="pointer-events-auto fixed bottom-0 right-6 z-50 w-full max-w-3xl overflow-hidden rounded-t-2xl bg-white shadow-2xl">
-                <div class="flex items-center justify-between bg-slate-100 px-5 py-3">
-                    <h3 class="text-[18px] font-semibold text-slate-900">New Message</h3>
+                                <div class="text-sm text-slate-500" x-text="formatDateTime(message.created_at)"></div>
+                            </div>
+                        </div>
 
-                    <div class="flex items-center gap-4 text-slate-500">
-                        <button type="button" @click="showCompose = false">—</button>
-                        <button type="button" @click="discardDraft()">✕</button>
+                        <div class="px-6 py-6">
+                            <div class="whitespace-pre-line text-[15px] leading-7 text-slate-700" x-text="message.body || '-'"></div>
+
+                            <template x-if="message.attachment_name">
+                                <div class="mt-5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                                    <div class="text-sm font-semibold text-slate-800">Attachment</div>
+                                    <div class="mt-1 text-sm text-slate-600" x-text="message.attachment_name"></div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    {{-- Ticket context --}}
+                    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <div class="border-b border-slate-200 px-6 py-4">
+                            <h2 class="text-lg font-bold text-slate-900">Related Ticket</h2>
+                        </div>
+
+                        <div class="px-6 py-5">
+                            <template x-if="message.ticket">
+                                <div class="space-y-4">
+                                    <div class="flex flex-wrap items-center gap-3">
+                                        <a
+                                            :href="ticketUrl(message.ticket.id)"
+                                            class="font-mono text-base font-semibold text-slate-900 hover:text-blue-600 hover:underline"
+                                            x-text="ticketLabel(message.ticket)">
+                                        </a>
+
+                                        <span
+                                            class="inline-flex rounded-full px-3 py-1 text-xs font-bold"
+                                            :class="priorityClass(message.ticket.priority)"
+                                            x-text="ucfirst(message.ticket.priority || '-')">
+                                        </span>
+
+                                        <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 uppercase"
+                                            x-text="message.ticket.team || '-'"></span>
+                                    </div>
+
+                                    <div>
+                                        <div class="text-sm text-slate-500">Title</div>
+                                        <div class="mt-1 font-semibold text-slate-900" x-text="message.ticket.title || '-'"></div>
+                                    </div>
+
+                                    <div>
+                                        <div class="text-sm text-slate-500">Description</div>
+                                        <div class="mt-1 whitespace-pre-line text-sm leading-6 text-slate-700" x-text="message.ticket.description || '-'"></div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
                     </div>
                 </div>
 
-                <form method="POST" action="{{ route('resolver-inbox.store') }}" enctype="multipart/form-data" class="p-5">
-                    @csrf
+                {{-- Right sidebar --}}
+                <div class="space-y-6">
+                    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <div class="border-b border-slate-200 px-6 py-4">
+                            <h2 class="text-lg font-bold text-slate-900">Message Info</h2>
+                        </div>
 
-                    <div class="border-b border-slate-200 py-2">
-                        <div class="flex items-center justify-between gap-4">
-                            <div class="flex flex-1 items-center gap-4">
-                                <span class="w-14 text-sm text-slate-700">To</span>
-                                <select name="to_user_id" x-model="form.to_user_id" class="w-full border-0 bg-transparent text-sm outline-none">
-                                    <option value="">Choose recipient</option>
-                                    @foreach($composeRecipients as $recipient)
-                                    <option value="{{ $recipient->id }}">{{ $recipient->name }} - {{ strtoupper($recipient->role) }}</option>
-                                    @endforeach
-                                </select>
+                        <div class="space-y-4 px-6 py-5 text-sm">
+                            <div>
+                                <div class="text-slate-500">Status</div>
+                                <div class="mt-1">
+                                    <span
+                                        class="inline-flex rounded-full px-3 py-1 text-xs font-bold"
+                                        :class="message.is_read ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-800'"
+                                        x-text="message.is_read ? 'Read' : 'Unread'">
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="text-slate-500">Created At</div>
+                                <div class="mt-1 font-medium text-slate-800" x-text="formatDateTime(message.created_at)"></div>
+                            </div>
+
+                            <div>
+                                <div class="text-slate-500">Last Updated</div>
+                                <div class="mt-1 font-medium text-slate-800" x-text="formatDateTime(message.updated_at)"></div>
                             </div>
                         </div>
                     </div>
 
+                    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <div class="border-b border-slate-200 px-6 py-4">
+                            <h2 class="text-lg font-bold text-slate-900">Quick Actions</h2>
+                        </div>
+
+                        <div class="space-y-3 px-6 py-5">
+                            <button
+                                type="button"
+                                @click="openReply()"
+                                class="inline-flex w-full items-center justify-center rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
+                                Reply Message
+                            </button>
+
+                            <a
+                                :href="message.ticket ? ticketUrl(message.ticket.id) : '#'"
+                                class="inline-flex w-full items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                                Open Ticket Detail
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- Reply Modal --}}
+        <div
+            x-show="showReply"
+            x-transition
+            class="fixed inset-0 z-50"
+            style="display:none;">
+            <div class="absolute inset-0 bg-black/20" @click="showReply = false"></div>
+
+            <div class="fixed bottom-0 right-6 z-50 w-full max-w-xl overflow-hidden rounded-t-2xl bg-white shadow-2xl">
+                <div class="flex items-center justify-between bg-slate-100 px-5 py-3">
+                    <h3 class="text-[18px] font-semibold text-slate-900">Reply Message</h3>
+
+                    <button type="button" @click="discardReply()" class="text-slate-500 hover:text-slate-900">
+                        ✕
+                    </button>
+                </div>
+
+                <form @submit.prevent="submitReply" class="p-5">
                     <div class="border-b border-slate-200 py-2">
                         <div class="flex items-center gap-4">
-                            <span class="w-14 text-sm text-slate-700">Ticket</span>
-                            <select name="ticket_id" x-model="form.ticket_id" class="w-full border-0 bg-transparent text-sm outline-none">
-                                <option value="">Choose Ticket</option>
-                                @foreach($composeTickets as $ticket)
-                                <option value="{{ $ticket->id }}">
-                                    #T-{{ $ticket->ticket_code ?? $ticket->id }} - {{ $ticket->title }}
-                                </option>
-                                @endforeach
-                            </select>
+                            <span class="w-16 text-sm text-slate-700">Ticket</span>
+                            <div class="w-full text-sm text-slate-800" x-text="ticketLabel(message.ticket)"></div>
                         </div>
                     </div>
 
                     <div class="border-b border-slate-200 py-2">
                         <div class="flex items-center gap-4">
-                            <span class="w-14 text-sm text-slate-700">Subject</span>
-                            <input type="text" name="subject" x-model="form.subject" class="w-full border-0 bg-transparent text-sm outline-none" placeholder="Message subject">
+                            <span class="w-16 text-sm text-slate-700">To</span>
+                            <div class="w-full text-sm text-slate-800" x-text="reply.to_display || '-'"></div>
+                        </div>
+                    </div>
+
+                    <div class="border-b border-slate-200 py-2">
+                        <div class="flex items-center gap-4">
+                            <span class="w-16 text-sm text-slate-700">Subject</span>
+                            <input
+                                type="text"
+                                x-model="reply.subject"
+                                class="w-full border-0 bg-transparent text-sm outline-none"
+                                placeholder="Message subject">
                         </div>
                     </div>
 
                     <div class="py-4">
                         <textarea
-                            name="body"
-                            x-model="form.body"
-                            rows="12"
+                            x-model="reply.body"
+                            rows="8"
                             class="w-full resize-none border-0 text-sm outline-none"
-                            placeholder="Write your message..."></textarea>
+                            placeholder="Write your reply..."></textarea>
                     </div>
 
-                    <div class="mb-4 rounded-full bg-slate-100 px-4 py-3">
-                        <div class="flex flex-wrap items-center gap-4 text-slate-600">
-                            <span class="text-sm">Sans Serif</span>
-                            <span class="text-sm font-bold">B</span>
-                            <span class="text-sm italic">I</span>
-                            <span class="text-sm underline">U</span>
-                            <span class="text-sm">≡</span>
-                            <span class="text-sm">•</span>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <button type="submit" class="rounded-full bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
-                                Send
-                            </button>
-
-                            <label class="cursor-pointer text-slate-600 hover:text-slate-900" title="Attach file">
-                                <input type="file" name="attachment" class="hidden">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 6.5l-7.8 7.8a3 3 0 104.2 4.2l8.5-8.5a5 5 0 00-7.1-7.1l-9 9a7 7 0 009.9 9.9l7.1-7.1" />
-                                </svg>
-                            </label>
-                        </div>
+                    <div class="flex items-center justify-between border-t border-slate-200 pt-4">
+                        <button
+                            type="submit"
+                            class="rounded-full bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+                            :disabled="submitting">
+                            <span x-text="submitting ? 'Sending...' : 'Send'"></span>
+                        </button>
 
                         <button
                             type="button"
-                            @click="discardDraft()"
-                            class="text-slate-500 hover:text-red-600"
-                            title="Discard draft">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 7h12M9 7V5h6v2m-7 3v7m4-7v7m4-7v7M7 7l1 12h8l1-12" />
-                            </svg>
+                            @click="discardReply()"
+                            class="text-slate-500 hover:text-red-600">
+                            Discard
                         </button>
                     </div>
                 </form>
@@ -281,39 +271,207 @@
     </div>
 
     <script>
-        function resolverInboxCompose() {
+        function resolverMessageDetailPage() {
             return {
-                showCompose: false,
-                form: {
+                loading: false,
+                submitting: false,
+                showReply: false,
+
+                messageId: Number(document.getElementById('resolver-message-detail-page')?.dataset.messageId || 0),
+                currentUserId: Number(document.getElementById('resolver-message-detail-page')?.dataset.currentUserId || 0),
+                isIT: document.getElementById('resolver-message-detail-page')?.dataset.isIt === '1',
+
+                message: {},
+
+                reply: {
                     ticket_id: '',
                     to_user_id: '',
+                    to_display: '',
                     subject: '',
                     body: '',
                 },
 
-                openCompose() {
-                    this.showCompose = true;
+                init() {
+                    this.loadMessage();
                 },
 
-                discardDraft() {
-                    this.form.ticket_id = '';
-                    this.form.to_user_id = '';
-                    this.form.subject = '';
-                    this.form.body = '';
-                    this.showCompose = false;
+                csrf() {
+                    return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                },
+
+                showAlert(message, type = 'success') {
+                    const el = document.getElementById('page-alert');
+                    el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
+                    el.textContent = message;
+
+                    if (type === 'success') {
+                        el.classList.add('bg-green-100', 'text-green-800');
+                    } else {
+                        el.classList.add('bg-red-100', 'text-red-800');
+                    }
+
+                    setTimeout(() => {
+                        el.classList.add('hidden');
+                    }, 3000);
+                },
+
+                async loadMessage() {
+                    this.loading = true;
+
+                    try {
+                        const res = await fetch(`/api/resolver-inbox/${this.messageId}`, {
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                            credentials: 'same-origin',
+                        });
+
+                        const result = await res.json();
+
+                        if (!res.ok || !result.success) {
+                            throw new Error(result.message || 'Failed to load message detail');
+                        }
+
+                        this.message = result.data || {};
+                    } catch (error) {
+                        console.error(error);
+                        this.showAlert(error.message || 'Failed to load message detail', 'error');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                openReply() {
+                    if (!this.message?.id) return;
+
+                    const isSender = Number(this.message.from_user_id) === this.currentUserId;
+                    const targetUser = isSender ? this.message.recipient : this.message.sender;
+
+                    this.reply.ticket_id = this.message.ticket_id || '';
+                    this.reply.to_user_id = targetUser?.id || (isSender ? this.message.to_user_id : this.message.from_user_id) || '';
+                    this.reply.to_display = targetUser ?
+                        `${targetUser.name}${targetUser.email ? ' <' + targetUser.email + '>' : ''}` :
+                        '-';
+                    this.reply.subject = this.buildReplySubject();
+                    this.reply.body = '';
+                    this.showReply = true;
+                },
+
+                buildReplySubject() {
+                    const ticketLabel = this.ticketLabel(this.message.ticket);
+                    const ticketTitle = this.message?.ticket?.title || this.normalizedStoredSubject() || 'Message';
+
+                    return `Reply for ${ticketLabel} - ${ticketTitle}`;
+                },
+
+                discardReply() {
+                    this.reply.ticket_id = '';
+                    this.reply.to_user_id = '';
+                    this.reply.to_display = '';
+                    this.reply.subject = '';
+                    this.reply.body = '';
+                    this.showReply = false;
+                },
+
+                async submitReply() {
+                    if (this.submitting) return;
+                    if (!this.reply.ticket_id || !this.reply.body) return;
+
+                    this.submitting = true;
+
+                    try {
+                        const formData = new FormData();
+                        formData.append('ticket_id', this.reply.ticket_id);
+                        formData.append('subject', this.reply.subject || '');
+                        formData.append('body', this.reply.body || '');
+
+                        const res = await fetch('/api/resolver-inbox', {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': this.csrf(),
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                            credentials: 'same-origin',
+                            body: formData,
+                        });
+
+                        const result = await res.json();
+
+                        if (!res.ok || !result.success) {
+                            throw new Error(result.message || 'Failed to send reply');
+                        }
+
+                        this.showAlert(result.message || 'Reply sent successfully', 'success');
+                        this.discardReply();
+                    } catch (error) {
+                        console.error(error);
+                        this.showAlert(error.message || 'Failed to send reply', 'error');
+                    } finally {
+                        this.submitting = false;
+                    }
+                },
+
+                ticketUrl(ticketId) {
+                    return `/tickets/${ticketId}`;
+                },
+
+                ticketLabel(ticket) {
+                    return window.HenanApp?.ticketLabel(ticket) ?? '-';
+                },
+
+                displayMessageTitle() {
+                    if (this.message?.ticket?.title) {
+                        return this.message.ticket.title;
+                    }
+
+                    const cleaned = this.normalizedStoredSubject();
+                    return cleaned || 'No subject';
+                },
+
+                normalizedStoredSubject() {
+                    const raw = (this.message?.subject || '').trim();
+                    if (!raw) return '';
+
+                    return raw.replace(/^Reply for\s+#?T-[A-Za-z0-9-]+\s*-\s*/i, '').trim();
+                },
+
+                ucfirst(value) {
+                    if (!value) return '-';
+                    value = String(value);
+                    return value.charAt(0).toUpperCase() + value.slice(1);
+                },
+
+                formatDateTime(value) {
+                    if (!value) return '-';
+                    const date = new Date(value);
+
+                    return date.toLocaleDateString('id-ID', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: '2-digit',
+                    }) + ' ' + date.toLocaleTimeString('id-ID', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                    });
+                },
+
+                priorityClass(priority) {
+                    switch (priority) {
+                        case 'critical':
+                            return 'bg-red-500 text-white';
+                        case 'high':
+                            return 'bg-orange-400 text-white';
+                        case 'medium':
+                            return 'bg-yellow-400 text-slate-900';
+                        case 'low':
+                            return 'bg-slate-300 text-slate-800';
+                        default:
+                            return 'bg-slate-300 text-slate-800';
+                    }
                 }
             }
         }
-
-        window.addEventListener('reply-message', (event) => {
-            const root = document.querySelector('[x-data="resolverInboxCompose()"]');
-            if (!root || !root.__x) return;
-
-            const data = event.detail || {};
-            root.__x.$data.showCompose = true;
-            root.__x.$data.form.ticket_id = data.ticketId || '';
-            root.__x.$data.form.to_user_id = data.toUserId || '';
-            root.__x.$data.form.subject = data.subject || '';
-        });
     </script>
 </x-app-layout>

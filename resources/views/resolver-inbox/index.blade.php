@@ -73,16 +73,15 @@ $isIT = auth()->user()->role === 'it';
                         <thead class="bg-slate-200 text-slate-700">
                             <tr>
                                 <th class="px-5 py-3 text-left font-semibold">Ticket</th>
-                                <th class="px-4 py-3 text-left font-semibold"></th>
-                                <th class="px-4 py-3 text-left font-semibold">Priority</th>
-                                <th class="px-4 py-3 text-left font-semibold">Description</th>
-                                <th class="px-4 py-3 text-right font-semibold"></th>
+                                <th class="px-4 py-3 text-left font-semibold">Message</th>
+                                <th class="px-4 py-3 text-right font-semibold">Time</th>
                             </tr>
                         </thead>
+
                         <tbody>
                             <template x-if="loading">
                                 <tr>
-                                    <td colspan="5" class="px-5 py-10 text-center text-slate-500">
+                                    <td colspan="3" class="px-5 py-10 text-center text-slate-500">
                                         Loading messages...
                                     </td>
                                 </tr>
@@ -90,7 +89,7 @@ $isIT = auth()->user()->role === 'it';
 
                             <template x-if="!loading && messages.length === 0">
                                 <tr>
-                                    <td colspan="5" class="px-5 py-10 text-center text-slate-500">
+                                    <td colspan="3" class="px-5 py-10 text-center text-slate-500">
                                         No messages found.
                                     </td>
                                 </tr>
@@ -100,33 +99,65 @@ $isIT = auth()->user()->role === 'it';
                                 <tr
                                     class="group cursor-pointer border-t border-slate-200 odd:bg-white even:bg-slate-100 hover:bg-slate-50"
                                     @click="window.location = `/resolver-inbox/${message.id}`">
-                                    <td class="px-5 py-4 font-medium text-slate-800">
-                                        <span x-text="'#T-' + (message.ticket?.ticket_code ?? message.ticket?.id ?? '-')"></span>
+
+                                    {{-- Ticket --}}
+                                    <td class="px-5 py-4 align-top">
+                                        <div class="flex items-start gap-3">
+                                            <template x-if="!message.is_read && message.to_user_id === currentUserId">
+                                                <span class="mt-1 inline-flex h-2.5 w-2.5 rounded-full bg-sky-500"></span>
+                                            </template>
+
+                                            <div>
+                                                <div class="font-mono text-[15px] font-semibold text-slate-900"
+                                                    x-text="ticketLabel(message.ticket)">
+                                                </div>
+
+                                                <div class="mt-1 flex flex-wrap items-center gap-2">
+                                                    <template x-if="!message.is_read && message.to_user_id === currentUserId">
+                                                        <span class="inline-flex rounded-md bg-slate-300 px-2.5 py-1 text-[11px] font-bold text-white">
+                                                            NEW
+                                                        </span>
+                                                    </template>
+
+                                                    <span
+                                                        class="inline-flex rounded-full px-3 py-1 text-xs font-bold"
+                                                        :class="priorityClass(message.ticket?.priority)"
+                                                        x-text="ucfirst(message.ticket?.priority ?? '-')">
+                                                    </span>
+
+                                                    <template x-if="message.ticket?.team">
+                                                        <span class="inline-flex rounded-full bg-slate-200 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700"
+                                                            x-text="message.ticket.team">
+                                                        </span>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </td>
 
-                                    <td class="px-4 py-4">
-                                        <template x-if="!message.is_read && message.to_user_id === currentUserId">
-                                            <span class="inline-flex rounded-md bg-slate-300 px-3 py-1 text-xs font-bold text-white">
-                                                NEW
-                                            </span>
-                                        </template>
+                                    {{-- Message content --}}
+                                    <td class="px-4 py-4 align-top">
+                                        <div class="space-y-2">
+                                            <div class="text-[16px] font-semibold leading-6 text-slate-900"
+                                                x-text="displaySubject(message)">
+                                            </div>
+
+                                            <div class="text-xs text-slate-500"
+                                                x-text="participantsLabel(message)">
+                                            </div>
+
+                                            <div class="line-clamp-2 text-sm leading-6 text-slate-600"
+                                                x-text="previewText(message)">
+                                            </div>
+                                        </div>
                                     </td>
 
-                                    <td class="px-4 py-4">
-                                        <span
-                                            class="inline-flex rounded-full px-3 py-1 text-xs font-bold"
-                                            :class="priorityClass(message.ticket?.priority)"
-                                            x-text="ucfirst(message.ticket?.priority ?? '-')">
-                                        </span>
-                                    </td>
-
-                                    <td class="px-4 py-4 text-base text-slate-800">
-                                        <span x-text="truncate(message.subject || message.body || '-', 70)"></span>
-                                    </td>
-
-                                    <td class="px-4 py-4 text-right">
-                                        <div class="relative flex justify-end">
-                                            <div class="text-slate-600 group-hover:hidden" x-text="formatTime(message.created_at)"></div>
+                                    {{-- Time + actions --}}
+                                    <td class="px-4 py-4 align-top text-right">
+                                        <div class="flex flex-col items-end gap-2">
+                                            <div class="text-sm font-medium text-slate-700 group-hover:hidden"
+                                                x-text="formatDateTimeShort(message.created_at)">
+                                            </div>
 
                                             <div class="hidden items-center gap-3 group-hover:flex">
                                                 {{-- Reply --}}
@@ -222,7 +253,7 @@ $isIT = auth()->user()->role === 'it';
                                 <template x-for="ticket in composeTickets" :key="ticket.id">
                                     <option
                                         :value="ticket.id"
-                                        x-text="`#T-${ticket.ticket_code ?? ticket.id} - ${ticket.title}`">
+                                        x-text="`${ticketLabel(ticket)} - ${ticket.title}`">
                                     </option>
                                 </template>
                             </select>
@@ -394,6 +425,55 @@ $isIT = auth()->user()->role === 'it';
                         minute: '2-digit',
                     });
                 },
+                ticketLabel(ticket) {
+                    return window.HenanApp?.ticketLabel(ticket) ?? '-';
+                },
+
+
+                displaySubject(message) {
+                    const raw = (message.subject || '').trim();
+
+                    if (!raw) {
+                        return 'No subject';
+                    }
+
+                    return raw.replace(/^Reply for\s+#?T-[A-Za-z0-9-]+\s*-\s*/i, '').trim();
+                },
+
+                previewText(message) {
+                    const body = (message.body || '').replace(/\s+/g, ' ').trim();
+
+                    if (!body) {
+                        return '-';
+                    }
+
+                    return this.truncate(body, 110);
+                },
+
+                participantsLabel(message) {
+                    const fromName = message.sender?.name || 'Unknown sender';
+                    const toName = message.recipient?.name || 'Unknown recipient';
+
+                    return `${fromName} → ${toName}`;
+                },
+
+                formatDateTimeShort(value) {
+                    if (!value) return '-';
+
+                    const date = new Date(value);
+
+                    const datePart = date.toLocaleDateString('id-ID', {
+                        day: '2-digit',
+                        month: 'short',
+                    });
+
+                    const timePart = date.toLocaleTimeString('id-ID', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                    });
+
+                    return `${datePart}, ${timePart}`;
+                },
 
                 priorityClass(priority) {
                     switch (priority) {
@@ -481,9 +561,11 @@ $isIT = auth()->user()->role === 'it';
 
                 syncTicketMeta() {
                     const ticket = this.composeTickets.find(t => String(t.id) === String(this.form.ticket_id));
+
                     if (!ticket) {
                         this.form.to_user_id = '';
                         this.form.to_display = '';
+                        this.form.subject = '';
                         return;
                     }
 
@@ -500,15 +582,13 @@ $isIT = auth()->user()->role === 'it';
                         `${target.name}${target.email ? ' <' + target.email + '>' : ''}` :
                         '';
 
-                    if (!this.form.subject) {
-                        this.form.subject = `Reply for #T-${ticket.ticket_code ?? ticket.id} - ${ticket.title}`;
-                    }
+                    this.form.subject = `Reply for ${this.ticketLabel(ticket)} - ${ticket.title}`;
                 },
 
                 replyMessage(message) {
                     this.showCompose = true;
                     this.form.ticket_id = message.ticket_id || '';
-                    this.form.subject = message.subject || `Reply for #T-${message.ticket?.ticket_code ?? message.ticket?.id ?? ''}`;
+                    this.form.subject = '';
                     this.syncTicketMeta();
                 },
 

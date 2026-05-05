@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Ticket;
 use App\Models\TicketStatusHistory;
+use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -20,13 +22,18 @@ class ReportsApiController extends BaseApiController
             $scope = 'my';
         }
 
+        $perPage = (int) $request->query('per_page', 10);
+        if (!in_array($perPage, [10, 25, 50], true)) {
+            $perPage = 10;
+        }
+
         $user = $request->user();
 
         $baseTickets = Ticket::query()->with(['creator', 'holder']);
         $this->applyScope($baseTickets, $scope, $user);
 
-        // Resolved / Closed in selected range
-        $resolvedCount = (clone $baseTickets)
+        $resolvedClosedCount = (clone $baseTickets)
+            ->whereIn('status', ['resolved', 'closed'])
             ->where(function ($q) use ($start, $end) {
                 $q->where(function ($qq) use ($start, $end) {
                     $qq->whereNotNull('resolved_at')
@@ -37,11 +44,11 @@ class ReportsApiController extends BaseApiController
                         ->whereBetween('closed_at', [$start, $end]);
                 });
             })
-            ->whereIn('status', ['resolved', 'closed'])
             ->count();
 
-        // Avg response = created_at -> claimed_at
-        $avgResponseSeconds = (clone $baseTickets)
+        $itTickets = (clone $baseTickets)->where('team', 'it');
+
+        $avgResponseSeconds = (clone $itTickets)
             ->whereNotNull('claimed_at')
             ->whereBetween('created_at', [$start, $end])
             ->selectRaw('AVG(TIMESTAMPDIFF(SECOND, created_at, claimed_at)) as avg_seconds')
@@ -49,7 +56,6 @@ class ReportsApiController extends BaseApiController
 
         $avgResponseSeconds = (int) round($avgResponseSeconds ?? 0);
 
-        // Reopened = resolved -> in_progress or waiting_info in selected range
         $reopenedTicketIds = TicketStatusHistory::query()
             ->whereIn('to_status', ['in_progress', 'waiting_info'])
             ->where('from_status', 'resolved')
@@ -57,54 +63,60 @@ class ReportsApiController extends BaseApiController
             ->pluck('ticket_id')
             ->unique();
 
-        $reopenedCount = (clone $baseTickets)
-            ->whereIn('id', $reopenedTicketIds)
-            ->count();
-
-        $reopenRate = $resolvedCount > 0
-            ? round(($reopenedCount / $resolvedCount) * 100, 1)
-            : 0;
-
-        // SLA Risk / Breach in selected range
-        $slaRiskCount = (clone $baseTickets)
-            ->whereNotNull('sla_deadline_at')
-            ->whereBetween('sla_deadline_at', [$start, $end])
-            ->where(function ($q) {
-                $q->where(function ($qq) {
-                    $qq->whereIn('status', ['new', 'in_progress', 'waiting_info'])
-                        ->where('sla_deadline_at', '<', now());
-                })->orWhere(function ($qq) {
+        $resolvedItCount = (clone $itTickets)
+            ->whereIn('status', ['resolved', 'closed'])
+            ->where(function ($q) use ($start, $end) {
+                $q->where(function ($qq) use ($start, $end) {
                     $qq->whereNotNull('resolved_at')
-                        ->whereColumn('resolved_at', '>', 'sla_deadline_at');
-                })->orWhere(function ($qq) {
+                        ->whereBetween('resolved_at', [$start, $end]);
+                })->orWhere(function ($qq) use ($start, $end) {
                     $qq->whereNull('resolved_at')
                         ->whereNotNull('closed_at')
-                        ->whereColumn('closed_at', '>', 'sla_deadline_at');
+                        ->whereBetween('closed_at', [$start, $end]);
                 });
             })
             ->count();
 
-        // Trend: resolved per day
-        $range = (string) $request->query('range', 'this_week');
+        $reopenedCount = (clone $itTickets)
+            ->whereIn('id', $reopenedTicketIds)
+            ->count();
+
+        $reopenRate = $resolvedItCount > 0
+            ? round(($reopenedCount / $resolvedItCount) * 100, 1)
+            : 0;
+
+        $slaRiskCount = (clone $itTickets)
+            ->whereNotNull('sla_deadline_at')
+            ->where(function ($q) {
+                $q->whereIn('status', ['new', 'in_progress', 'waiting_info'])
+                    ->where('sla_deadline_at', '<=', now());
+            })
+            ->whereBetween('created_at', [$start, $end])
+            ->count();
 
         $trendLabels = [];
         $trendValues = [];
 
+        $range = (string) $request->query('range', 'this_week');
+
         if ($range === 'one_year') {
+            $months = $this->makeMonthRange($start, $end);
+
             $trendRows = (clone $baseTickets)
                 ->whereIn('status', ['resolved', 'closed'])
                 ->where(function ($q) use ($start, $end) {
                     $q->whereBetween(DB::raw('COALESCE(resolved_at, closed_at)'), [$start, $end]);
                 })
-                ->selectRaw('MONTH(COALESCE(resolved_at, closed_at)) as resolved_month, COUNT(*) as total')
+                ->selectRaw("DATE_FORMAT(COALESCE(resolved_at, closed_at), '%Y-%m') as resolved_month, COUNT(*) as total")
                 ->groupBy('resolved_month')
                 ->orderBy('resolved_month')
                 ->get()
                 ->keyBy('resolved_month');
 
-            for ($month = 1; $month <= 12; $month++) {
-                $trendLabels[] = Carbon::create(null, $month, 1)->format('M');
-                $trendValues[] = (int) ($trendRows[$month]->total ?? 0);
+            foreach ($months as $month) {
+                $key = $month->format('Y-m');
+                $trendLabels[] = $month->format('M Y');
+                $trendValues[] = (int) ($trendRows[$key]->total ?? 0);
             }
         } else {
             $trendDays = $this->makeDayRange($start, $end);
@@ -127,55 +139,21 @@ class ReportsApiController extends BaseApiController
             }
         }
 
-        // Table rows
-        $rows = (clone $baseTickets)
+        $rowsQuery = (clone $baseTickets)
             ->whereBetween('created_at', [$start, $end])
-            ->latest()
-            ->take(10)
-            ->get()
-            ->map(function ($ticket) {
-                $responseSeconds = null;
-                if ($ticket->claimed_at) {
-                    $responseSeconds = Carbon::parse($ticket->created_at)
-                        ->diffInSeconds(Carbon::parse($ticket->claimed_at));
-                }
+            ->latest();
 
-                $slaSeconds = null;
-                if ($ticket->sla_deadline_at) {
-                    $slaSeconds = now()->diffInSeconds(Carbon::parse($ticket->sla_deadline_at), false);
-                }
+        $rowsPaginator = $rowsQuery
+            ->paginate($perPage)
+            ->withQueryString();
 
-                $result = 'Open';
-
-                if (in_array($ticket->status, ['resolved', 'closed'], true)) {
-                    $breached = false;
-
-                    if ($ticket->resolved_at && $ticket->sla_deadline_at) {
-                        $breached = Carbon::parse($ticket->resolved_at)
-                            ->gt(Carbon::parse($ticket->sla_deadline_at));
-                    } elseif ($ticket->closed_at && $ticket->sla_deadline_at) {
-                        $breached = Carbon::parse($ticket->closed_at)
-                            ->gt(Carbon::parse($ticket->sla_deadline_at));
-                    }
-
-                    $result = $breached ? 'Breach' : 'OK';
-                }
-
-                return [
-                    'id' => $ticket->id,
-                    'ticket_code' => $ticket->ticket_code ? '#T-' . $ticket->ticket_code : '#T-' . $ticket->id,
-                    'status' => $ticket->status,
-                    'team' => strtoupper((string) $ticket->team),
-                    'sla_time' => $this->formatSecondsAsClock($slaSeconds),
-                    'response_time' => $this->formatSecondsAsClock($responseSeconds),
-                    'result' => $result,
-                ];
-            })
+        $rows = $rowsPaginator->getCollection()
+            ->map(fn ($ticket) => $this->mapTicketRow($ticket))
             ->values();
 
         return $this->success([
             'cards' => [
-                'resolved' => $resolvedCount,
+                'resolved' => $resolvedClosedCount,
                 'avg_response_seconds' => $avgResponseSeconds,
                 'avg_response_label' => $this->formatAvgResponse($avgResponseSeconds),
                 'reopen_rate' => $reopenRate,
@@ -186,11 +164,23 @@ class ReportsApiController extends BaseApiController
                 'values' => $trendValues,
             ],
             'rows' => $rows,
+            'pagination' => [
+                'current_page' => $rowsPaginator->currentPage(),
+                'last_page' => $rowsPaginator->lastPage(),
+                'per_page' => $rowsPaginator->perPage(),
+                'total' => $rowsPaginator->total(),
+                'from' => $rowsPaginator->firstItem(),
+                'to' => $rowsPaginator->lastItem(),
+            ],
             'meta' => [
                 'scope' => $scope,
                 'range' => [
                     'start' => $start->toDateString(),
                     'end' => $end->toDateString(),
+                ],
+                'table_labels' => [
+                    'sla_time' => 'SLA Remaining / Outcome',
+                    'result' => 'SLA Result',
                 ],
             ],
         ], 'Reports loaded');
@@ -198,31 +188,81 @@ class ReportsApiController extends BaseApiController
 
     public function export(Request $request)
     {
-        $data = $this->index($request)->getData(true);
-        $rows = $data['data']['rows'] ?? [];
+        [$start, $end] = $this->resolveRange($request);
+
+        $scope = (string) $request->query('scope', 'my');
+        if (!in_array($scope, ['my', 'team', 'all'], true)) {
+            $scope = 'my';
+        }
+
+        $user = $request->user();
+
+        $baseTickets = Ticket::query()->with(['creator', 'holder']);
+        $this->applyScope($baseTickets, $scope, $user);
+
+        $exportQuery = (clone $baseTickets)
+            ->whereBetween('created_at', [$start, $end])
+            ->latest();
 
         $filename = 'reports_' . now()->format('Ymd_His') . '.csv';
 
-        return response()->streamDownload(function () use ($rows) {
+        return response()->streamDownload(function () use ($exportQuery) {
             $handle = fopen('php://output', 'w');
 
-            fputcsv($handle, ['Ticket', 'Status', 'Team', 'SLA Time', 'Response Time', 'Result']);
+            fwrite($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
 
-            foreach ($rows as $row) {
-                fputcsv($handle, [
-                    $row['ticket_code'] ?? '',
-                    $row['status'] ?? '',
-                    $row['team'] ?? '',
-                    $row['sla_time'] ?? '',
-                    $row['response_time'] ?? '',
-                    $row['result'] ?? '',
-                ]);
-            }
+            fputcsv($handle, [
+                'Ticket',
+                'Status',
+                'Team',
+                'SLA Remaining / Outcome',
+                'Response Time',
+                'SLA Result',
+            ]);
+
+            $exportQuery->chunk(500, function (Collection $tickets) use ($handle) {
+                foreach ($tickets as $ticket) {
+                    $row = $this->mapTicketRow($ticket);
+
+                    fputcsv($handle, [
+                        $row['ticket_code'] ?? '',
+                        $row['status'] ?? '',
+                        $row['team'] ?? '',
+                        $row['sla_time'] ?? '',
+                        $row['response_time'] ?? '',
+                        $row['result'] ?? '',
+                    ]);
+                }
+            });
 
             fclose($handle);
         }, $filename, [
-            'Content-Type' => 'text/csv',
+            'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
+    }
+
+    protected function mapTicketRow(Ticket $ticket): array
+    {
+        $responseSeconds = null;
+
+        if ($ticket->team === 'it' && $ticket->claimed_at) {
+            $responseSeconds = Carbon::parse($ticket->created_at)
+                ->diffInSeconds(Carbon::parse($ticket->claimed_at));
+        }
+
+        $slaSnapshot = $this->buildSlaSnapshot($ticket);
+
+        return [
+            'id' => $ticket->id,
+            'ticket_code' => $ticket->ticket_code ? 'T-' . $ticket->ticket_code : 'T-' . $ticket->id,
+            'status' => $ticket->status,
+            'team' => strtoupper((string) $ticket->team),
+            'sla_time' => $slaSnapshot['sla_time'],
+            'response_time' => $ticket->team === 'it'
+                ? $this->formatHumanDuration($responseSeconds)
+                : 'N/A',
+            'result' => $slaSnapshot['result'],
+        ];
     }
 
     protected function resolveRange(Request $request): array
@@ -235,7 +275,7 @@ class ReportsApiController extends BaseApiController
             '7d' => [now()->copy()->subDays(6)->startOfDay(), now()->copy()->endOfDay()],
             '30d' => [now()->copy()->subDays(29)->startOfDay(), now()->copy()->endOfDay()],
             'this_month' => [now()->copy()->startOfMonth(), now()->copy()->endOfDay()],
-            'one_year' => [now()->copy()->startOfYear(), now()->copy()->endOfDay()],
+            'one_year' => [now()->copy()->subMonths(11)->startOfMonth(), now()->copy()->endOfDay()],
             'custom' => [
                 $customFrom !== '' ? Carbon::parse($customFrom)->startOfDay() : now()->copy()->startOfWeek(),
                 $customTo !== '' ? Carbon::parse($customTo)->endOfDay() : now()->copy()->endOfDay(),
@@ -244,25 +284,32 @@ class ReportsApiController extends BaseApiController
         };
     }
 
-    protected function applyScope($query, string $scope, $user): void
+    protected function applyScope(Builder $query, string $scope, User $user): void
     {
-        if ($scope === 'all' && $user->role === 'admin') {
-            return;
-        }
-
-        if ($scope === 'team') {
-            if ($user->role === 'it') {
+        if ($user->role === 'it') {
+            if ($scope === 'team') {
                 $query->where('team', 'it');
                 return;
             }
 
-            if (in_array($user->role, ['cs', 'admin'], true)) {
+            if ($scope === 'all' && in_array($user->role, ['admin', 'supervisor'], true)) {
                 return;
             }
+
+            $query->where('holder_id', $user->id);
+            return;
         }
 
-        if ($user->role === 'it') {
-            $query->where('holder_id', $user->id);
+        if ($scope === 'all' && in_array($user->role, ['admin', 'supervisor'], true)) {
+            return;
+        }
+
+        if ($scope === 'team') {
+            $csUserIds = User::query()
+                ->where('role', 'cs')
+                ->pluck('id');
+
+            $query->whereIn('created_by', $csUserIds);
             return;
         }
 
@@ -282,44 +329,149 @@ class ReportsApiController extends BaseApiController
         return $days;
     }
 
+    protected function makeMonthRange(Carbon $start, Carbon $end): Collection
+    {
+        $months = collect();
+        $cursor = $start->copy()->startOfMonth();
+
+        while ($cursor->lte($end)) {
+            $months->push($cursor->copy());
+            $cursor->addMonth();
+        }
+
+        return $months;
+    }
+
+    protected function buildSlaSnapshot(Ticket $ticket): array
+    {
+        if ($ticket->team !== 'it') {
+            if (in_array($ticket->status, ['resolved', 'closed'], true)) {
+                return [
+                    'sla_time' => 'Direct close',
+                    'result' => 'Closed',
+                ];
+            }
+
+            return [
+                'sla_time' => 'No SLA',
+                'result' => 'Open',
+            ];
+        }
+
+        if (!$ticket->sla_deadline_at) {
+            return [
+                'sla_time' => 'No SLA',
+                'result' => 'Open',
+            ];
+        }
+
+        $deadline = Carbon::parse($ticket->sla_deadline_at);
+        $completedAt = $this->resolveCompletedAt($ticket);
+        $isCompleted = in_array($ticket->status, ['resolved', 'closed'], true) && $completedAt !== null;
+
+        if ($isCompleted) {
+            $diffSeconds = $completedAt->diffInSeconds($deadline, false);
+
+            if ($diffSeconds >= 0) {
+                return [
+                    'sla_time' => 'Met by ' . $this->formatHumanDuration($diffSeconds),
+                    'result' => 'OK',
+                ];
+            }
+
+            return [
+                'sla_time' => 'Breached by ' . $this->formatHumanDuration(abs($diffSeconds)),
+                'result' => 'Breach',
+            ];
+        }
+
+        $remainingSeconds = now()->diffInSeconds($deadline, false);
+
+        if ($remainingSeconds >= 0) {
+            return [
+                'sla_time' => $this->formatHumanDuration($remainingSeconds) . ' left',
+                'result' => 'Open',
+            ];
+        }
+
+        return [
+            'sla_time' => 'Overdue ' . $this->formatHumanDuration(abs($remainingSeconds)),
+            'result' => 'Breach',
+        ];
+    }
+
+    protected function resolveCompletedAt(Ticket $ticket): ?Carbon
+    {
+        if ($ticket->resolved_at) {
+            return Carbon::parse($ticket->resolved_at);
+        }
+
+        if ($ticket->closed_at) {
+            return Carbon::parse($ticket->closed_at);
+        }
+
+        return null;
+    }
+
     protected function formatAvgResponse(int $seconds): string
     {
         if ($seconds <= 0) {
             return '0m';
         }
 
-        $minutes = round($seconds / 60);
+        $minutes = (int) round($seconds / 60);
 
         if ($minutes < 60) {
             return $minutes . 'm';
         }
 
-        $hours = floor($minutes / 60);
+        $days = intdiv($minutes, 1440);
+        $hours = intdiv($minutes % 1440, 60);
         $remainingMinutes = $minutes % 60;
 
-        if ($remainingMinutes === 0) {
+        if ($days > 0) {
+            return $hours > 0
+                ? $days . 'd ' . $hours . 'h'
+                : $days . 'd';
+        }
+
+        return $remainingMinutes > 0
+            ? intdiv($minutes, 60) . 'h ' . $remainingMinutes . 'm'
+            : intdiv($minutes, 60) . 'h';
+    }
+
+    protected function formatHumanDuration(?int $seconds): string
+    {
+        if ($seconds === null || $seconds <= 0) {
+            return '0m';
+        }
+
+        $minutes = (int) floor($seconds / 60);
+
+        if ($minutes <= 0) {
+            return '0m';
+        }
+
+        $days = intdiv($minutes, 1440);
+        $hours = intdiv($minutes % 1440, 60);
+        $remainingMinutes = $minutes % 60;
+
+        if ($days > 0) {
+            if ($hours > 0) {
+                return $days . 'd ' . $hours . 'h';
+            }
+
+            return $days . 'd';
+        }
+
+        if ($hours > 0) {
+            if ($remainingMinutes > 0) {
+                return $hours . 'h ' . $remainingMinutes . 'm';
+            }
+
             return $hours . 'h';
         }
 
-        return $hours . 'h ' . $remainingMinutes . 'm';
-    }
-
-    protected function formatSecondsAsClock(?int $seconds): string
-    {
-        if ($seconds === null) {
-            return '-';
-        }
-
-        $negative = $seconds < 0;
-        $seconds = abs($seconds);
-
-        $hours = floor($seconds / 3600);
-        $minutes = floor(($seconds % 3600) / 60);
-
-        $formatted = str_pad((string) $hours, 2, '0', STR_PAD_LEFT)
-            . ':'
-            . str_pad((string) $minutes, 2, '0', STR_PAD_LEFT);
-
-        return $negative ? '-' . $formatted : $formatted;
+        return $remainingMinutes . 'm';
     }
 }

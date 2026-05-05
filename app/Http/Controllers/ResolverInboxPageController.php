@@ -10,7 +10,7 @@ class ResolverInboxPageController extends Controller
     // Render resolver inbox index page
     public function index(Request $request)
     {
-        if (!in_array($request->user()->role, ['cs', 'it', 'admin'], true)) {
+        if (!in_array($request->user()->role, ['cs', 'it', 'admin', 'supervisor'], true)) {
             abort(403);
         }
 
@@ -20,7 +20,7 @@ class ResolverInboxPageController extends Controller
     // Render resolver inbox detail/open page
     public function show(Request $request, ResolverMessage $resolverMessage)
     {
-        if (!in_array($request->user()->role, ['cs', 'it', 'admin'], true)) {
+        if (!in_array($request->user()->role, ['cs', 'it', 'admin', 'supervisor'], true)) {
             abort(403);
         }
 

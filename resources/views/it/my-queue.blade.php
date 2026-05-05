@@ -41,11 +41,13 @@
 
                                 <template x-for="t in newTickets" :key="t.id">
                                     <tr class="border-b">
-                                        <td class="py-3 px-3 font-mono" x-text="'#T-' + (t.ticket_code ?? t.id)"></td>
+                                        <td class="py-3 px-3 font-mono" x-text="ticketLabel(t)"></td>
 
                                         <td class="px-3">
-                                            <div class="font-semibold" x-text="t.title"></div>
-                                            <div class="text-xs text-gray-500 truncate max-w-[520px]" x-text="t.description"></div>
+                                            <a :href="ticketUrl(t.id)" class="block">
+                                                <div class="font-semibold text-slate-900 hover:text-blue-600 hover:underline" x-text="t.title"></div>
+                                                <div class="text-xs text-gray-500 truncate max-w-[520px]" x-text="t.description"></div>
+                                            </a>
                                         </td>
 
                                         <td class="px-3">
@@ -102,11 +104,13 @@
 
                                 <template x-for="t in ongoingTickets" :key="t.id">
                                     <tr class="border-b">
-                                        <td class="py-3 px-3 font-mono" x-text="'#T-' + (t.ticket_code ?? t.id)"></td>
+                                        <td class="py-3 px-3 font-mono" x-text="ticketLabel(t)"></td>
 
                                         <td class="px-3">
-                                            <div class="font-semibold" x-text="t.title"></div>
-                                            <div class="text-xs text-gray-500 truncate max-w-[520px]" x-text="t.description"></div>
+                                            <a :href="ticketUrl(t.id)" class="block">
+                                                <div class="font-semibold text-slate-900 hover:text-blue-600 hover:underline" x-text="t.title"></div>
+                                                <div class="text-xs text-gray-500 truncate max-w-[520px]" x-text="t.description"></div>
+                                            </a>
                                         </td>
 
                                         <td class="px-3">
@@ -163,11 +167,13 @@
 
                                 <template x-for="t in waitingTickets" :key="t.id">
                                     <tr class="border-b">
-                                        <td class="py-3 px-3 font-mono" x-text="'#T-' + (t.ticket_code ?? t.id)"></td>
+                                        <td class="py-3 px-3 font-mono" x-text="ticketLabel(t)"></td>
 
                                         <td class="px-3">
-                                            <div class="font-semibold" x-text="t.title"></div>
-                                            <div class="text-xs text-gray-500 truncate max-w-[520px]" x-text="t.description"></div>
+                                            <a :href="ticketUrl(t.id)" class="block">
+                                                <div class="font-semibold text-slate-900 hover:text-blue-600 hover:underline" x-text="t.title"></div>
+                                                <div class="text-xs text-gray-500 truncate max-w-[520px]" x-text="t.description"></div>
+                                            </a>
                                         </td>
 
                                         <td class="px-3">
@@ -224,11 +230,13 @@
 
                                 <template x-for="t in resolvedTickets" :key="t.id">
                                     <tr class="border-b">
-                                        <td class="py-3 px-3 font-mono" x-text="'#T-' + (t.ticket_code ?? t.id)"></td>
+                                        <td class="py-3 px-3 font-mono" x-text="ticketLabel(t)"></td>
 
                                         <td class="px-3">
-                                            <div class="font-semibold" x-text="t.title"></div>
-                                            <div class="text-xs text-gray-500 truncate max-w-[520px]" x-text="t.description"></div>
+                                            <a :href="ticketUrl(t.id)" class="block">
+                                                <div class="font-semibold text-slate-900 hover:text-blue-600 hover:underline" x-text="t.title"></div>
+                                                <div class="text-xs text-gray-500 truncate max-w-[520px]" x-text="t.description"></div>
+                                            </a>
                                         </td>
 
                                         <td class="px-3">
@@ -283,6 +291,10 @@
 
                 csrf() {
                     return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                },
+
+                ticketUrl(ticketId) {
+                    return `/tickets/${ticketId}`;
                 },
 
                 showAlert(message, type = 'success') {
@@ -360,6 +372,10 @@
                         await this.loadQueue();
                     }
                 },
+                ticketLabel(ticket) {
+                    return window.HenanApp?.ticketLabel(ticket) ?? '-';
+                },
+
 
                 ucfirst(value) {
                     if (!value) return '-';

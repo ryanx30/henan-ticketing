@@ -2,12 +2,22 @@
 
 namespace Database\Seeders;
 
+use App\Models\Category;
+use App\Models\Client;
+use App\Models\IssueType;
+use App\Models\Priority;
+use App\Models\SlaRule;
+use App\Models\Team;
 use App\Models\Ticket;
+use App\Models\TicketSequence;
 use App\Models\User;
 use Carbon\Carbon;
 use Faker\Factory;
+use Faker\Generator as FakerGenerator;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class TicketSeeder extends Seeder
 {
@@ -35,137 +45,121 @@ class TicketSeeder extends Seeder
             return;
         }
 
-        $catalog = [
-            'it' => [
-                'trading_orders' => [
-                    'order_status_mismatch',
-                    'order_pending',
-                    'order_execution_error',
-                    'order_stuck',
-                ],
-                'app_technical' => [
-                    'performance_slow',
-                    'app_crash',
-                    'sync_issue',
-                    'notification_bug',
-                ],
-                'portfolio_reports' => [
-                    'pnl_wrong',
-                    'portfolio_not_updated',
-                    'statement_mismatch',
-                ],
-                'account_access' => [
-                    'login_auth',
-                    'reset_password',
-                    'otp_not_received',
-                    'session_expired',
-                ],
-            ],
-            'finance' => [
-                'funds' => [
-                    'deposit_not_reflected',
-                    'withdraw_pending',
-                    'rdn_transfer_delay',
-                    'balance_not_updated',
-                ],
-                'billing' => [
-                    'fee_mismatch',
-                    'charge_unknown',
-                    'invoice_request',
-                ],
-                'settlement' => [
-                    'settlement_delay',
-                    'fund_release_issue',
-                ],
-            ],
-            'compliance' => [
-                'kyc_compliance' => [
-                    'kyc_pending',
-                    'document_rejected',
-                    'name_mismatch',
-                    'selfie_verification_failed',
-                ],
-                'account_restriction' => [
-                    'account_blocked',
-                    'source_of_funds_check',
-                    'suspicious_activity_review',
-                ],
-                'document_review' => [
-                    'document_expired',
-                    'incomplete_documents',
-                ],
-            ],
-        ];
+        $teams = Team::query()
+            ->where('is_active', true)
+            ->whereNotNull('code')
+            ->whereNotNull('code_num')
+            ->orderBy('code_num')
+            ->get();
+
+        $categories = Category::query()
+            ->where('is_active', true)
+            ->whereNotNull('code_num')
+            ->orderBy('code_num')
+            ->get();
+
+        $priorities = Priority::query()
+            ->where('is_active', true)
+            ->whereNotNull('code')
+            ->whereNotNull('code_num')
+            ->orderBy('sort_order')
+            ->orderBy('code_num')
+            ->get();
+
+        $issueTypesByCategory = IssueType::query()
+            ->where('is_active', true)
+            ->whereNotNull('category_id')
+            ->whereNotNull('code_num')
+            ->whereIn('category_id', $categories->pluck('id'))
+            ->orderBy('code_num')
+            ->get()
+            ->groupBy('category_id');
+
+        $usableCategories = $categories
+            ->filter(fn ($category) => isset($issueTypesByCategory[$category->id]) && $issueTypesByCategory[$category->id]->isNotEmpty())
+            ->values();
+
+        if ($teams->isEmpty()) {
+            $this->command->warn('Seeder dibatalkan: master data Teams aktif dengan code dan code_num belum tersedia.');
+            return;
+        }
+
+        if ($usableCategories->isEmpty()) {
+            $this->command->warn('Seeder dibatalkan: master data Categories/Issue Types aktif dengan code_num belum lengkap.');
+            return;
+        }
+
+        if ($priorities->isEmpty()) {
+            $this->command->warn('Seeder dibatalkan: master data Priorities aktif dengan code dan code_num belum tersedia.');
+            return;
+        }
+
+        $this->resetTicketTables();
 
         $platformTypes = ['web', 'mobile', 'desktop'];
         $flowTypes = ['login', 'order', 'deposit', 'withdrawal', 'verification', 'reporting'];
-        $priorities = ['low', 'medium', 'high', 'critical'];
         $statuses = ['new', 'in_progress', 'waiting_info', 'resolved', 'closed'];
 
-        $slaHoursByPriority = [
-            'critical' => 2,
-            'high'     => 6,
-            'medium'   => 12,
-            'low'      => 24,
-        ];
-
         for ($i = 1; $i <= 80; $i++) {
-            $team = $faker->randomElement(array_keys($catalog));
-            $category = $faker->randomElement(array_keys($catalog[$team]));
-            $issueType = $faker->randomElement($catalog[$team][$category]);
-
-            $priority = $faker->randomElement($priorities);
+            $team = $teams->random();
+            $category = $usableCategories->random();
+            $issueType = $issueTypesByCategory[$category->id]->random();
+            $priority = $priorities->random();
             $status = $faker->randomElement($statuses);
 
-            $createdAt = Carbon::instance(
-                $faker->dateTimeBetween('-4 months', '-1 day')
-            );
-
+            $createdAt = Carbon::instance($faker->dateTimeBetween('-4 months', '-1 day'));
             $createdBy = $creatorIds->random();
-            $holderId = in_array($status, ['in_progress', 'waiting_info', 'resolved', 'closed'], true)
-                ? $resolverIds->random()
-                : null;
+
+            $needsResolver = in_array($status, ['in_progress', 'waiting_info', 'resolved', 'closed'], true);
+            $holderId = $needsResolver ? $resolverIds->random() : null;
 
             $title = $this->makeTitle($team, $category, $issueType, $faker);
             $description = $this->makeDescription($team, $category, $issueType);
 
-            $requestTime = (clone $createdAt)->addMinutes($faker->numberBetween(0, 20));
-            $slaDeadlineAt = (clone $createdAt)->addHours($slaHoursByPriority[$priority]);
+            $requestTime = $createdAt->copy()->addMinutes($faker->numberBetween(0, 20));
+            $slaHours = $this->getSlaHoursForTicket($team, $priority);
+            $slaDeadlineAt = $slaHours ? $createdAt->copy()->addHours($slaHours) : null;
 
             $claimedAt = null;
             $resolvedAt = null;
             $closedAt = null;
-            $updatedAt = clone $createdAt;
-
+            $updatedAt = $createdAt->copy();
             $historyRows = [];
 
             $historyRows[] = $this->makeHistoryRow(
                 fromStatus: null,
                 toStatus: 'new',
                 changedBy: $createdBy,
-                changedAt: clone $createdAt,
+                changedAt: $createdAt->copy(),
                 note: 'Initial status on ticket creation'
             );
 
             if ($status !== 'new') {
-                // First response / claim: realistis, dekat ke waktu dibuat
-                $claimedAt = (clone $createdAt)->addMinutes($faker->numberBetween(5, 90));
-                $updatedAt = clone $claimedAt;
-
-                $nextStatusAfterClaim = $status === 'waiting_info' ? 'waiting_info' : 'in_progress';
+                $claimedAt = $createdAt->copy()->addMinutes($faker->numberBetween(5, 90));
+                $updatedAt = $claimedAt->copy();
 
                 $historyRows[] = $this->makeHistoryRow(
                     fromStatus: 'new',
-                    toStatus: $nextStatusAfterClaim,
+                    toStatus: 'in_progress',
                     changedBy: $holderId,
-                    changedAt: clone $claimedAt,
-                    note: $nextStatusAfterClaim === 'waiting_info'
-                        ? 'Ticket requires additional customer information'
-                        : 'Ticket claimed by resolver'
+                    changedAt: $claimedAt->copy(),
+                    note: 'Ticket claimed by resolver'
                 );
 
+                if ($status === 'waiting_info') {
+                    $waitingAt = $claimedAt->copy()->addMinutes($faker->numberBetween(15, 120));
+                    $updatedAt = $waitingAt->copy();
+
+                    $historyRows[] = $this->makeHistoryRow(
+                        fromStatus: 'in_progress',
+                        toStatus: 'waiting_info',
+                        changedBy: $holderId,
+                        changedAt: $waitingAt->copy(),
+                        note: 'Ticket requires additional customer information'
+                    );
+                }
+
                 if (in_array($status, ['resolved', 'closed'], true)) {
-                    // 70% met SLA, 30% breached tipis
                     $isBreached = $faker->boolean(30);
 
                     $baseResolvedAt = $this->makeResolvedAtNearSla(
@@ -176,20 +170,18 @@ class TicketSeeder extends Seeder
                         faker: $faker
                     );
 
-                    $finalResolvedAt = clone $baseResolvedAt;
-
-                    // reopen kecil-kecilan, jangan bikin ngawur
+                    $finalResolvedAt = $baseResolvedAt->copy();
                     $reopened = $faker->boolean(12);
 
                     if ($reopened) {
-                        $reopenedAt = (clone $baseResolvedAt)->addMinutes($faker->numberBetween(15, 120));
-                        $finalResolvedAt = (clone $reopenedAt)->addMinutes($faker->numberBetween(20, 180));
+                        $reopenedAt = $baseResolvedAt->copy()->addMinutes($faker->numberBetween(15, 120));
+                        $finalResolvedAt = $reopenedAt->copy()->addMinutes($faker->numberBetween(20, 180));
 
                         $historyRows[] = $this->makeHistoryRow(
-                            fromStatus: $nextStatusAfterClaim,
+                            fromStatus: 'in_progress',
                             toStatus: 'resolved',
                             changedBy: $holderId,
-                            changedAt: clone $baseResolvedAt,
+                            changedAt: $baseResolvedAt->copy(),
                             note: 'Issue resolved'
                         );
 
@@ -197,7 +189,7 @@ class TicketSeeder extends Seeder
                             fromStatus: 'resolved',
                             toStatus: 'in_progress',
                             changedBy: $createdBy,
-                            changedAt: clone $reopenedAt,
+                            changedAt: $reopenedAt->copy(),
                             note: 'Ticket reopened due to recurring issue'
                         );
 
@@ -205,50 +197,69 @@ class TicketSeeder extends Seeder
                             fromStatus: 'in_progress',
                             toStatus: 'resolved',
                             changedBy: $holderId,
-                            changedAt: clone $finalResolvedAt,
+                            changedAt: $finalResolvedAt->copy(),
                             note: 'Issue resolved after reopen'
                         );
                     } else {
                         $historyRows[] = $this->makeHistoryRow(
-                            fromStatus: $nextStatusAfterClaim,
+                            fromStatus: 'in_progress',
                             toStatus: 'resolved',
                             changedBy: $holderId,
-                            changedAt: clone $finalResolvedAt,
+                            changedAt: $finalResolvedAt->copy(),
                             note: 'Issue resolved'
                         );
                     }
 
-                    $resolvedAt = clone $finalResolvedAt;
-                    $updatedAt = clone $resolvedAt;
+                    $resolvedAt = $finalResolvedAt->copy();
+                    $updatedAt = $resolvedAt->copy();
 
                     if ($status === 'closed') {
-                        // close cepat setelah resolved, jangan beda berhari-hari
-                        $closedAt = (clone $resolvedAt)->addMinutes($faker->numberBetween(5, 120));
-                        $updatedAt = clone $closedAt;
+                        $closedAt = $resolvedAt->copy()->addMinutes($faker->numberBetween(5, 120));
+                        $updatedAt = $closedAt->copy();
 
                         $historyRows[] = $this->makeHistoryRow(
                             fromStatus: 'resolved',
                             toStatus: 'closed',
                             changedBy: $createdBy,
-                            changedAt: clone $closedAt,
+                            changedAt: $closedAt->copy(),
                             note: 'Ticket closed'
                         );
                     }
                 }
             }
 
+            $clientName = $faker->optional(0.85)->name();
+            $clientContact = $faker->optional(0.85)->phoneNumber();
+            $clientEmail = $faker->optional(0.8)->safeEmail();
+
+            $client = Client::resolveForTicket([
+                'client_name' => $clientName,
+                'client_contact' => $clientContact,
+                'client_email' => $clientEmail,
+            ]);
+
             $ticket = Ticket::query()->create([
-                'ticket_code' => $this->generateTicketCode($faker),
+                // Database menyimpan angka structured code saja.
+                // UI index/detail yang menampilkan prefix T- agar terlihat sebagai T-code.
+                'ticket_code' => $this->generateStructuredTicketCode($team, $category, $issueType, $priority),
                 'title' => $title,
                 'description' => $description,
                 'status' => $status,
-                'priority' => $priority,
-                'team' => $team,
-                'category' => $category,
-                'issue_type' => $issueType,
-                'client_name' => $faker->optional(0.85)->name(),
-                'client_contact' => $faker->optional(0.85)->phoneNumber(),
-                'client_email' => $faker->optional(0.8)->safeEmail(),
+
+                // Snapshot string dari Master Data supaya backward-compatible dengan page lama/report lama.
+                'priority' => $this->normalizeCode($priority->code ?: $priority->name),
+                'team' => $this->normalizeCode($team->code ?: $team->name),
+                'team_id' => $team->id,
+                'priority_id' => $priority->id,
+                'category' => $category->name,
+                'category_id' => $category->id,
+                'issue_type' => $issueType->name,
+                'issue_type_id' => $issueType->id,
+
+                'client_id' => $client?->id,
+                'client_name' => $clientName,
+                'client_contact' => $clientContact,
+                'client_email' => $clientEmail,
                 'platform_type' => $faker->optional(0.75)->randomElement($platformTypes),
                 'amount' => $faker->optional(0.45)->numberBetween(100000, 50000000),
                 'flow_type' => $faker->optional(0.65)->randomElement($flowTypes),
@@ -270,77 +281,153 @@ class TicketSeeder extends Seeder
             }
         }
 
-        $this->command->info('80 random tickets seeded successfully.');
+        $this->command->info('80 tickets seeded successfully with updated Master Data ticket code format.');
+    }
+
+    private function resetTicketTables(): void
+    {
+        Schema::disableForeignKeyConstraints();
+
+        foreach ([
+            'resolver_messages',
+            'ticket_attachments',
+            'ticket_status_histories',
+            'tickets',
+            'ticket_sequences',
+        ] as $table) {
+            if (Schema::hasTable($table)) {
+                DB::table($table)->truncate();
+            }
+        }
+
+        Schema::enableForeignKeyConstraints();
+    }
+
+    private function getSlaHoursForTicket(Team $team, Priority $priority): ?int
+    {
+        if (Schema::hasTable('sla_rules')) {
+            $rule = SlaRule::query()
+                ->where('team_id', $team->id)
+                ->where('priority_id', $priority->id)
+                ->where('is_active', true)
+                ->first();
+
+            if ($rule) {
+                return (int) $rule->hours;
+            }
+        }
+
+        return match ($this->normalizeCode($priority->code ?: $priority->name)) {
+            'critical' => 6,
+            'high' => 12,
+            'medium' => 18,
+            'low' => 24,
+            default => 24,
+        };
     }
 
     private function makeResolvedAtNearSla(
         Carbon $createdAt,
         Carbon $claimedAt,
-        Carbon $slaDeadlineAt,
+        ?Carbon $slaDeadlineAt,
         bool $isBreached,
-        $faker
+        FakerGenerator $faker
     ): Carbon {
-        if ($isBreached) {
-            // breached tipis: telat 10 menit sampai 3 jam
-            $resolvedAt = (clone $slaDeadlineAt)->addMinutes($faker->numberBetween(10, 180));
-        } else {
-            // met SLA: selesai 15 menit sampai 2 jam sebelum SLA
-            $resolvedAt = (clone $slaDeadlineAt)->subMinutes($faker->numberBetween(15, 120));
+        if (!$slaDeadlineAt) {
+            $slaDeadlineAt = $createdAt->copy()->addHours(24);
         }
 
-        // jaga supaya resolved_at tidak lebih awal dari claimed_at + sedikit waktu kerja
-        $minimumWorkFinish = (clone $claimedAt)->addMinutes($faker->numberBetween(20, 90));
+        if ($isBreached) {
+            $resolvedAt = $slaDeadlineAt->copy()->addMinutes($faker->numberBetween(10, 180));
+        } else {
+            $resolvedAt = $slaDeadlineAt->copy()->subMinutes($faker->numberBetween(15, 120));
+        }
+
+        $minimumWorkFinish = $claimedAt->copy()->addMinutes($faker->numberBetween(20, 90));
 
         if ($resolvedAt->lessThan($minimumWorkFinish)) {
             $resolvedAt = $minimumWorkFinish;
         }
 
-        // jaga juga supaya tidak absurd jauh dari created_at
         if ($resolvedAt->lessThan($createdAt)) {
-            $resolvedAt = (clone $createdAt)->addMinutes(30);
+            $resolvedAt = $createdAt->copy()->addMinutes(30);
         }
 
         return $resolvedAt;
     }
 
-    private function generateTicketCode($faker): string
-    {
-        do {
-            $code = $faker->numerify('10####');
-        } while (Ticket::query()->where('ticket_code', $code)->exists());
+    private function generateStructuredTicketCode(
+        Team $team,
+        Category $category,
+        IssueType $issueType,
+        Priority $priority
+    ): string {
+        $prefix =
+            $this->padCode($team->code_num, 1) .
+            $this->padCode($category->code_num, 2) .
+            $this->padCode($issueType->code_num, 3) .
+            $this->padCode($priority->code_num, 1);
 
-        return $code;
+        return TicketSequence::nextCode($prefix);
     }
 
-    private function makeTitle(string $team, string $category, string $issueType, $faker): string
+    private function padCode(null|string|int $value, int $length): string
     {
-        $templates = [
+        return str_pad((string) $value, $length, '0', STR_PAD_LEFT);
+    }
+
+    private function normalizeCode(?string $value): string
+    {
+        return Str::of((string) $value)
+            ->lower()
+            ->replace('-', '_')
+            ->replace(' ', '_')
+            ->toString();
+    }
+
+    private function makeTitle(Team $team, Category $category, IssueType $issueType, FakerGenerator $faker): string
+    {
+        $teamCode = $this->normalizeCode($team->code ?: $team->name);
+        $categoryName = $category->name;
+        $issueName = $issueType->name;
+
+        $templates = match ($teamCode) {
             'it' => [
-                'Aplikasi bermasalah pada ' . str_replace('_', ' ', $issueType),
-                'Kendala sistem kategori ' . str_replace('_', ' ', $category),
-                'Error pada fitur ' . str_replace('_', ' ', $issueType),
+                "Aplikasi bermasalah pada {$issueName}",
+                "Kendala sistem kategori {$categoryName}",
+                "Error pada fitur {$issueName}",
             ],
             'finance' => [
-                'Masalah dana: ' . str_replace('_', ' ', $issueType),
-                'Permintaan pengecekan transaksi ' . str_replace('_', ' ', $category),
-                'Saldo / mutasi bermasalah',
+                "Masalah dana: {$issueName}",
+                "Permintaan pengecekan transaksi {$categoryName}",
+                "Saldo atau mutasi bermasalah",
             ],
             'compliance' => [
-                'Kendala verifikasi: ' . str_replace('_', ' ', $issueType),
-                'Review dokumen tertunda',
-                'Permasalahan compliance pada akun client',
+                "Kendala verifikasi: {$issueName}",
+                "Review dokumen tertunda",
+                "Permasalahan compliance pada akun client",
             ],
-        ];
+            default => [
+                "Kendala {$issueName}",
+                "Permintaan bantuan kategori {$categoryName}",
+                "Ticket terkait {$issueName}",
+            ],
+        };
 
-        return $faker->randomElement($templates[$team]);
+        return $faker->randomElement($templates);
     }
 
-    private function makeDescription(string $team, string $category, string $issueType): string
+    private function makeDescription(Team $team, Category $category, IssueType $issueType): string
     {
-        return match ($team) {
-            'it' => "Client melaporkan kendala {$issueType} pada kategori {$category}. Mohon dilakukan pengecekan pada aplikasi atau sistem terkait agar operasional kembali normal.",
-            'finance' => "Client mengalami masalah {$issueType} pada proses {$category}. Dibutuhkan pengecekan lebih lanjut terhadap transaksi dan status dana.",
-            'compliance' => "Client membutuhkan tindak lanjut untuk {$issueType} dalam area {$category}. Mohon review dan validasi sesuai prosedur compliance.",
+        $teamCode = $this->normalizeCode($team->code ?: $team->name);
+        $categoryName = $category->name;
+        $issueName = $issueType->name;
+
+        return match ($teamCode) {
+            'it' => "Client melaporkan kendala {$issueName} pada kategori {$categoryName}. Mohon dilakukan pengecekan pada aplikasi atau sistem terkait agar operasional kembali normal.",
+            'finance' => "Client mengalami masalah {$issueName} pada proses {$categoryName}. Dibutuhkan pengecekan lebih lanjut terhadap transaksi dan status dana.",
+            'compliance' => "Client membutuhkan tindak lanjut untuk {$issueName} dalam area {$categoryName}. Mohon review dan validasi sesuai prosedur compliance.",
+            default => "Client melaporkan kendala {$issueName} pada kategori {$categoryName}. Mohon dilakukan pengecekan dan tindak lanjut sesuai alur operasional.",
         };
     }
 

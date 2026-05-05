@@ -31,7 +31,7 @@
 
                                 <div class="text-center">
                                     <div class="text-2xl font-bold tracking-wide">OPEN TICKET</div>
-                                    <div class="text-xs text-gray-500 mt-1" x-text="ticket_code ? '#T-' + ticket_code : 'Loading...'"></div>
+                                    <div class="text-xs text-gray-500 mt-1" x-text="ticketCodeLabel() || 'Loading...'"></div>
                                 </div>
 
                                 <div class="flex justify-end items-center gap-2">
@@ -110,32 +110,37 @@
                                                     <div class="text-sm font-medium mb-2">Priority</div>
                                                     <div class="border rounded p-3">
                                                         <div class="grid grid-cols-2 gap-3 text-sm">
-                                                            <label class="flex items-center gap-2">
-                                                                <input type="radio" value="critical" x-model="priority">
-                                                                <span>Critical</span>
-                                                            </label>
-                                                            <label class="flex items-center gap-2">
-                                                                <input type="radio" value="medium" x-model="priority">
-                                                                <span>Medium</span>
-                                                            </label>
-                                                            <label class="flex items-center gap-2">
-                                                                <input type="radio" value="high" x-model="priority">
-                                                                <span>High</span>
-                                                            </label>
-                                                            <label class="flex items-center gap-2">
-                                                                <input type="radio" value="low" x-model="priority">
-                                                                <span>Low</span>
-                                                            </label>
+                                                            <template x-if="optionsLoading">
+                                                                <div class="col-span-2 text-xs text-slate-400">Loading priorities...</div>
+                                                            </template>
+
+                                                            <template x-for="priority in master.priorities" :key="priority.id">
+                                                                <label class="flex items-center gap-2">
+                                                                    <input
+                                                                        type="radio"
+                                                                        :value="String(priority.id)"
+                                                                        x-model="priority_id"
+                                                                        @change="fetchSimilar()"
+                                                                    >
+                                                                    <span x-text="priority.name"></span>
+                                                                </label>
+                                                            </template>
                                                         </div>
                                                     </div>
                                                 </div>
 
                                                 <div class="lg:col-span-2">
                                                     <label class="text-sm font-medium">Owner Team</label>
-                                                    <select x-model="team" class="mt-1 w-full border rounded px-3 py-2">
-                                                        <option value="it">IT</option>
-                                                        <option value="finance">Finance</option>
-                                                        <option value="compliance">Compliance</option>
+                                                    <select
+                                                        x-model="team_id"
+                                                        @change="fetchSimilar()"
+                                                        :disabled="optionsLoading"
+                                                        class="mt-1 w-full border rounded px-3 py-2 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                                                    >
+                                                        <option value="" x-text="optionsLoading ? 'Loading teams...' : 'Select team'"></option>
+                                                        <template x-for="team in master.teams" :key="team.id">
+                                                            <option :value="String(team.id)" x-text="masterLabel(team)"></option>
+                                                        </template>
                                                     </select>
                                                 </div>
 
@@ -152,23 +157,30 @@
 
                                                 <div class="lg:col-span-3">
                                                     <label class="text-sm font-medium">Category</label>
-                                                    <select x-model="category" class="mt-1 w-full border rounded px-3 py-2">
-                                                        <option value="" disabled hidden>Select category</option>
-                                                        <option value="account_access">Account &amp; Access</option>
-                                                        <option value="kyc_compliance">KYC &amp; Compliance</option>
-                                                        <option value="trading_orders">Trading &amp; Orders</option>
-                                                        <option value="funds">Funds (Deposit/Withdraw)</option>
-                                                        <option value="portfolio_reports">Portfolio &amp; Reports</option>
-                                                        <option value="app_technical">App &amp; Technical</option>
+                                                    <select
+                                                        x-model="category_id"
+                                                        @change="onCategoryChange()"
+                                                        :disabled="optionsLoading"
+                                                        class="mt-1 w-full border rounded px-3 py-2 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                                                    >
+                                                        <option value="" x-text="optionsLoading ? 'Loading categories...' : 'Select category'"></option>
+                                                        <template x-for="category in master.categories" :key="category.id">
+                                                            <option :value="String(category.id)" x-text="masterLabel(category)"></option>
+                                                        </template>
                                                     </select>
                                                 </div>
 
                                                 <div class="lg:col-span-2">
                                                     <label class="text-sm font-medium">Issue Type</label>
-                                                    <select x-model="issue_type" class="mt-1 w-full border rounded px-3 py-2" :disabled="!category">
-                                                        <option value="" disabled hidden x-text="category ? 'Select issue type' : 'Select category first'"></option>
-                                                        <template x-for="it in issueTypes" :key="it.v">
-                                                            <option :value="it.v" x-text="it.t"></option>
+                                                    <select
+                                                        x-model="issue_type_id"
+                                                        class="mt-1 w-full border rounded px-3 py-2 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                                                        :disabled="!category_id || issueTypesLoading"
+                                                        @change="fetchSimilar()"
+                                                    >
+                                                        <option value="" x-text="issueTypePlaceholder()"></option>
+                                                        <template x-for="item in issueTypes" :key="item.id">
+                                                            <option :value="String(item.id)" x-text="masterLabel(item)"></option>
                                                         </template>
                                                     </select>
                                                 </div>
@@ -242,7 +254,7 @@
                                 <div class="p-3 text-sm space-y-2">
                                     <div class="flex justify-between">
                                         <span class="text-gray-600">Ticket Code:</span>
-                                        <b x-text="ticket_code ? '#T-' + ticket_code : '-'"></b>
+                                        <b x-text="ticketCodeLabel()"></b>
                                     </div>
                                     <div class="flex justify-between">
                                         <span class="text-gray-600">Status:</span>
@@ -291,7 +303,7 @@
                                             <div class="border rounded p-2 flex items-center justify-between gap-2">
                                                 <div class="min-w-0">
                                                     <div class="text-xs font-mono text-slate-700">
-                                                        <span x-text="'#T-' + (tk.ticket_code ?? tk.id)"></span>
+                                                        <span x-text="ticketLabel(tk)"></span>
                                                     </div>
                                                     <div class="text-sm font-semibold truncate" x-text="tk.title"></div>
                                                 </div>
@@ -321,6 +333,8 @@
 
                     loading: true,
                     submitting: false,
+                    optionsLoading: false,
+                    issueTypesLoading: false,
 
                     ticket_code: '',
                     creator_name: '',
@@ -332,90 +346,223 @@
 
                     title: '',
                     description: '',
-                    priority: 'medium',
-                    team: 'it',
+                    priority_id: '',
+                    team_id: '',
                     status: 'new',
-                    category: '',
-                    issue_type: '',
+                    category_id: '',
+                    issue_type_id: '',
                     platform_type: '',
                     amount: '',
                     flow_type: '',
                     request_time: '',
                     notes: '',
 
-                    slaMap: {
-                        critical: { response: '1hr', resolve: '2hr' },
-                        high:     { response: '2hr', resolve: '6hr' },
-                        medium:   { response: '4hr', resolve: '12hr' },
-                        low:      { response: '8hr', resolve: '24hr' },
+                    master: {
+                        teams: [],
+                        categories: [],
+                        priorities: [],
                     },
-
-                    issueMap: {
-                        account_access: [
-                            {v:'login_auth', t:'Login / Auth'},
-                            {v:'otp_verification', t:'OTP / Verification'},
-                            {v:'reset_password', t:'Reset Password / Account Locked'},
-                            {v:'session_device', t:'Device / Session Issue'},
-                        ],
-                        kyc_compliance: [
-                            {v:'kyc_pending', t:'KYC Pending'},
-                            {v:'kyc_rejected', t:'KYC Rejected'},
-                            {v:'profile_update', t:'Update Identity/Profile'},
-                            {v:'rdn_setup', t:'RDN Setup / Activation'},
-                            {v:'bank_account_change', t:'Bank Account / Withdrawal Bank Change'},
-                        ],
-                        trading_orders: [
-                            {v:'order_rejected', t:'Order Rejected / Failed'},
-                            {v:'order_pending', t:'Order Pending / Stuck'},
-                            {v:'order_status_mismatch', t:'Order Status Mismatch'},
-                            {v:'cancel_amend_issue', t:'Cancel / Amend Issue'},
-                            {v:'trading_hours', t:'Trading Hours / Market'},
-                        ],
-                        funds: [
-                            {v:'deposit_not_reflected', t:'Deposit Not Reflected'},
-                            {v:'withdraw_pending', t:'Withdraw Pending / Failed'},
-                            {v:'rdn_transfer_delay', t:'RDN Transfer Delay'},
-                            {v:'fee_dispute', t:'Fee / Charges Dispute'},
-                        ],
-                        portfolio_reports: [
-                            {v:'portfolio_mismatch', t:'Portfolio / Holdings Mismatch'},
-                            {v:'pnl_wrong', t:'Avg Price / P&L Wrong'},
-                            {v:'corporate_action', t:'Corporate Action'},
-                            {v:'statement_report', t:'Statement / Report Download'},
-                        ],
-                        app_technical: [
-                            {v:'app_crash', t:'App Crash'},
-                            {v:'performance_slow', t:'Performance / Slow'},
-                            {v:'notification_issue', t:'Notification Issue'},
-                            {v:'ui_bug', t:'UI Bug / Display Wrong'},
-                        ],
-                    },
-
-                    get sla() {
-                        return this.slaMap[this.priority] || { response:'-', resolve:'-' };
-                    },
-
-                    get issueTypes() {
-                        return this.issueMap[this.category] || [];
-                    },
-
+                    issueTypes: [],
                     similarTickets: [],
                     similarLoading: false,
 
+                    get sla() {
+                        const priority = (this.selectedPriority()?.code || '').toLowerCase();
+
+                        const map = {
+                            critical: { response: '1hr', resolve: '2hr' },
+                            high: { response: '2hr', resolve: '6hr' },
+                            medium: { response: '4hr', resolve: '12hr' },
+                            low: { response: '8hr', resolve: '24hr' },
+                        };
+
+                        return map[priority] || { response: '-', resolve: '-' };
+                    },
+
+                    csrf() {
+                        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                    },
+
                     showAlert(message, type = 'success') {
                         const el = document.getElementById('page-alert');
+                        if (!el) return;
+
                         el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
                         el.textContent = message;
+
                         if (type === 'success') {
                             el.classList.add('bg-green-100', 'text-green-800');
                         } else {
                             el.classList.add('bg-red-100', 'text-red-800');
                         }
+
                         window.scrollTo({ top: 0, behavior: 'smooth' });
+                    },
+
+                    async init() {
+                        await this.loadFormOptions();
+                        await this.loadTicket();
+
+                        let t;
+                        this.$watch('title', () => {
+                            clearTimeout(t);
+                            t = setTimeout(() => this.fetchSimilar(), 300);
+                        });
+                    },
+
+                    async loadFormOptions() {
+                        this.optionsLoading = true;
+
+                        try {
+                            const response = await fetch('/api/ticket-form/options', {
+                                method: 'GET',
+                                credentials: 'same-origin',
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'X-Requested-With': 'XMLHttpRequest',
+                                },
+                            });
+
+                            const result = await response.json();
+
+                            if (!response.ok || !result.success) {
+                                throw new Error(result.message || 'Failed to load master data options');
+                            }
+
+                            this.master.teams = result.data?.teams || [];
+                            this.master.categories = result.data?.categories || [];
+                            this.master.priorities = result.data?.priorities || [];
+                        } catch (error) {
+                            console.error(error);
+                            this.showAlert(error.message || 'Failed to load master data options', 'error');
+                        } finally {
+                            this.optionsLoading = false;
+                        }
+                    },
+
+                    async loadIssueTypes(categoryId = this.category_id, keepIssueSnapshot = '') {
+                        this.issueTypes = [];
+
+                        if (!categoryId) {
+                            this.issue_type_id = '';
+                            return;
+                        }
+
+                        this.issueTypesLoading = true;
+
+                        try {
+                            const params = new URLSearchParams({ category_id: categoryId });
+                            const response = await fetch(`/api/ticket-form/issue-types?${params.toString()}`, {
+                                method: 'GET',
+                                credentials: 'same-origin',
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'X-Requested-With': 'XMLHttpRequest',
+                                },
+                            });
+
+                            const result = await response.json();
+
+                            if (!response.ok || !result.success) {
+                                throw new Error(result.message || 'Failed to load issue types');
+                            }
+
+                            this.issueTypes = result.data || [];
+
+                            if (keepIssueSnapshot) {
+                                const matchedIssue = this.matchMaster(this.issueTypes, keepIssueSnapshot);
+                                this.issue_type_id = matchedIssue ? String(matchedIssue.id) : '';
+                            }
+                        } catch (error) {
+                            console.error(error);
+                            this.showAlert(error.message || 'Failed to load issue types', 'error');
+                        } finally {
+                            this.issueTypesLoading = false;
+                        }
+                    },
+
+                    async onCategoryChange() {
+                        this.issue_type_id = '';
+                        await this.loadIssueTypes();
+                        this.fetchSimilar();
+                    },
+
+                    issueTypePlaceholder() {
+                        if (this.issueTypesLoading) return 'Loading issue types...';
+                        if (!this.category_id) return 'Select category first';
+                        if (this.issueTypes.length === 0) return 'No issue type available';
+                        return 'Select issue type';
+                    },
+
+                    slugify(value) {
+                        return String(value || '')
+                            .toLowerCase()
+                            .trim()
+                            .replace(/[^a-z0-9]+/g, '_')
+                            .replace(/^_+|_+$/g, '');
+                    },
+
+                    normalize(value) {
+                        return this.slugify(value);
+                    },
+
+                    matchMaster(collection, snapshot) {
+                        const target = this.normalize(snapshot);
+                        if (!target) return null;
+
+                        return collection.find(item => {
+                            const candidates = [
+                                item.id,
+                                item.name,
+                                item.code,
+                                item.slug,
+                                item.code_num,
+                                this.slugify(item.name),
+                            ];
+
+                            return candidates.some(value => this.normalize(value) === target);
+                        }) || null;
+                    },
+
+                    findById(collection, id) {
+                        return collection.find(item => String(item.id) === String(id)) || null;
+                    },
+
+                    selectedTeam() {
+                        return this.findById(this.master.teams, this.team_id);
+                    },
+
+                    selectedCategory() {
+                        return this.findById(this.master.categories, this.category_id);
+                    },
+
+                    selectedIssueType() {
+                        return this.findById(this.issueTypes, this.issue_type_id);
+                    },
+
+                    selectedPriority() {
+                        return this.findById(this.master.priorities, this.priority_id);
+                    },
+                    ticketLabel(ticket) {
+                    return window.HenanApp?.ticketLabel(ticket) ?? '-';
+                },
+
+                    ticketCodeLabel() {
+                        return this.ticketLabel({ ticket_code: this.ticket_code });
+                    },
+
+
+                    masterLabel(item) {
+                        if (!item) return '-';
+
+                        // Code number tetap dipakai di belakang layar untuk generate ticket_code,
+                        // tapi tidak ditampilkan ke CS supaya form lebih mudah dipahami.
+                        return item.name || item.code || item.slug || '-';
                     },
 
                     async loadTicket() {
                         this.loading = true;
+
                         try {
                             const response = await fetch(this.loadUrl, {
                                 headers: {
@@ -427,20 +574,37 @@
 
                             const result = await response.json();
 
-                            if (!response.ok) {
+                            if (!response.ok || !result.success) {
                                 throw new Error(result.message || 'Failed to load ticket');
                             }
 
-                            const t = result.data;
+                            const t = result.data || {};
 
                             this.ticket_code = t.ticket_code || '';
                             this.title = t.title || '';
                             this.description = t.description || '';
-                            this.priority = t.priority || 'medium';
-                            this.team = t.team || 'it';
                             this.status = t.status || 'new';
-                            this.category = t.category || '';
-                            this.issue_type = t.issue_type || '';
+
+                            this.client_name = t.client_name || '';
+                            this.client_contact = t.client_contact || '';
+                            this.client_email = t.client_email || '';
+                            this.platform_type = t.platform_type || '';
+                            this.amount = t.amount || '';
+                            this.flow_type = t.flow_type || '';
+                            this.request_time = t.request_time || '';
+                            this.notes = t.internal_notes || '';
+
+                            const matchedPriority = this.matchMaster(this.master.priorities, t.priority || 'medium') || this.master.priorities[0];
+                            const matchedTeam = this.matchMaster(this.master.teams, t.team || 'it') || this.master.teams[0];
+                            const matchedCategory = this.matchMaster(this.master.categories, t.category || '');
+
+                            this.priority_id = matchedPriority ? String(matchedPriority.id) : '';
+                            this.team_id = matchedTeam ? String(matchedTeam.id) : '';
+                            this.category_id = matchedCategory ? String(matchedCategory.id) : '';
+
+                            if (this.category_id) {
+                                await this.loadIssueTypes(this.category_id, t.issue_type || '');
+                            }
 
                             this.creator_name = t.creator?.name || '-';
                             this.holder_name = t.holder?.name || '-';
@@ -453,6 +617,8 @@
                     },
 
                     async submitForm() {
+                        if (this.submitting) return;
+
                         this.submitting = true;
 
                         try {
@@ -461,24 +627,24 @@
                                 headers: {
                                     'Accept': 'application/json',
                                     'Content-Type': 'application/json',
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                                    'X-CSRF-TOKEN': this.csrf(),
                                     'X-Requested-With': 'XMLHttpRequest',
                                 },
                                 credentials: 'same-origin',
                                 body: JSON.stringify({
                                     title: this.title,
                                     description: this.description,
-                                    priority: this.priority,
-                                    team: this.team,
                                     status: this.status,
-                                    category: this.category,
-                                    issue_type: this.issue_type,
+                                    priority_id: this.priority_id,
+                                    team_id: this.team_id,
+                                    category_id: this.category_id,
+                                    issue_type_id: this.issue_type_id,
                                 }),
                             });
 
                             const result = await response.json();
 
-                            if (!response.ok) {
+                            if (!response.ok || !result.success) {
                                 throw new Error(result.message || 'Failed to update ticket');
                             }
 
@@ -496,9 +662,23 @@
                     },
 
                     async fetchSimilar() {
+                        const team = this.selectedTeam();
+                        const category = this.selectedCategory();
+
+                        if (!this.title || !team || !category) {
+                            this.similarTickets = [];
+                            return;
+                        }
+
                         this.similarLoading = true;
+
                         try {
-                            const params = new URLSearchParams({ q: this.title || '' });
+                            const params = new URLSearchParams({
+                                q: this.title || '',
+                                team: team.code || team.name || '',
+                                category: category.name || category.slug || '',
+                            });
+
                             const res = await fetch(`/api/tickets-similar?${params.toString()}`, {
                                 headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                                 credentials: 'same-origin'
@@ -511,21 +691,6 @@
                             this.similarLoading = false;
                         }
                     },
-
-                    init() {
-                        this.loadTicket();
-
-                        this.$watch('category', () => {
-                            this.issue_type = '';
-                            this.fetchSimilar();
-                        });
-
-                        let t;
-                        this.$watch('title', () => {
-                            clearTimeout(t);
-                            t = setTimeout(() => this.fetchSimilar(), 300);
-                        });
-                    }
                 }
             }
         </script>

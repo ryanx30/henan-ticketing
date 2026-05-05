@@ -189,7 +189,7 @@ class DashboardApiController extends BaseApiController
         }
 
         $activeQ->orderBy('created_at', $sort === 'oldest' ? 'asc' : 'desc');
-        $activeTickets = $activeQ->take(6)->get();
+        $activeTickets = $activeQ->take(10)->get();
 
         // ===== Resolver Inbox for CS =====
         $resolverInboxQ = ResolverMessage::query()
@@ -200,20 +200,20 @@ class DashboardApiController extends BaseApiController
             $resolverInboxQ->where('created_at', '>=', $inboxStart);
         }
 
-        $resolverInbox = $resolverInboxQ->take(6)->get();
+        $resolverInbox = $resolverInboxQ->take(10)->get();
 
         // ===== IT Dashboard data =====
         $itMyQueue = Ticket::where('team', 'it')
             ->where('holder_id', $request->user()->id)
             ->whereIn('status', ['new', 'in_progress', 'waiting_info'])
             ->latest()
-            ->take(6)
+            ->take(10)
             ->get();
 
         $itTeamNew = Ticket::where('team', 'it')
             ->where('status', 'new')
             ->latest()
-            ->take(6)
+            ->take(10)
             ->get();
 
         // ===== Trend Chart =====

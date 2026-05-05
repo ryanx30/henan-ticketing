@@ -240,18 +240,19 @@
                                     <th class="px-3">Subject</th>
                                     <th class="px-3">Status</th>
                                     <th class="px-3 text-center">SLA</th>
+                                    <th class="px-3 text-right">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <template x-if="loading && itMyQueue.length === 0">
                                     <tr>
-                                        <td colspan="5" class="py-8 text-center text-gray-500">Loading my queue...</td>
+                                        <td colspan="6" class="py-8 text-center text-gray-500">Loading my queue...</td>
                                     </tr>
                                 </template>
 
                                 <template x-if="!loading && itMyQueue.length === 0">
                                     <tr>
-                                        <td colspan="5" class="py-8 text-center text-gray-500">No tickets in my queue.</td>
+                                        <td colspan="6" class="py-8 text-center text-gray-500">No tickets in my queue.</td>
                                     </tr>
                                 </template>
 
@@ -263,9 +264,14 @@
                                                 x-text="ucfirst(t.priority)"></span>
                                         </td>
 
-                                        <td class="px-3 font-mono whitespace-nowrap" x-text="'#T-' + (t.ticket_code ?? t.id)"></td>
+                                        <td class="px-3 font-mono whitespace-nowrap" x-text="ticketLabel(t)"></td>
 
-                                        <td class="px-3 max-w-[420px] truncate" x-text="t.title"></td>
+                                        <td class="px-3 max-w-[420px] truncate">
+                                            <a
+                                                :href="ticketUrl(t.id)"
+                                                class="font-medium text-slate-900 hover:text-blue-600 hover:underline"
+                                                x-text="t.title"></a>
+                                        </td>
 
                                         <td class="px-3">
                                             <span class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
@@ -276,6 +282,8 @@
                                         <td class="px-3 text-center w-[130px]">
                                             <span class="font-mono tabular-nums inline-block text-center w-[110px]" x-text="slaCountdown(t.sla_deadline_at)"></span>
                                         </td>
+
+                                        <td class="px-3 text-right"></td>
                                     </tr>
                                 </template>
                             </tbody>
@@ -322,9 +330,14 @@
                                                 x-text="ucfirst(t.priority)"></span>
                                         </td>
 
-                                        <td class="px-3 font-mono whitespace-nowrap" x-text="'#T-' + (t.ticket_code ?? t.id)"></td>
+                                        <td class="px-3 font-mono whitespace-nowrap" x-text="ticketLabel(t)"></td>
 
-                                        <td class="px-3 max-w-[420px] truncate" x-text="t.title"></td>
+                                        <td class="px-3 max-w-[420px] truncate">
+                                            <a
+                                                :href="ticketUrl(t.id)"
+                                                class="font-medium text-slate-900 hover:text-blue-600 hover:underline"
+                                                x-text="t.title"></a>
+                                        </td>
 
                                         <td class="px-3 text-center w-[130px]">
                                             <span class="font-mono tabular-nums inline-block text-center w-[110px]" x-text="slaCountdown(t.sla_deadline_at)"></span>
@@ -359,41 +372,11 @@
                 chart: null,
 
                 kpi: {
-                    total: {
-                        value: 0,
-                        prev_month: 0,
-                        prev_year: 0,
-                        mom: {},
-                        yoy: {}
-                    },
-                    new: {
-                        value: 0,
-                        prev_month: 0,
-                        prev_year: 0,
-                        mom: {},
-                        yoy: {}
-                    },
-                    in_progress: {
-                        value: 0,
-                        prev_month: 0,
-                        prev_year: 0,
-                        mom: {},
-                        yoy: {}
-                    },
-                    resolved: {
-                        value: 0,
-                        prev_month: 0,
-                        prev_year: 0,
-                        mom: {},
-                        yoy: {}
-                    },
-                    sla_risk: {
-                        value: 0,
-                        prev_month: 0,
-                        prev_year: 0,
-                        mom: {},
-                        yoy: {}
-                    },
+                    total: { value: 0, prev_month: 0, prev_year: 0, mom: {}, yoy: {} },
+                    new: { value: 0, prev_month: 0, prev_year: 0, mom: {}, yoy: {} },
+                    in_progress: { value: 0, prev_month: 0, prev_year: 0, mom: {}, yoy: {} },
+                    resolved: { value: 0, prev_month: 0, prev_year: 0, mom: {}, yoy: {} },
+                    sla_risk: { value: 0, prev_month: 0, prev_year: 0, mom: {}, yoy: {} },
                 },
 
                 itMyQueue: [],
@@ -414,30 +397,24 @@
                         this.itTeamNew = [...this.itTeamNew];
                     }, 1000);
 
-                    this._resizeHandler = () => {
+                    window.addEventListener('resize', () => {
                         if (this.chart) {
                             this.chart.resize();
                         }
-                    };
-
-                    window.addEventListener('resize', this._resizeHandler);
+                    });
                 },
 
                 destroy() {
                     if (this.timer) clearInterval(this.timer);
-
-                    if (this.chart) {
-                        this.chart.destroy();
-                        this.chart = null;
-                    }
-
-                    if (this._resizeHandler) {
-                        window.removeEventListener('resize', this._resizeHandler);
-                    }
+                    if (this.chart) this.chart.destroy();
                 },
 
                 csrf() {
                     return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                },
+
+                ticketUrl(ticketId) {
+                    return `/tickets/${ticketId}`;
                 },
 
                 showAlert(message, type = 'success') {
@@ -489,7 +466,7 @@
 
                         this.$nextTick(() => {
                             requestAnimationFrame(() => {
-                                this.renderChart(0);
+                                this.renderChart();
                             });
                         });
                     }
@@ -497,24 +474,10 @@
 
                 renderChart(retry = 0) {
                     const el = document.getElementById('trendChart');
-                    if (!el) {
-                        if (retry < 30) {
-                            setTimeout(() => this.renderChart(retry + 1), 200);
-                        }
-                        return;
-                    }
+                    if (!el) return;
 
-                    // tunggu Chart.js siap
                     if (typeof Chart === 'undefined') {
-                        if (retry < 30) {
-                            setTimeout(() => this.renderChart(retry + 1), 200);
-                        }
-                        return;
-                    }
-
-                    // tunggu canvas benar-benar punya ukuran
-                    if (el.offsetWidth === 0 || el.offsetHeight === 0) {
-                        if (retry < 30) {
+                        if (retry < 10) {
                             setTimeout(() => this.renderChart(retry + 1), 200);
                         }
                         return;
@@ -538,7 +501,8 @@
                         type: 'line',
                         data: {
                             labels,
-                            datasets: [{
+                            datasets: [
+                                {
                                     label: 'IT',
                                     data: this.trend.it || [],
                                     tension: 0.35,
@@ -650,6 +614,10 @@
                     const arrow = item.direction === 'up' ? '▲' : (item.direction === 'down' ? '▼' : '•');
                     return `${item.label ?? '-'} ${arrow}`;
                 },
+                ticketLabel(ticket) {
+                    return window.HenanApp?.ticketLabel(ticket) ?? '-';
+                },
+
 
                 ucfirst(value) {
                     if (!value) return '-';

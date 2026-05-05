@@ -4,13 +4,17 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Ticket;
 use App\Models\TicketStatusHistory;
+use App\Support\AuditLogger;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Collection;
 
 class ITQueueApiController extends BaseApiController
 {
+    private const PDF_EXPORT_LIMIT = 1000;
+
     public function myQueue(Request $request)
     {
         $userId = $request->user()->id;
@@ -84,12 +88,14 @@ class ITQueueApiController extends BaseApiController
     public function history(Request $request)
     {
         $perPage = (int) $request->query('per_page', 10);
+
         if (!in_array($perPage, [10, 25, 50], true)) {
             $perPage = 10;
         }
 
-        $query = $this->buildHistoryQuery($request);
-        $tickets = $query->paginate($perPage)->withQueryString();
+        $tickets = $this->buildHistoryQuery($request)
+            ->paginate($perPage)
+            ->withQueryString();
 
         return $this->paginated($tickets, 'History loaded');
     }
@@ -98,19 +104,21 @@ class ITQueueApiController extends BaseApiController
     {
         $format = strtolower((string) $request->query('format', 'csv'));
 
-        if (!in_array($format, ['csv', 'pdf'], true)) {
+        if (!in_array($format, ['csv', 'excel', 'xls', 'pdf'], true)) {
             return $this->error('Invalid export format', 422);
         }
-
-        $tickets = $this->buildHistoryQuery($request)->get();
 
         $filename = 'ticket-history-' . now()->format('Ymd-His');
 
         if ($format === 'csv') {
-            return $this->exportHistoryCsv($tickets, $filename . '.csv');
+            return $this->exportHistoryCsv($request, $filename . '.csv');
         }
 
-        return $this->exportHistoryPdf($tickets, $filename . '.pdf', $request);
+        if (in_array($format, ['excel', 'xls'], true)) {
+            return $this->exportHistoryExcel($request, $filename . '.xls');
+        }
+
+        return $this->exportHistoryPdf($request, $filename . '.pdf');
     }
 
     private function buildHistoryQuery(Request $request)
@@ -122,6 +130,7 @@ class ITQueueApiController extends BaseApiController
         $sortDir = strtolower((string) $request->query('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
 
         $allowedSorts = ['ticket_code', 'resolved_at', 'category', 'team', 'duration'];
+
         if (!in_array($sortBy, $allowedSorts, true)) {
             $sortBy = 'resolved_at';
         }
@@ -140,23 +149,23 @@ class ITQueueApiController extends BaseApiController
             });
         }
 
-        $effectiveDateSql = "COALESCE(resolved_at, closed_at, updated_at, created_at)";
+        $effectiveDateSql = 'COALESCE(resolved_at, closed_at, updated_at, created_at)';
 
         if ($dateFrom !== '') {
-            $query->whereRaw("DATE($effectiveDateSql) >= ?", [$dateFrom]);
+            $query->whereRaw("DATE({$effectiveDateSql}) >= ?", [$dateFrom]);
         }
 
         if ($dateTo !== '') {
-            $query->whereRaw("DATE($effectiveDateSql) <= ?", [$dateTo]);
+            $query->whereRaw("DATE({$effectiveDateSql}) <= ?", [$dateTo]);
         }
 
         switch ($sortBy) {
             case 'resolved_at':
-                $query->orderByRaw("$effectiveDateSql $sortDir");
+                $query->orderByRaw("{$effectiveDateSql} {$sortDir}");
                 break;
 
             case 'duration':
-                $query->orderByRaw("TIMESTAMPDIFF(SECOND, created_at, COALESCE(resolved_at, closed_at, updated_at, created_at)) $sortDir");
+                $query->orderByRaw("TIMESTAMPDIFF(SECOND, created_at, COALESCE(resolved_at, closed_at, updated_at, created_at)) {$sortDir}");
                 break;
 
             default:
@@ -167,49 +176,116 @@ class ITQueueApiController extends BaseApiController
         return $query;
     }
 
-    private function exportHistoryCsv($tickets, string $filename): StreamedResponse
+    private function historyExportHeaders(): array
     {
-        $headers = [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        return [
+            'Ticket',
+            'Resolved Date',
+            'Category',
+            'Team',
+            'Resolution Note',
+            'Duration (SLA)',
         ];
-
-        return response()->streamDownload(function () use ($tickets) {
-            $handle = fopen('php://output', 'w');
-
-            fwrite($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
-
-            fputcsv($handle, [
-                'Ticket',
-                'Resolved Date',
-                'Category',
-                'Team',
-                'Resolution Note',
-                'Duration',
-                'SLA Status',
-                'Title',
-                'Status',
-            ]);
-
-            foreach ($tickets as $t) {
-                fputcsv($handle, [
-                    $this->ticketLabel($t),
-                    $this->resolvedLabel($t),
-                    $this->categoryLabel($t),
-                    strtoupper((string) ($t->team ?? '-')),
-                    $this->resolutionLabel($t),
-                    $this->durationText($t),
-                    $this->slaBadge($t),
-                    $t->title ?? '-',
-                    $t->status ?? '-',
-                ]);
-            }
-
-            fclose($handle);
-        }, $filename, $headers);
     }
 
-    private function exportHistoryPdf($tickets, string $filename, Request $request)
+    private function historyExportRow(Ticket $ticket): array
+    {
+        return [
+            $this->ticketLabel($ticket),
+            $this->resolvedLabel($ticket),
+            $this->categoryLabel($ticket),
+            strtoupper((string) ($ticket->team ?? '-')),
+            $this->resolutionLabel($ticket),
+            $this->durationSlaText($ticket),
+        ];
+    }
+
+    private function durationSlaText(Ticket $ticket): string
+    {
+        $duration = $this->durationText($ticket);
+        $sla = $this->slaBadge($ticket);
+
+        if ($sla === '') {
+            return $duration;
+        }
+
+        return $duration . ' (' . $sla . ')';
+    }
+
+    private function exportHistoryCsv(Request $request, string $filename): StreamedResponse
+    {
+        return response()->streamDownload(function () use ($request) {
+            $handle = fopen('php://output', 'w');
+
+            // UTF-8 BOM supaya Excel Windows aman baca karakter.
+            fwrite($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+            fputcsv($handle, $this->historyExportHeaders());
+
+            $this->buildHistoryQuery($request)
+                ->chunk(500, function (Collection $tickets) use ($handle) {
+                    foreach ($tickets as $ticket) {
+                        fputcsv($handle, $this->historyExportRow($ticket));
+                    }
+                });
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    private function exportHistoryExcel(Request $request, string $filename): StreamedResponse
+    {
+        return response()->streamDownload(function () use ($request) {
+            echo '<html>';
+            echo '<head>';
+            echo '<meta charset="UTF-8">';
+            echo '<style>';
+            echo 'body{font-family:Arial,sans-serif;font-size:12px;color:#1e293b;}';
+            echo 'h2{margin:0 0 12px 0;color:#051823;}';
+            echo 'table{width:100%;border-collapse:collapse;}';
+            echo 'th{background:#051823;color:#ffffff;font-weight:700;text-align:left;}';
+            echo 'th,td{border:1px solid #cbd5e1;padding:8px;vertical-align:top;}';
+            echo 'tr:nth-child(even){background:#eef3f7;}';
+            echo '</style>';
+            echo '</head>';
+            echo '<body>';
+
+            echo '<h2>Ticket History Repository</h2>';
+            echo '<table>';
+
+            echo '<thead><tr>';
+            foreach ($this->historyExportHeaders() as $header) {
+                echo '<th>' . e($header) . '</th>';
+            }
+            echo '</tr></thead>';
+
+            echo '<tbody>';
+
+            $this->buildHistoryQuery($request)
+                ->chunk(500, function (Collection $tickets) {
+                    foreach ($tickets as $ticket) {
+                        echo '<tr>';
+
+                        foreach ($this->historyExportRow($ticket) as $cell) {
+                            echo '<td>' . e($cell) . '</td>';
+                        }
+
+                        echo '</tr>';
+                    }
+                });
+
+            echo '</tbody>';
+            echo '</table>';
+            echo '</body>';
+            echo '</html>';
+        }, $filename, [
+            'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
+        ]);
+    }
+
+    private function exportHistoryPdf(Request $request, string $filename)
     {
         $filters = [
             'q' => (string) $request->query('q', ''),
@@ -217,12 +293,22 @@ class ITQueueApiController extends BaseApiController
             'date_to' => (string) $request->query('date_to', ''),
             'sort_by' => (string) $request->query('sort_by', 'resolved_at'),
             'sort_dir' => (string) $request->query('sort_dir', 'desc'),
+            'limit' => self::PDF_EXPORT_LIMIT,
         ];
 
+        $tickets = $this->buildHistoryQuery($request)
+            ->limit(self::PDF_EXPORT_LIMIT)
+            ->get();
+
+        $rows = $tickets
+            ->map(fn (Ticket $ticket) => $this->historyExportRow($ticket))
+            ->values();
+
         $pdf = Pdf::loadView('exports.history-pdf', [
-            'tickets' => $tickets,
+            'headers' => $this->historyExportHeaders(),
+            'rows' => $rows,
             'filters' => $filters,
-            'helper' => $this,
+            'isLimited' => $tickets->count() >= self::PDF_EXPORT_LIMIT,
         ])->setPaper('a4', 'landscape');
 
         return $pdf->download($filename);
@@ -238,6 +324,8 @@ class ITQueueApiController extends BaseApiController
             return $this->error('Ticket already claimed by another resolver', 422);
         }
 
+        $before = $this->snapshotTicket($ticket);
+
         DB::transaction(function () use ($request, $ticket) {
             $oldStatus = $ticket->status;
 
@@ -248,17 +336,30 @@ class ITQueueApiController extends BaseApiController
             ]);
 
             TicketStatusHistory::create([
-                'ticket_id'   => $ticket->id,
+                'ticket_id' => $ticket->id,
                 'from_status' => $oldStatus,
-                'to_status'   => 'in_progress',
-                'changed_by'  => $request->user()->id,
-                'changed_at'  => now(),
-                'note'        => 'Ticket claimed by IT',
+                'to_status' => 'in_progress',
+                'changed_by' => $request->user()->id,
+                'changed_at' => now(),
+                'note' => 'Ticket claimed by IT',
             ]);
         });
 
+        $freshTicket = $ticket->fresh(['creator', 'holder']);
+
+        AuditLogger::record(
+            $request,
+            'claimed',
+            'ticket',
+            $freshTicket->id,
+            AuditLogger::ticketLabel($freshTicket),
+            'Claimed ticket ' . AuditLogger::ticketLabel($freshTicket),
+            $before,
+            $this->snapshotTicket($freshTicket)
+        );
+
         return $this->success(
-            $ticket->fresh(['creator', 'holder']),
+            $freshTicket,
             'Ticket claimed successfully'
         );
     }
@@ -271,6 +372,7 @@ class ITQueueApiController extends BaseApiController
         ]);
 
         $oldStatus = $ticket->status;
+        $before = $this->snapshotTicket($ticket);
 
         DB::transaction(function () use ($request, $ticket, $validated, $oldStatus) {
             $ticket->status = $validated['status'];
@@ -286,93 +388,136 @@ class ITQueueApiController extends BaseApiController
             $ticket->save();
 
             TicketStatusHistory::create([
-                'ticket_id'   => $ticket->id,
+                'ticket_id' => $ticket->id,
                 'from_status' => $oldStatus,
-                'to_status'   => $validated['status'],
-                'changed_by'  => $request->user()->id,
-                'changed_at'  => now(),
-                'note'        => $validated['note'] ?? 'Status updated by IT',
+                'to_status' => $validated['status'],
+                'changed_by' => $request->user()->id,
+                'changed_at' => now(),
+                'note' => $validated['note'] ?? 'Status updated by IT',
             ]);
         });
 
+        $freshTicket = $ticket->fresh(['creator', 'holder']);
+
+        AuditLogger::record(
+            $request,
+            'status_changed',
+            'ticket',
+            $freshTicket->id,
+            AuditLogger::ticketLabel($freshTicket),
+            'Changed ticket status from ' . $oldStatus . ' to ' . $validated['status'] . ' for ' . AuditLogger::ticketLabel($freshTicket),
+            $before,
+            $this->snapshotTicket($freshTicket)
+        );
+
         return $this->success(
-            $ticket->fresh(['creator', 'holder']),
+            $freshTicket,
             'Ticket status updated successfully'
         );
     }
 
-    public function ticketLabel($t): string
+    protected function snapshotTicket(Ticket $ticket): array
     {
-        $ticketNumber = $t->ticket_code ?: $t->id;
-        $ticketNumber = preg_replace('/^#?T-?/i', '', (string) $ticketNumber);
-
-        return '#T-' . $ticketNumber;
+        return [
+            'id' => $ticket->id,
+            'ticket_code' => $ticket->ticket_code,
+            'title' => $ticket->title,
+            'status' => $ticket->status,
+            'priority' => $ticket->priority,
+            'team' => $ticket->team,
+            'holder_id' => $ticket->holder_id,
+            'claimed_at' => optional($ticket->claimed_at)?->toISOString(),
+            'resolved_at' => optional($ticket->resolved_at)?->toISOString(),
+            'closed_at' => optional($ticket->closed_at)?->toISOString(),
+        ];
     }
 
-    public function resolvedLabel($t): string
+    public function ticketLabel(Ticket $ticket): string
     {
-        $value = $t->resolved_at ?: $t->closed_at ?: $t->updated_at ?: $t->created_at;
+        $ticketNumber = $ticket->ticket_code ?: $ticket->id;
+
+        $cleanCode = preg_replace('/[\s#]+/', '', (string) $ticketNumber);
+        $cleanCode = preg_replace('/^T-?/i', '', $cleanCode);
+
+        return $cleanCode ? 'T-' . $cleanCode : '-';
+    }
+
+    public function resolvedLabel(Ticket $ticket): string
+    {
+        $value = $ticket->resolved_at ?: $ticket->closed_at ?: $ticket->updated_at ?: $ticket->created_at;
+
         if (!$value) {
             return '-';
         }
 
-        return \Carbon\Carbon::parse($value)->format('d M, H:i');
+        return \Carbon\Carbon::parse($value)->format('d M Y, H:i');
     }
 
-    public function categoryLabel($t): string
+    public function categoryLabel(Ticket $ticket): string
     {
-        if (!$t->category) {
+        if (!$ticket->category) {
             return '-';
         }
 
-        return str($t->category)->replace('_', ' ')->title()->toString();
+        return str($ticket->category)
+            ->replace('_', ' ')
+            ->title()
+            ->toString();
     }
 
-    public function resolutionLabel($t): string
+    public function resolutionLabel(Ticket $ticket): string
     {
-        if ($t->issue_type) {
-            return str($t->issue_type)->replace('_', ' ')->title()->toString();
+        if ($ticket->issue_type) {
+            return str($ticket->issue_type)
+                ->replace('_', ' ')
+                ->title()
+                ->toString();
         }
 
-        return $t->title ?: '-';
+        return $ticket->title ?: '-';
     }
 
-    public function durationText($t): string
+    public function durationText(Ticket $ticket): string
     {
-        $start = $t->created_at ? \Carbon\Carbon::parse($t->created_at) : null;
-        $endValue = $t->resolved_at ?: $t->closed_at ?: $t->updated_at;
+        $start = $ticket->created_at ? \Carbon\Carbon::parse($ticket->created_at) : null;
+        $endValue = $ticket->resolved_at ?: $ticket->closed_at ?: $ticket->updated_at;
 
         if (!$start || !$endValue) {
             return '-';
         }
 
         $end = \Carbon\Carbon::parse($endValue);
-        $minutes = abs($start->diffInMinutes($end));
+        $seconds = abs($start->diffInSeconds($end));
 
-        $days = intdiv($minutes, 1440);
-        $hours = intdiv($minutes % 1440, 60);
-        $mins = $minutes % 60;
+        $days = intdiv($seconds, 86400);
+        $hours = intdiv($seconds % 86400, 3600);
+        $minutes = intdiv($seconds % 3600, 60);
+        $remainingSeconds = $seconds % 60;
 
         if ($days > 0) {
-            return "{$days}d {$hours}h {$mins}m";
+            return "{$days}d {$hours}h {$minutes}m {$remainingSeconds}s";
         }
 
         if ($hours > 0) {
-            return "{$hours}h {$mins}m";
+            return "{$hours}h {$minutes}m {$remainingSeconds}s";
         }
 
-        return "{$mins}m";
+        if ($minutes > 0) {
+            return "{$minutes}m {$remainingSeconds}s";
+        }
+
+        return "{$remainingSeconds}s";
     }
 
-    public function slaBadge($t): string
+    public function slaBadge(Ticket $ticket): string
     {
-        $endValue = $t->resolved_at ?: $t->closed_at;
+        $endValue = $ticket->resolved_at ?: $ticket->closed_at;
 
-        if (!$t->sla_deadline_at || !$endValue) {
+        if (!$ticket->sla_deadline_at || !$endValue) {
             return '';
         }
 
-        return \Carbon\Carbon::parse($endValue)->lte(\Carbon\Carbon::parse($t->sla_deadline_at))
+        return \Carbon\Carbon::parse($endValue)->lte(\Carbon\Carbon::parse($ticket->sla_deadline_at))
             ? 'Met'
             : 'Breached';
     }

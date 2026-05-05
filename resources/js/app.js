@@ -1,4 +1,5 @@
 import './bootstrap';
+import './henan-helpers';
 
 import Alpine from 'alpinejs'
 

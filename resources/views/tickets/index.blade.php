@@ -1,11 +1,13 @@
 @php
-    $q = request('q', '');
-    $status = request('status', 'all');
-    $priority = request('priority', 'all');
-    $dateFrom = request('date_from', '');
-    $dateTo = request('date_to', '');
-    $focus = request('focus', '');
-    $userRole = auth()->user()->role ?? null;
+$q = request('q', '');
+$status = request('status', 'all');
+$priority = request('priority', 'all');
+$dateFrom = request('date_from', '');
+$dateTo = request('date_to', '');
+$focus = request('focus', '');
+$sortBy = request('sort_by', 'created_at');
+$sortDir = request('sort_dir', 'desc');
+$perPage = request('per_page', '10');
 @endphp
 
 <x-app-layout>
@@ -14,6 +16,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css" />
 
     <div
+        id="tickets-index-page"
         x-data="ticketsIndexPage({
             initialFilters: {
                 q: @js($q),
@@ -22,11 +25,13 @@
                 date_from: @js($dateFrom),
                 date_to: @js($dateTo),
                 focus: @js($focus),
+                sort_by: @js($sortBy),
+                sort_dir: @js($sortDir),
+                per_page: @js($perPage),
             }
         })"
         x-init="init()"
-        class="min-h-screen bg-[#eef1f5] px-8 py-7"
-    >
+        class="min-h-screen bg-[#eef1f5] px-8 py-7">
         <div class="mx-auto w-full max-w-[1400px]">
             <div id="page-alert" class="hidden mb-4 rounded p-3 text-sm"></div>
 
@@ -39,59 +44,56 @@
                 <div class="flex flex-wrap items-center gap-2">
                     <a
                         href="{{ route('tickets.create') }}"
-                        class="inline-flex items-center rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-slate-800"
-                    >
+                        class="inline-flex items-center rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-slate-800">
                         + Create Ticket
                     </a>
                 </div>
             </div>
 
             @if($focus)
-                <div class="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
-                    <div class="flex items-center justify-between gap-3">
-                        <div>
-                            <span class="font-semibold">Focus Filter Active:</span>
-                            @switch($focus)
-                                @case('sla_risk')
-                                    SLA Risk Tickets
-                                    @break
-                                @case('due_today')
-                                    Tickets Due Today
-                                    @break
-                                @case('reopened')
-                                    Reopened Tickets
-                                    @break
-                                @default
-                                    {{ $focus }}
-                            @endswitch
-                        </div>
-
-                        <a href="{{ route('tickets.index') }}"
-                           class="rounded border border-sky-300 bg-white px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100">
-                            Clear Focus
-                        </a>
+            <div class="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <span class="font-semibold">Focus Filter Active:</span>
+                        @switch($focus)
+                        @case('sla_risk')
+                        SLA Risk Tickets
+                        @break
+                        @case('due_today')
+                        Tickets Due Today
+                        @break
+                        @case('reopened')
+                        Reopened Tickets
+                        @break
+                        @default
+                        {{ $focus }}
+                        @endswitch
                     </div>
+
+                    <a href="{{ route('tickets.index') }}"
+                        class="rounded border border-sky-300 bg-white px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100">
+                        Clear Focus
+                    </a>
                 </div>
+            </div>
             @endif
 
             <div class="rounded bg-white p-6 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
                 <form @submit.prevent="applyFilters()" class="mb-6">
-                    <div class="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_170px_170px_240px_auto]">
+                    <div class="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_170px_170px_300px_auto]">
                         <div>
                             <input
                                 type="text"
                                 x-model="filters.q"
-                                placeholder="Search by Ticket ID or Keyword..."
+                                placeholder="Search by T-code or Keyword..."
                                 class="h-10 w-full rounded-md border border-slate-300 bg-white px-4 text-sm text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-0"
-                                @keydown.enter.prevent="applyFilters()"
-                            />
+                                @keydown.enter.prevent="applyFilters()" />
                         </div>
 
                         <div>
                             <select
                                 x-model="filters.status"
-                                class="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none focus:ring-0"
-                            >
+                                class="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none focus:ring-0">
                                 <option value="all">All Status</option>
                                 <option value="new">New</option>
                                 <option value="in_progress">On Going</option>
@@ -104,13 +106,11 @@
                         <div>
                             <select
                                 x-model="filters.priority"
-                                class="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none focus:ring-0"
-                            >
+                                class="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none focus:ring-0">
                                 <option value="all">All Priority</option>
-                                <option value="critical">Critical</option>
-                                <option value="high">High</option>
-                                <option value="medium">Medium</option>
-                                <option value="low">Low</option>
+                                <template x-for="priority in priorityOptions" :key="priority.id">
+                                    <option :value="priority.code || slugify(priority.name)" x-text="priority.name"></option>
+                                </template>
                             </select>
                         </div>
 
@@ -119,9 +119,10 @@
                             <input type="hidden" id="date_to" x-model="filters.date_to">
 
                             <div id="dateRangeTrigger"
+                                @click.prevent="openDatePicker()"
                                 class="relative flex h-10 w-full shrink-0 cursor-pointer items-center justify-between gap-2 rounded-md border border-slate-300 bg-white px-3 hover:border-slate-400">
-                                <span id="dateRangeLabel" class="truncate text-sm text-slate-700" x-text="dateLabel()"></span>
-                                <svg class="h-4 w-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <span id="dateRangeLabel" class="pointer-events-none truncate text-sm text-slate-700" x-text="dateLabel()"></span>
+                                <svg class="pointer-events-none h-4 w-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                                     <rect x="3" y="4" width="18" height="18" rx="2"></rect>
                                     <path d="M16 2v4M8 2v4M3 10h18"></path>
                                 </svg>
@@ -131,16 +132,14 @@
                         <div class="flex items-center gap-2">
                             <button
                                 type="submit"
-                                class="inline-flex h-10 items-center justify-center rounded-md bg-[#2f88d8] px-4 text-sm font-semibold text-white transition hover:bg-[#2878c3]"
-                            >
+                                class="inline-flex h-10 items-center justify-center rounded-md bg-[#2f88d8] px-4 text-sm font-semibold text-white transition hover:bg-[#2878c3]">
                                 Apply
                             </button>
 
                             <button
                                 type="button"
                                 @click="resetFilters()"
-                                class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                            >
+                                class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
                                 Reset
                             </button>
                         </div>
@@ -152,17 +151,45 @@
                         <h2 class="text-xl font-semibold leading-none text-white">Ticket Repository</h2>
                     </div>
 
-                    <div class="overflow-x-auto">
+                    <div class="ticket-table-scroll max-h-[606px] overflow-auto">
                         <table class="w-full text-sm text-slate-800">
-                            <thead class="bg-[#d5e0e7] text-[#051823]">
+                            <thead class="sticky top-0 z-10 bg-[#d5e0e7] text-[#051823]">
                                 <tr class="text-left">
-                                    <th class="px-7 py-3 font-semibold">Ticket</th>
-                                    <th class="px-7 py-3 font-semibold">Title</th>
-                                    <th class="px-7 py-3 font-semibold">Priority</th>
-                                    <th class="px-7 py-3 font-semibold">Category</th>
-                                    <th class="px-7 py-3 font-semibold">Team</th>
-                                    <th class="px-7 py-3 font-semibold">Status</th>
-                                    <th class="px-7 py-3 font-semibold">Created</th>
+                                    <th class="px-7 py-3 font-semibold">
+                                        <button type="button" @click="sort('ticket_code')" class="inline-flex items-center gap-1 hover:text-[#2f88d8] transition-colors">
+                                            Ticket <span x-html="sortIcon('ticket_code')"></span>
+                                        </button>
+                                    </th>
+                                    <th class="px-7 py-3 font-semibold">
+                                        <button type="button" @click="sort('title')" class="inline-flex items-center gap-1 hover:text-[#2f88d8] transition-colors">
+                                            Title <span x-html="sortIcon('title')"></span>
+                                        </button>
+                                    </th>
+                                    <th class="px-7 py-3 font-semibold">
+                                        <button type="button" @click="sort('priority')" class="inline-flex items-center gap-1 hover:text-[#2f88d8] transition-colors">
+                                            Priority <span x-html="sortIcon('priority')"></span>
+                                        </button>
+                                    </th>
+                                    <th class="px-7 py-3 font-semibold">
+                                        <button type="button" @click="sort('category')" class="inline-flex items-center gap-1 hover:text-[#2f88d8] transition-colors">
+                                            Category <span x-html="sortIcon('category')"></span>
+                                        </button>
+                                    </th>
+                                    <th class="px-7 py-3 font-semibold">
+                                        <button type="button" @click="sort('team')" class="inline-flex items-center gap-1 hover:text-[#2f88d8] transition-colors">
+                                            Team <span x-html="sortIcon('team')"></span>
+                                        </button>
+                                    </th>
+                                    <th class="px-7 py-3 font-semibold">
+                                        <button type="button" @click="sort('status')" class="inline-flex items-center gap-1 hover:text-[#2f88d8] transition-colors">
+                                            Status <span x-html="sortIcon('status')"></span>
+                                        </button>
+                                    </th>
+                                    <th class="px-7 py-3 font-semibold">
+                                        <button type="button" @click="sort('created_at')" class="inline-flex items-center gap-1 hover:text-[#2f88d8] transition-colors">
+                                            Created <span x-html="sortIcon('created_at')"></span>
+                                        </button>
+                                    </th>
                                     <th class="w-[82px] px-6 py-3 text-right"></th>
                                 </tr>
                             </thead>
@@ -181,46 +208,32 @@
                                 </template>
 
                                 <template x-for="(t, index) in tickets" :key="t.id">
-                                    <tr
-                                        :class="index % 2 === 0 ? 'border-t border-slate-200 bg-white' : 'border-t border-slate-200 bg-[#dfe8ee]'"
-                                    >
-                                        <td class="px-7 py-3 whitespace-nowrap font-medium" x-text="ticketLabel(t)"></td>
+                                    <tr :class="index % 2 === 0 ? 'border-t border-slate-200 bg-white' : 'border-t border-slate-200 bg-[#dfe8ee]'">
+                                        <td class="min-w-[170px] px-7 py-3 whitespace-nowrap font-medium tracking-tight" x-text="ticketLabel(t)"></td>
                                         <td class="px-7 py-3 max-w-[340px] truncate" x-text="t.title || '-'"></td>
                                         <td class="px-7 py-3 whitespace-nowrap">
-                                            <span
-                                                class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                                            <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
                                                 :class="priorityBadgeClass(t.priority)"
-                                                x-text="ucfirst(t.priority)"
-                                            ></span>
+                                                x-text="ucfirst(t.priority)"></span>
                                         </td>
                                         <td class="px-7 py-3 whitespace-nowrap" x-text="categoryLabel(t)"></td>
                                         <td class="px-7 py-3 whitespace-nowrap uppercase" x-text="t.team ?? '-'"></td>
                                         <td class="px-7 py-3 whitespace-nowrap">
-                                            <span
-                                                class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                                            <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
                                                 :class="statusBadgeClass(t.status)"
-                                                x-text="statusLabel(t.status)"
-                                            ></span>
+                                                x-text="statusLabel(t.status)"></span>
                                         </td>
                                         <td class="px-7 py-3 whitespace-nowrap" x-text="createdLabel(t)"></td>
                                         <td class="px-6 py-3">
                                             <div class="flex items-center justify-end gap-3 text-slate-500">
-                                                <a
-                                                    :href="`/tickets/${t.id}`"
-                                                    class="hover:text-slate-800 transition-colors"
-                                                    title="View Detail"
-                                                >
+                                                <a :href="`/tickets/${t.id}`" class="hover:text-slate-800 transition-colors" title="View Detail">
                                                     <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                                                         <path stroke-linecap="round" stroke-linejoin="round" d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
                                                         <circle cx="12" cy="12" r="3" />
                                                     </svg>
                                                 </a>
 
-                                                <a
-                                                    :href="`/tickets/${t.id}/edit`"
-                                                    class="hover:text-slate-800 transition-colors"
-                                                    title="Edit Ticket"
-                                                >
+                                                <a :href="`/tickets/${t.id}/edit`" class="hover:text-slate-800 transition-colors" title="Edit Ticket">
                                                     <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                                                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 20h9" />
                                                         <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
@@ -242,8 +255,7 @@
                         <select
                             x-model="filters.per_page"
                             @change="applyFilters()"
-                            class="h-9 w-16 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-700"
-                        >
+                            class="h-9 w-16 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-700">
                             <option value="10">10</option>
                             <option value="25">25</option>
                             <option value="50">50</option>
@@ -258,7 +270,9 @@
 
     <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
     <script>
-        function ticketsIndexPage({ initialFilters }) {
+        function ticketsIndexPage({
+            initialFilters
+        }) {
             return {
                 loading: false,
                 tickets: [],
@@ -268,6 +282,9 @@
                     per_page: 10,
                     total: 0,
                 },
+                datePicker: null,
+                priorityOptions: [],
+
                 filters: {
                     q: initialFilters.q || '',
                     status: initialFilters.status || 'all',
@@ -275,30 +292,72 @@
                     date_from: initialFilters.date_from || '',
                     date_to: initialFilters.date_to || '',
                     focus: initialFilters.focus || '',
-                    per_page: '10',
+                    sort_by: initialFilters.sort_by || 'created_at',
+                    sort_dir: initialFilters.sort_dir || 'desc',
+                    per_page: initialFilters.per_page || '10',
                     page: 1,
                 },
 
-                init() {
-                    const params = new URLSearchParams(window.location.search);
+                async init() {
+                    window.ticketsIndexPageRef = this;
 
+                    await this.loadPriorityOptions();
+
+                    const params = new URLSearchParams(window.location.search);
                     this.filters.q = params.get('q') || this.filters.q;
                     this.filters.status = params.get('status') || this.filters.status;
                     this.filters.priority = params.get('priority') || this.filters.priority;
                     this.filters.date_from = params.get('date_from') || this.filters.date_from;
                     this.filters.date_to = params.get('date_to') || this.filters.date_to;
                     this.filters.focus = params.get('focus') || this.filters.focus;
-                    this.filters.per_page = params.get('per_page') || '10';
+                    this.filters.sort_by = params.get('sort_by') || this.filters.sort_by;
+                    this.filters.sort_dir = params.get('sort_dir') || this.filters.sort_dir;
+                    this.filters.per_page = params.get('per_page') || this.filters.per_page;
                     this.filters.page = Number(params.get('page') || 1);
 
                     this.initDatePicker();
                     this.loadTickets();
                 },
 
+                slugify(value) {
+                    return String(value || '')
+                        .toLowerCase()
+                        .trim()
+                        .replace(/[^a-z0-9]+/g, '_')
+                        .replace(/^_+|_+$/g, '');
+                },
+
+                async loadPriorityOptions() {
+                    try {
+                        const response = await fetch('/api/ticket-form/options', {
+                            method: 'GET',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                        });
+
+                        const result = await response.json();
+
+                        if (!response.ok || !result.success) {
+                            throw new Error(result.message || 'Failed to load priorities');
+                        }
+
+                        this.priorityOptions = result.data?.priorities || [];
+                    } catch (error) {
+                        console.error(error);
+                        this.priorityOptions = [
+                            { id: 'critical', code: 'critical', name: 'Critical' },
+                            { id: 'high', code: 'high', name: 'High' },
+                            { id: 'medium', code: 'medium', name: 'Medium' },
+                            { id: 'low', code: 'low', name: 'Low' },
+                        ];
+                    }
+                },
+
                 showAlert(message, type = 'success') {
                     const el = document.getElementById('page-alert');
-                    if (!el) return;
-
                     el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
                     el.textContent = message;
 
@@ -308,53 +367,24 @@
                         el.classList.add('bg-red-100', 'text-red-800');
                     }
 
-                    setTimeout(() => {
-                        el.classList.add('hidden');
-                    }, 3000);
+                    setTimeout(() => el.classList.add('hidden'), 3000);
                 },
 
                 buildQuery() {
                     const params = new URLSearchParams();
 
                     if (this.filters.q) params.set('q', this.filters.q);
-                    if (this.filters.status) params.set('status', this.filters.status);
-                    if (this.filters.priority) params.set('priority', this.filters.priority);
+                    if (this.filters.status && this.filters.status !== 'all') params.set('status', this.filters.status);
+                    if (this.filters.priority && this.filters.priority !== 'all') params.set('priority', this.filters.priority);
                     if (this.filters.date_from) params.set('date_from', this.filters.date_from);
                     if (this.filters.date_to) params.set('date_to', this.filters.date_to);
                     if (this.filters.focus) params.set('focus', this.filters.focus);
-
-                    params.set('per_page', this.filters.per_page);
+                    if (this.filters.sort_by) params.set('sort_by', this.filters.sort_by);
+                    if (this.filters.sort_dir) params.set('sort_dir', this.filters.sort_dir);
+                    if (this.filters.per_page) params.set('per_page', this.filters.per_page);
                     params.set('page', this.filters.page);
 
                     return params;
-                },
-
-                applyFilters() {
-                    this.filters.page = 1;
-                    const params = this.buildQuery();
-                    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
-                    this.loadTickets();
-                },
-
-                goToPage(page) {
-                    this.filters.page = page;
-                    const params = this.buildQuery();
-                    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
-                    this.loadTickets();
-                },
-
-                resetFilters() {
-                    this.filters.q = '';
-                    this.filters.status = 'all';
-                    this.filters.priority = 'all';
-                    this.filters.date_from = '';
-                    this.filters.date_to = '';
-                    this.filters.focus = '';
-                    this.filters.per_page = '10';
-                    this.filters.page = 1;
-
-                    window.history.replaceState({}, '', window.location.pathname);
-                    this.loadTickets();
                 },
 
                 async loadTickets() {
@@ -367,7 +397,7 @@
                                 'Accept': 'application/json',
                                 'X-Requested-With': 'XMLHttpRequest',
                             },
-                            credentials: 'same-origin'
+                            credentials: 'same-origin',
                         });
 
                         const result = await response.json();
@@ -389,6 +419,72 @@
                     }
                 },
 
+                applyFilters() {
+                    this.filters.page = 1;
+                    const params = this.buildQuery();
+                    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+                    this.loadTickets();
+                },
+
+                resetFilters() {
+                    this.filters.q = '';
+                    this.filters.status = 'all';
+                    this.filters.priority = 'all';
+                    this.filters.date_from = '';
+                    this.filters.date_to = '';
+                    this.filters.sort_by = 'created_at';
+                    this.filters.sort_dir = 'desc';
+                    this.filters.per_page = '10';
+                    this.filters.page = 1;
+
+                    if (this.datePicker) {
+                        this.datePicker.clearSelection();
+                    }
+
+                    const basePath = this.filters.focus ? `${window.location.pathname}?focus=${encodeURIComponent(this.filters.focus)}` : window.location.pathname;
+                    window.history.replaceState({}, '', basePath);
+                    this.loadTickets();
+                },
+
+                goToPage(page) {
+                    this.filters.page = page;
+                    const params = this.buildQuery();
+                    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+                    this.loadTickets();
+                },
+
+                paginationItems() {
+                    const current = Number(this.meta.current_page || 1);
+                    const last = Number(this.meta.last_page || 1);
+
+                    if (last <= 7) {
+                        return Array.from({
+                            length: last
+                        }, (_, i) => i + 1);
+                    }
+
+                    const items = [1];
+
+                    if (current > 4) {
+                        items.push('...');
+                    }
+
+                    const start = Math.max(2, current - 1);
+                    const end = Math.min(last - 1, current + 1);
+
+                    for (let i = start; i <= end; i++) {
+                        items.push(i);
+                    }
+
+                    if (current < last - 3) {
+                        items.push('...');
+                    }
+
+                    items.push(last);
+
+                    return items;
+                },
+
                 renderPagination() {
                     const container = document.getElementById('tickets-pagination');
                     if (!container) return;
@@ -398,43 +494,103 @@
                         return;
                     }
 
+                    const items = this.paginationItems();
                     let html = '';
 
-                    for (let i = 1; i <= this.meta.last_page; i++) {
+                    if (this.meta.current_page > 1) {
                         html += `
-                            <button
-                                type="button"
-                                onclick="document.querySelector('[x-data^=\\'ticketsIndexPage\\']').__x.$data.goToPage(${i})"
-                                class="px-3 py-1 border rounded text-sm ${i === this.meta.current_page ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 hover:bg-slate-50'}">
-                                ${i}
-                            </button>
-                        `;
+            <button
+                type="button"
+                onclick="window.ticketsIndexPageRef.goToPage(${this.meta.current_page - 1})"
+                class="px-3 py-1 border rounded text-sm bg-white text-slate-700 hover:bg-slate-50">
+                ‹
+            </button>
+        `;
+                    }
+
+                    items.forEach((item) => {
+                        if (item === '...') {
+                            html += `
+                <span class="px-2 py-1 text-sm text-slate-500 select-none">...</span>
+            `;
+                            return;
+                        }
+
+                        html += `
+            <button
+                type="button"
+                onclick="window.ticketsIndexPageRef.goToPage(${item})"
+                class="px-3 py-1 border rounded text-sm ${item === this.meta.current_page ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 hover:bg-slate-50'}">
+                ${item}
+            </button>
+        `;
+                    });
+
+                    if (this.meta.current_page < this.meta.last_page) {
+                        html += `
+            <button
+                type="button"
+                onclick="window.ticketsIndexPageRef.goToPage(${this.meta.current_page + 1})"
+                class="px-3 py-1 border rounded text-sm bg-white text-slate-700 hover:bg-slate-50">
+                ›
+            </button>
+        `;
                     }
 
                     container.innerHTML = html;
                 },
 
-                dateLabel() {
-                    if (this.filters.date_from && this.filters.date_to) {
-                        return `${this.formatHumanDate(this.filters.date_from)} → ${this.formatHumanDate(this.filters.date_to)}`;
+                sort(column) {
+                    if (this.filters.sort_by === column) {
+                        this.filters.sort_dir = this.filters.sort_dir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        this.filters.sort_by = column;
+                        this.filters.sort_dir = column === 'created_at' ? 'desc' : 'asc';
                     }
-                    return 'dd/mm/yyyy → dd/mm/yyyy';
+
+                    this.applyFilters();
                 },
 
-                formatHumanDate(value) {
-                    const date = new Date(value);
-                    return date.toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                    });
+                sortIcon(column) {
+                    if (this.filters.sort_by !== column) {
+                        return `<span style="display:inline-flex;flex-direction:column;margin-left:4px;opacity:0.35;line-height:1;">
+                            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                <path d="M12 4l-8 8h16z" />
+                            </svg>
+                            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                <path d="M12 20l8-8H4z" />
+                            </svg>
+                        </span>`;
+                    }
+
+                    if (this.filters.sort_dir === 'asc') {
+                        return `<span style="display:inline-flex;flex-direction:column;margin-left:4px;line-height:1;">
+                            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#2f88d8" stroke-width="3">
+                                <path d="M12 4l-8 8h16z" />
+                            </svg>
+                            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="opacity:0.25">
+                                <path d="M12 20l8-8H4z" />
+                            </svg>
+                        </span>`;
+                    }
+
+                    return `<span style="display:inline-flex;flex-direction:column;margin-left:4px;line-height:1;">
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="opacity:0.25">
+                            <path d="M12 4l-8 8h16z" />
+                        </svg>
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#2f88d8" stroke-width="3">
+                            <path d="M12 20l8-8H4z" />
+                        </svg>
+                    </span>`;
                 },
 
                 initDatePicker() {
                     const self = this;
+                    const trigger = document.getElementById('dateRangeTrigger');
+                    if (!trigger) return;
 
-                    new Litepicker({
-                        element: document.getElementById('dateRangeTrigger'),
+                    this.datePicker = new Litepicker({
+                        element: trigger,
                         singleMode: false,
                         numberOfMonths: 2,
                         numberOfColumns: 2,
@@ -450,16 +606,84 @@
                             cancel: 'Cancel',
                             reset: 'Reset'
                         },
-
                         setup(picker) {
+                            picker.on('render', (ui) => {
+                                if (ui.querySelector('.lp-shortcuts')) return;
+
+                                const shortcuts = document.createElement('div');
+                                shortcuts.className = 'lp-shortcuts';
+
+                                const today = new Date();
+                                const items = [{
+                                        label: 'Today',
+                                        from: today,
+                                        to: today
+                                    },
+                                    {
+                                        label: 'Last 7 Days',
+                                        from: new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6),
+                                        to: today
+                                    },
+                                    {
+                                        label: 'Last 30 Days',
+                                        from: new Date(today.getFullYear(), today.getMonth(), today.getDate() - 29),
+                                        to: today
+                                    },
+                                    {
+                                        label: 'Last 1 Year',
+                                        from: new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()),
+                                        to: today
+                                    },
+                                ];
+
+                                items.forEach(item => {
+                                    const btn = document.createElement('button');
+                                    btn.type = 'button';
+                                    btn.textContent = item.label;
+                                    btn.className = 'lp-shortcut-btn';
+                                    btn.addEventListener('click', () => {
+                                        picker.setDateRange(item.from, item.to);
+                                        self.filters.date_from = self.toYmd(item.from);
+                                        self.filters.date_to = self.toYmd(item.to);
+                                        picker.hide();
+                                        self.applyFilters();
+                                    });
+                                    shortcuts.appendChild(btn);
+                                });
+
+                                ui.appendChild(shortcuts);
+                            });
+
                             picker.on('selected', (date1, date2) => {
                                 if (!date1 || !date2) return;
-
                                 self.filters.date_from = self.toYmd(new Date(date1.dateInstance));
                                 self.filters.date_to = self.toYmd(new Date(date2.dateInstance));
-                                self.applyFilters();
                             });
                         },
+                    });
+                },
+
+                openDatePicker() {
+                    if (this.datePicker) {
+                        this.datePicker.show();
+                    }
+                },
+
+                dateLabel() {
+                    if (this.filters.date_from && this.filters.date_to) {
+                        return `${this.formatHumanDate(this.filters.date_from)} → ${this.formatHumanDate(this.filters.date_to)}`;
+                    }
+                    return 'dd/mm/yyyy → dd/mm/yyyy';
+                },
+
+                formatHumanDate(value) {
+                    if (!value) return '-';
+
+                    const date = new Date(value);
+                    return date.toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric'
                     });
                 },
 
@@ -470,34 +694,13 @@
                     return `${y}-${m}-${day}`;
                 },
 
-                ucfirst(value) {
-                    if (!value) return '-';
-                    value = String(value);
-                    return value.charAt(0).toUpperCase() + value.slice(1);
-                },
-
-                ticketLabel(t) {
-                    let ticketNumber = t.ticket_code || t.id;
-                    ticketNumber = String(ticketNumber).replace('#', '').replace(/^T-?/i, '');
-                    return `#T-${ticketNumber}`;
+                ticketLabel(ticket) {
+                    return window.HenanApp?.ticketLabel(ticket) ?? '-';
                 },
 
                 categoryLabel(t) {
                     if (!t.category) return '-';
                     return String(t.category).replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
-                },
-
-                createdLabel(t) {
-                    const value = t.created_at;
-                    if (!value) return '-';
-
-                    const date = new Date(value);
-
-                    return date.toLocaleDateString('en-GB', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric',
-                    });
                 },
 
                 statusLabel(status) {
@@ -508,25 +711,23 @@
                         resolved: 'Resolved',
                         closed: 'Closed',
                     };
-
                     return map[status] || status || '-';
                 },
 
-                statusBadgeClass(status) {
-                    switch (status) {
-                        case 'new':
-                            return 'bg-gray-200 text-gray-800';
-                        case 'in_progress':
-                            return 'bg-amber-100 text-amber-700';
-                        case 'waiting_info':
-                            return 'bg-orange-100 text-orange-700';
-                        case 'resolved':
-                            return 'bg-green-100 text-green-700';
-                        case 'closed':
-                            return 'bg-sky-100 text-sky-700';
-                        default:
-                            return 'bg-slate-100 text-slate-700';
-                    }
+                createdLabel(t) {
+                    if (!t.created_at) return '-';
+                    const date = new Date(t.created_at);
+                    return date.toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                    });
+                },
+
+                ucfirst(value) {
+                    if (!value) return '-';
+                    value = String(value);
+                    return value.charAt(0).toUpperCase() + value.slice(1);
                 },
 
                 priorityBadgeClass(priority) {
@@ -539,6 +740,23 @@
                             return 'bg-amber-100 text-amber-700';
                         case 'low':
                             return 'bg-green-100 text-green-700';
+                        default:
+                            return 'bg-slate-100 text-slate-700';
+                    }
+                },
+
+                statusBadgeClass(status) {
+                    switch (status) {
+                        case 'new':
+                            return 'bg-slate-100 text-slate-800';
+                        case 'in_progress':
+                            return 'bg-amber-100 text-amber-700';
+                        case 'waiting_info':
+                            return 'bg-orange-100 text-orange-700';
+                        case 'resolved':
+                            return 'bg-green-100 text-green-700';
+                        case 'closed':
+                            return 'bg-sky-100 text-sky-700';
                         default:
                             return 'bg-slate-100 text-slate-700';
                     }
@@ -586,8 +804,8 @@
             padding: 8px 16px;
         }
 
-        .litepicker .month-item-header div > .month-item-name,
-        .litepicker .month-item-header div > .month-item-year {
+        .litepicker .month-item-header div>.month-item-name,
+        .litepicker .month-item-header div>.month-item-year {
             color: #0f172a;
             font-weight: 600;
         }
@@ -629,6 +847,63 @@
             background-color: #bfdbfe !important;
             color: #1e40af !important;
             border-radius: 0 !important;
+        }
+
+        .lp-shortcuts {
+            display: flex;
+            gap: 4px;
+            padding: 10px 16px 14px;
+            border-top: 1px solid #e2e8f0;
+            background: #ffffff;
+            flex-wrap: wrap;
+        }
+
+        .lp-shortcut-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #2f88d8;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 4px 10px;
+            border-radius: 6px;
+            transition: background 0.15s;
+        }
+
+        .lp-shortcut-btn:hover {
+            background: #eff6ff;
+        }
+
+        .ticket-table-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: #94a3b8 #e2e8f0;
+        }
+
+        .ticket-table-scroll::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .ticket-table-scroll::-webkit-scrollbar-track {
+            background: #e2e8f0;
+        }
+
+        .ticket-table-scroll::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 9999px;
+        }
+
+        thead button {
+            color: inherit;
+            text-decoration: none;
+            background: transparent;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+        }
+
+        thead button:hover {
+            color: #2f88d8;
         }
     </style>
 </x-app-layout>

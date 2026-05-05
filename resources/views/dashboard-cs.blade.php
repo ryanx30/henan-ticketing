@@ -226,16 +226,18 @@
                             <div class="mt-4 text-md font-semibold">Quick Actions:</div>
 
                             <div class="mt-2 flex flex-wrap gap-2">
-                                <a href="{{ route('tickets.create') }}" class="rounded bg-slate-900 px-4 py-2 text-sm text-white shadow">+ Create Ticket</a>
-                                <button class="rounded border bg-white px-4 py-2 text-sm">Knowledge Base</button>
-                                <button class="rounded border bg-white px-4 py-2 text-sm">Bulk Action</button>
+                                <a
+                                    href="{{ route('tickets.create') }}"
+                                    class="rounded border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm transition duration-200 hover:border-slate-900 hover:bg-slate-900 hover:text-white hover:shadow-md">
+                                    + Create Ticket
+                                </a>
                             </div>
                         </div>
 
                         {{-- My Active Tickets --}}
                         <div class="overflow-hidden rounded bg-white shadow-lg">
                             <div class="flex items-center justify-between border-b bg-slate-50 px-4 py-3">
-                                <div class="text-xl font-semibold">My Active Tickets</div>
+                                <div class="text-xl font-semibold">Active Tickets</div>
 
                                 <div class="flex flex-wrap items-center gap-2 text-sm">
                                     <label class="text-gray-500">Priority</label>
@@ -274,17 +276,17 @@
                                 </div>
                             </div>
 
-                            <div class="overflow-x-auto">
-                                <table class="w-full text-sm">
-                                    <thead>
+                            <div class="max-h-[560px] overflow-auto">
+                                <table class="w-full min-w-[960px] text-sm">
+                                    <thead class="sticky top-0 z-10">
                                         <tr class="bg-slate-900 text-left text-white">
-                                            <th class="px-3 py-2">Priority</th>
-                                            <th class="px-3">Ticket</th>
-                                            <th class="px-3">Subject</th>
-                                            <th class="px-3">Team</th>
-                                            <th class="px-3">Status</th>
-                                            <th class="px-3">SLA</th>
-                                            <th class="px-3 text-right">Action</th>
+                                            <th class="w-[100px] px-3 py-2">Priority</th>
+                                            <th class="w-[150px] px-2">Ticket</th>
+                                            <th class="px-2">Subject</th>
+                                            <th class="w-[135px] px-2">Team</th>
+                                            <th class="w-[120px] px-2 text-center">Status</th>
+                                            <th class="w-[115px] px-2 text-center">SLA</th>
+                                            <th class="w-[80px] px-2 text-right">Action</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -307,22 +309,20 @@
                                                         :class="priorityBadgeClass(t.priority)"
                                                         x-text="ucfirst(t.priority)"></span>
                                                 </td>
-                                                <td class="font-mono px-3" x-text="'#T-' + (t.ticket_code ?? t.id)"></td>
-                                                <td class="max-w-[260px] truncate px-3" x-text="t.title"></td>
-                                                <td class="px-3 uppercase" x-text="t.team"></td>
-                                                <td class="px-3">
-                                                    <span class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
+                                                <td class="whitespace-nowrap px-2 font-mono" x-text="ticketLabel(t)"></td>
+                                                <td class="max-w-[340px] truncate px-2" x-text="t.title"></td>
+                                                <td class="whitespace-nowrap px-2 uppercase" x-text="t.team"></td>
+                                                <td class="whitespace-nowrap px-2 text-center">
+                                                    <span class="inline-flex min-w-[82px] items-center justify-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium leading-none"
                                                         :class="statusBadgeClass(t.status)"
                                                         x-text="statusLabel(t.status)"></span>
                                                 </td>
-                                                <td class="w-[140px] px-3">
-                                                    <div class="flex justify-center">
-                                                        <span class="inline-block w-[110px] font-mono tabular-nums text-slate-800"
-                                                            x-text="slaCountdown(t.sla_deadline_at)"></span>
-                                                    </div>
+                                                <td class="whitespace-nowrap px-2 text-center">
+                                                    <span class="inline-block w-[90px] font-mono tabular-nums text-slate-800"
+                                                        x-text="slaCountdown(t.sla_deadline_at)"></span>
                                                 </td>
-                                                <td class="px-3 text-right">
-                                                    <a :href="`/tickets/${t.id}/edit`" class="rounded border bg-slate-100 px-3 py-1 text-xs">Open</a>
+                                                <td class="whitespace-nowrap px-2 text-right">
+                                                    <a :href="`/tickets/${t.id}`" class="rounded border bg-slate-100 px-3 py-1 text-xs">Open</a>
                                                 </td>
                                             </tr>
                                         </template>
@@ -373,7 +373,7 @@
                                         <template x-for="m in resolverInbox" :key="m.id">
                                             <tr class="border-b">
                                                 <td class="px-3 py-2" x-text="formatTime(m.created_at)"></td>
-                                                <td class="px-3" x-text="'#T-' + (m.ticket?.ticket_code ?? m.ticket?.id ?? '-')"></td>
+                                                <td class="min-w-[150px] whitespace-nowrap px-3" x-text="ticketLabel(m.ticket)"></td>
                                                 <td class="max-w-[520px] truncate px-3" x-text="truncate(m.subject || m.body || '-', 70)"></td>
                                                 <td class="space-x-2 px-3 text-right">
                                                     <a :href="`/resolver-inbox/${m.id}`" class="rounded border bg-slate-100 px-3 py-1 text-xs">Open</a>
@@ -575,6 +575,10 @@
                     const arrow = item.direction === 'up' ? '▲' : (item.direction === 'down' ? '▼' : '•');
                     return `${item.label ?? '-'} ${arrow}`;
                 },
+                ticketLabel(ticket) {
+                    return window.HenanApp?.ticketLabel(ticket) ?? '-';
+                },
+
 
                 ucfirst(value) {
                     if (!value) return '-';

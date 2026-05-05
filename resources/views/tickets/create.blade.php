@@ -1,5 +1,8 @@
 <x-app-layout>
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
 
     <div
         x-data="createTicketPage()"
@@ -35,7 +38,7 @@
                 </div>
 
                 {{-- CLIENT CONTACT --}}
-                <div class="mb-4 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
+                <div class="mb-4 overflow-visible rounded-md border border-slate-200 bg-white shadow-sm">
                     <button
                         type="button"
                         class="flex w-full items-center justify-between bg-slate-900 px-4 py-3 text-left text-sm font-semibold text-white"
@@ -45,15 +48,49 @@
                         <span x-text="sections.client ? '▾' : '▸'"></span>
                     </button>
 
-                    <div x-show="sections.client" x-collapse class="grid grid-cols-1 gap-4 p-4 md:grid-cols-3">
-                        <div id="field-client_name">
+<div x-show="sections.client" x-collapse class="relative overflow-visible grid grid-cols-1 gap-4 p-4 md:grid-cols-3">                        <div id="field-client_name" class="relative">
                             <label class="mb-2 block text-xs font-semibold text-slate-700">Client Name*</label>
                             <input
                                 type="text"
                                 x-model="form.client_name"
+                                @input.debounce.350ms="loadClientSuggestions()"
+                                @focus="loadClientSuggestions()"
+                                @keydown.escape="clientSuggestOpen = false"
                                 placeholder="Client Name"
+                                autocomplete="off"
                                 class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
                             />
+
+<div
+    x-show="clientSuggestOpen"
+    x-cloak
+    @click.outside="clientSuggestOpen = false"
+    class="absolute left-0 right-0 z-[9999] mt-2 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl"
+>
+                                <template x-if="clientSuggestLoading">
+                                    <div class="px-3 py-3 text-xs text-slate-500">Searching clients...</div>
+                                </template>
+
+                                <template x-if="!clientSuggestLoading && clientSuggestions.length === 0">
+                                    <div class="px-3 py-3 text-xs text-slate-500">No existing client found. New client will be saved automatically.</div>
+                                </template>
+
+                                <template x-for="client in clientSuggestions" :key="client.id">
+                                    <button
+                                        type="button"
+                                        @click="selectClientSuggestion(client)"
+                                        class="block w-full border-b border-slate-100 px-3 py-3 text-left text-xs hover:bg-slate-50"
+                                    >
+                                        <div class="font-semibold text-slate-900" x-text="client.name || '-' "></div>
+                                        <div class="mt-1 text-slate-500">
+                                            <span x-text="client.email || '-'"></span>
+                                            <span> • </span>
+                                            <span x-text="client.contact || '-'"></span>
+                                        </div>
+                                        <div class="mt-1 text-[10px] text-slate-400" x-text="`${client.ticket_count || 0} previous ticket(s)`"></div>
+                                    </button>
+                                </template>
+                            </div>
                         </div>
 
                         <div id="field-client_contact">
@@ -61,10 +98,12 @@
                             <input
                                 type="text"
                                 x-model="form.client_contact"
+                                @input.debounce.350ms="loadClientSuggestions()"
+                                @focus="loadClientSuggestions()"
                                 placeholder="Client Contact"
+                                autocomplete="off"
                                 class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
                             />
-                            <p class="mt-1 text-[11px] text-slate-500">Next improvement: auto lookup by email/contact for faster matching.</p>
                         </div>
 
                         <div id="field-client_email">
@@ -72,10 +111,28 @@
                             <input
                                 type="email"
                                 x-model="form.client_email"
+                                @input.debounce.350ms="loadClientSuggestions()"
+                                @focus="loadClientSuggestions()"
                                 placeholder="lorem@gmail.com"
+                                autocomplete="off"
                                 class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
                             />
                         </div>
+
+                        <template x-if="selectedClient">
+                            <div class="md:col-span-3 rounded border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                        Linked to existing client:
+                                        <span class="font-semibold" x-text="selectedClient.name"></span>
+                                        <span class="text-blue-500" x-text="selectedClient.email ? ` • ${selectedClient.email}` : ''"></span>
+                                    </div>
+                                    <button type="button" class="text-[11px] font-semibold underline" @click="clearSelectedClient()">
+                                        Use as new client
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                 </div>
 
@@ -130,48 +187,50 @@
                         <div id="field-priority">
                             <label class="mb-2 block text-xs font-semibold text-slate-700">Priority*</label>
                             <div class="grid grid-cols-2 gap-2 rounded border border-slate-300 p-3 text-sm text-slate-700">
-                                <label class="flex items-center gap-2">
-                                    <input type="radio" value="critical" x-model="form.priority">
-                                    <span>Critical</span>
-                                </label>
-                                <label class="flex items-center gap-2">
-                                    <input type="radio" value="medium" x-model="form.priority">
-                                    <span>Medium</span>
-                                </label>
-                                <label class="flex items-center gap-2">
-                                    <input type="radio" value="high" x-model="form.priority">
-                                    <span>High</span>
-                                </label>
-                                <label class="flex items-center gap-2">
-                                    <input type="radio" value="low" x-model="form.priority">
-                                    <span>Low</span>
-                                </label>
+                                <template x-if="optionsLoading">
+                                    <div class="col-span-2 text-xs text-slate-400">Loading priorities...</div>
+                                </template>
+
+                                <template x-for="priority in master.priorities" :key="priority.id">
+                                    <label class="flex items-center gap-2">
+                                        <input
+                                            type="radio"
+                                            :value="String(priority.id)"
+                                            x-model="form.priority_id"
+                                            @change="loadSimilarTickets()"
+                                        >
+                                        <span x-text="priority.name"></span>
+                                    </label>
+                                </template>
                             </div>
                         </div>
 
                         <div id="field-team">
                             <label class="mb-2 block text-xs font-semibold text-slate-700">Owner Team*</label>
                             <select
-                                x-model="form.team"
+                                x-model="form.team_id"
                                 @change="loadSimilarTickets()"
-                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+                                :disabled="optionsLoading"
+                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 focus:border-slate-400 focus:outline-none"
                             >
-                                <option value="it">IT</option>
-                                <option value="finance">Finance</option>
-                                <option value="compliance">Compliance</option>
+                                <option value="" x-text="optionsLoading ? 'Loading teams...' : 'Select team'"></option>
+                                <template x-for="team in master.teams" :key="team.id">
+                                    <option :value="String(team.id)" x-text="masterLabel(team)"></option>
+                                </template>
                             </select>
                         </div>
 
                         <div id="field-category">
                             <label class="mb-2 block text-xs font-semibold text-slate-700">Category*</label>
                             <select
-                                x-model="form.category"
+                                x-model="form.category_id"
                                 @change="onCategoryChange()"
-                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+                                :disabled="optionsLoading"
+                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 focus:border-slate-400 focus:outline-none"
                             >
-                                <option value="">Select category</option>
-                                <template x-for="cat in categoryOptions" :key="cat.value">
-                                    <option :value="cat.value" x-text="cat.label"></option>
+                                <option value="" x-text="optionsLoading ? 'Loading categories...' : 'Select category'"></option>
+                                <template x-for="cat in master.categories" :key="cat.id">
+                                    <option :value="String(cat.id)" x-text="masterLabel(cat)"></option>
                                 </template>
                             </select>
                         </div>
@@ -179,13 +238,14 @@
                         <div id="field-issue_type">
                             <label class="mb-2 block text-xs font-semibold text-slate-700">Issue Type*</label>
                             <select
-                                x-model="form.issue_type"
-                                :disabled="!form.category"
+                                x-model="form.issue_type_id"
+                                :disabled="!form.category_id || issueTypesLoading"
+                                @change="loadSimilarTickets()"
                                 class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 focus:border-slate-400 focus:outline-none"
                             >
-                                <option value="" x-text="form.category ? 'Select issue type' : 'Select category first'"></option>
-                                <template x-for="item in availableIssueTypes()" :key="item.value">
-                                    <option :value="item.value" x-text="item.label"></option>
+                                <option value="" x-text="issueTypePlaceholder()"></option>
+                                <template x-for="item in issueTypes" :key="item.id">
+                                    <option :value="String(item.id)" x-text="masterLabel(item)"></option>
                                 </template>
                             </select>
                         </div>
@@ -330,6 +390,12 @@
                             <div class="mb-1 text-[11px] font-semibold text-slate-500">Issue Type:</div>
                             <div x-text="previewIssueTypeLabel()"></div>
                         </div>
+
+                        <div>
+                            <div class="mb-1 text-[11px] font-semibold text-slate-500">Ticket Code Preview:</div>
+                            <div class="font-semibold text-slate-900" x-text="ticketCodePreview()"></div>
+                            <div class="mt-1 text-[10px] text-slate-400">Final sequence is generated by backend.</div>
+                        </div>
                     </div>
                 </div>
 
@@ -432,15 +498,56 @@
 
                 {{-- CLIENT HISTORY --}}
                 <div class="rounded border border-slate-200 bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
-                    <div class="mb-3 text-xs font-bold text-slate-900">CLIENT HISTORY <span class="text-slate-500">(Mini)</span></div>
+                    <div class="mb-3 text-xs font-bold text-slate-900">CLIENT HISTORY <span class="text-slate-500">(Auto)</span></div>
 
                     <div class="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-                        <div class="text-[11px]">
-                            Client history endpoint currently supports creator-based lookup from backend.
-                        </div>
-                        <div class="mt-2 text-[11px] text-slate-500">
-                            Next step: add lookup by email/contact to enable client history preview here.
-                        </div>
+                        <template x-if="!selectedClient && !clientHistoryLoading">
+                            <div>
+                                <div class="text-[11px]">
+                                    Type a client name, email, or contact, then select an existing client to preview history.
+                                </div>
+                                <div class="mt-2 text-[11px] text-slate-500">
+                                    New clients are saved automatically after ticket submission.
+                                </div>
+                            </div>
+                        </template>
+
+                        <template x-if="clientHistoryLoading">
+                            <div class="text-[11px] text-slate-500">Loading client history...</div>
+                        </template>
+
+                        <template x-if="selectedClient && !clientHistoryLoading">
+                            <div>
+                                <div class="mb-3 rounded border border-slate-200 bg-white p-2">
+                                    <div class="font-semibold text-slate-900" x-text="selectedClient.name || '-'"></div>
+                                    <div class="mt-1 text-[11px] text-slate-500" x-text="selectedClient.email || '-'"></div>
+                                    <div class="text-[11px] text-slate-500" x-text="selectedClient.contact || '-'"></div>
+                                </div>
+
+                                <template x-if="clientHistory.length === 0">
+                                    <div class="text-[11px] text-slate-500">No previous ticket found for this client.</div>
+                                </template>
+
+                                <div class="space-y-2" x-show="clientHistory.length > 0">
+                                    <template x-for="ticket in clientHistory" :key="ticket.id">
+                                        <div class="rounded border border-slate-200 bg-white p-2">
+                                            <div class="flex items-center justify-between gap-2">
+                                                <div class="font-semibold text-slate-800" x-text="ticketLabel(ticket)"></div>
+                                                <span class="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600" x-text="ticket.status || '-'"></span>
+                                            </div>
+                                            <div class="mt-1 text-[11px] text-slate-600" x-text="ticket.title || '-'"></div>
+                                            <div class="mt-1 text-[10px] text-slate-400" x-text="formatDate(ticket.created_at)"></div>
+                                            <a
+                                                :href="`/tickets/${ticket.id}`"
+                                                class="mt-2 inline-flex rounded border border-slate-300 bg-white px-2 py-1 text-[10px] font-medium text-slate-700 hover:bg-slate-50"
+                                            >
+                                                View Ticket
+                                            </a>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                 </div>
             </div>
@@ -452,8 +559,22 @@
             return {
                 submitting: false,
                 similarLoading: false,
+                optionsLoading: false,
+                issueTypesLoading: false,
+                clientSuggestLoading: false,
+                clientSuggestOpen: false,
+                clientHistoryLoading: false,
                 attachmentName: '',
                 similarTickets: [],
+                clientSuggestions: [],
+                clientHistory: [],
+                selectedClient: null,
+                issueTypes: [],
+                master: {
+                    teams: [],
+                    categories: [],
+                    priorities: [],
+                },
                 sections: {
                     client: true,
                     summary: true,
@@ -463,15 +584,16 @@
                 },
 
                 form: {
+                    client_id: '',
                     client_name: '',
                     client_contact: '',
                     client_email: '',
                     title: '',
                     description: '',
-                    priority: 'medium',
-                    team: 'it',
-                    category: '',
-                    issue_type: '',
+                    priority_id: '',
+                    team_id: '',
+                    category_id: '',
+                    issue_type_id: '',
                     platform_type: '',
                     amount: '',
                     flow_type: '',
@@ -480,38 +602,12 @@
                     attachment: null,
                 },
 
-                categoryOptions: [
-                    { value: 'access', label: 'Access' },
-                    { value: 'incident', label: 'Incident' },
-                    { value: 'request', label: 'Request' },
-                    { value: 'finance_ops', label: 'Finance Ops' },
-                ],
-
-                issueTypeMap: {
-                    access: [
-                        { value: 'login_issue', label: 'Login Issue' },
-                        { value: 'permission_change', label: 'Permission Change' },
-                        { value: 'account_unlock', label: 'Account Unlock' },
-                    ],
-                    incident: [
-                        { value: 'system_error', label: 'System Error' },
-                        { value: 'slow_performance', label: 'Slow Performance' },
-                        { value: 'service_down', label: 'Service Down' },
-                    ],
-                    request: [
-                        { value: 'new_feature', label: 'New Feature' },
-                        { value: 'data_request', label: 'Data Request' },
-                        { value: 'configuration', label: 'Configuration' },
-                    ],
-                    finance_ops: [
-                        { value: 'payment_issue', label: 'Payment Issue' },
-                        { value: 'approval_flow', label: 'Approval Flow' },
-                        { value: 'amount_revision', label: 'Amount Revision' },
-                    ],
+                async init() {
+                    await this.loadFormOptions();
                 },
 
-                init() {
-                    this.loadSimilarTickets();
+                csrf() {
+                    return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
                 },
 
                 showAlert(message, type = 'success') {
@@ -527,50 +623,300 @@
                         el.classList.add('bg-red-100', 'text-red-800');
                     }
 
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+
                     setTimeout(() => {
                         el.classList.add('hidden');
                     }, 3000);
                 },
 
-                availableIssueTypes() {
-                    return this.issueTypeMap[this.form.category] || [];
+                clientSearchQuery() {
+                    return [
+                        this.form.client_name,
+                        this.form.client_email,
+                        this.form.client_contact,
+                    ].find(value => String(value || '').trim().length >= 2) || '';
                 },
 
-                onCategoryChange() {
-                    this.form.issue_type = '';
+                async loadClientSuggestions() {
+                    const query = String(this.clientSearchQuery() || '').trim();
+
+                    if (query.length < 2) {
+                        this.clientSuggestions = [];
+                        this.clientSuggestOpen = false;
+                        return;
+                    }
+
+                    this.clientSuggestLoading = true;
+                    this.clientSuggestOpen = true;
+
+                    try {
+                        const params = new URLSearchParams({ q: query });
+                        const response = await fetch(`/api/clients/suggest?${params.toString()}`, {
+                            method: 'GET',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                        });
+
+                        const result = await response.json();
+
+                        if (!response.ok || !result.success) {
+                            throw new Error(result.message || 'Failed to load client suggestions.');
+                        }
+
+                        this.clientSuggestions = result.data || [];
+                    } catch (error) {
+                        console.error(error);
+                        this.clientSuggestions = [];
+                    } finally {
+                        this.clientSuggestLoading = false;
+                    }
+                },
+
+                selectClientSuggestion(client) {
+                    this.selectedClient = client;
+                    this.form.client_id = client.id ? String(client.id) : '';
+                    this.form.client_name = client.name || '';
+                    this.form.client_contact = client.contact || '';
+                    this.form.client_email = client.email || '';
+                    this.clientSuggestOpen = false;
+                    this.loadClientHistory(client.id);
+                },
+
+                clearSelectedClient() {
+                    this.selectedClient = null;
+                    this.form.client_id = '';
+                    this.clientHistory = [];
+                },
+
+                async loadClientHistory(clientId) {
+                    if (!clientId) {
+                        this.clientHistory = [];
+                        return;
+                    }
+
+                    this.clientHistoryLoading = true;
+
+                    try {
+                        const response = await fetch(`/api/clients/${clientId}/history`, {
+                            method: 'GET',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                        });
+
+                        const result = await response.json();
+
+                        if (!response.ok || !result.success) {
+                            throw new Error(result.message || 'Failed to load client history.');
+                        }
+
+                        this.selectedClient = result.data?.client || this.selectedClient;
+                        this.clientHistory = result.data?.tickets || [];
+                    } catch (error) {
+                        console.error(error);
+                        this.clientHistory = [];
+                    } finally {
+                        this.clientHistoryLoading = false;
+                    }
+                },
+
+                ticketLabel(ticket) {
+                    return window.HenanApp?.ticketLabel(ticket) ?? '-';
+                },
+
+                formatDate(value) {
+                    if (!value) return '-';
+
+                    return new Date(value).toLocaleString('en-GB', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                    });
+                },
+
+                async loadFormOptions() {
+                    this.optionsLoading = true;
+
+                    try {
+                        const response = await fetch('/api/ticket-form/options', {
+                            method: 'GET',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                        });
+
+                        const result = await response.json();
+
+                        if (!response.ok || !result.success) {
+                            throw new Error(result.message || 'Failed to load ticket form options.');
+                        }
+
+                        this.master.teams = result.data?.teams || [];
+                        this.master.categories = result.data?.categories || [];
+                        this.master.priorities = result.data?.priorities || [];
+
+                        const defaultTeam = this.master.teams.find(item => (item.code || '').toLowerCase() === 'it') || this.master.teams[0];
+                        const defaultPriority = this.master.priorities.find(item => (item.code || '').toLowerCase() === 'medium') || this.master.priorities[0];
+
+                        this.form.team_id = defaultTeam ? String(defaultTeam.id) : '';
+                        this.form.priority_id = defaultPriority ? String(defaultPriority.id) : '';
+                    } catch (error) {
+                        console.error(error);
+                        this.showAlert(error.message || 'Failed to load ticket form options.', 'error');
+                    } finally {
+                        this.optionsLoading = false;
+                    }
+                },
+
+                async loadIssueTypes() {
+                    this.issueTypes = [];
+                    this.form.issue_type_id = '';
+
+                    if (!this.form.category_id) return;
+
+                    this.issueTypesLoading = true;
+
+                    try {
+                        const params = new URLSearchParams({ category_id: this.form.category_id });
+                        const response = await fetch(`/api/ticket-form/issue-types?${params.toString()}`, {
+                            method: 'GET',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                        });
+
+                        const result = await response.json();
+
+                        if (!response.ok || !result.success) {
+                            throw new Error(result.message || 'Failed to load issue types.');
+                        }
+
+                        this.issueTypes = result.data || [];
+                    } catch (error) {
+                        console.error(error);
+                        this.showAlert(error.message || 'Failed to load issue types.', 'error');
+                    } finally {
+                        this.issueTypesLoading = false;
+                    }
+                },
+
+                async onCategoryChange() {
+                    await this.loadIssueTypes();
                     this.loadSimilarTickets();
                 },
 
+                issueTypePlaceholder() {
+                    if (this.issueTypesLoading) return 'Loading issue types...';
+                    if (!this.form.category_id) return 'Select category first';
+                    if (this.issueTypes.length === 0) return 'No issue type available';
+                    return 'Select issue type';
+                },
+
+                findById(collection, id) {
+                    return collection.find(item => String(item.id) === String(id)) || null;
+                },
+
+                selectedTeam() {
+                    return this.findById(this.master.teams, this.form.team_id);
+                },
+
+                selectedCategory() {
+                    return this.findById(this.master.categories, this.form.category_id);
+                },
+
+                selectedIssueType() {
+                    return this.findById(this.issueTypes, this.form.issue_type_id);
+                },
+
+                selectedPriority() {
+                    return this.findById(this.master.priorities, this.form.priority_id);
+                },
+
+                masterLabel(item) {
+                    if (!item) return '-';
+
+                    // Code number tetap dipakai di belakang layar untuk generate ticket_code,
+                    // tapi tidak ditampilkan ke CS supaya form lebih mudah dipahami.
+                    return item.name || item.code || item.slug || '-';
+                },
+
+                slugify(value) {
+                    return String(value || '')
+                        .toLowerCase()
+                        .trim()
+                        .replace(/[^a-z0-9]+/g, '_')
+                        .replace(/^_+|_+$/g, '');
+                },
+
+                selectedCategoryKey() {
+                    const category = this.selectedCategory();
+                    return this.slugify(category?.slug || category?.name || '');
+                },
+
                 showField(field) {
-                    const category = this.form.category;
+                    const categoryKey = this.selectedCategoryKey();
 
-                    const visibleMap = {
-                        finance_ops: ['amount', 'flow_type', 'request_time'],
-                        request: ['flow_type', 'request_time'],
-                        incident: ['request_time'],
-                        access: ['request_time'],
-                    };
+                    if (categoryKey.includes('finance') || categoryKey.includes('fund')) {
+                        return ['amount', 'flow_type', 'request_time'].includes(field);
+                    }
 
-                    return (visibleMap[category] || ['request_time']).includes(field);
+                    if (categoryKey.includes('request')) {
+                        return ['flow_type', 'request_time'].includes(field);
+                    }
+
+                    return field === 'request_time';
                 },
 
                 routeToLabel() {
-                    return this.form.team ? this.form.team.toUpperCase() : '-';
+                    const team = this.selectedTeam();
+                    return team ? (team.name || team.code || '-').toUpperCase() : '-';
                 },
 
                 previewCategoryLabel() {
-                    if (!this.form.category) return '-';
-                    const found = this.categoryOptions.find(item => item.value === this.form.category);
-                    return found ? found.label : this.form.category;
+                    const category = this.selectedCategory();
+                    return category ? this.masterLabel(category) : '-';
                 },
 
                 previewIssueTypeLabel() {
-                    if (!this.form.issue_type) return '-';
-                    const found = this.availableIssueTypes().find(item => item.value === this.form.issue_type);
-                    return found ? found.label : this.form.issue_type;
+                    const issueType = this.selectedIssueType();
+                    return issueType ? this.masterLabel(issueType) : '-';
+                },
+
+                codePart(value, length) {
+                    if (value === undefined || value === null || value === '') return '?'.repeat(length);
+                    return String(value).padStart(length, '0');
+                },
+
+                ticketCodePreview() {
+                    const team = this.selectedTeam();
+                    const category = this.selectedCategory();
+                    const issueType = this.selectedIssueType();
+                    const priority = this.selectedPriority();
+
+                    return [
+                        this.codePart(team?.code_num, 1),
+                        this.codePart(category?.code_num, 2),
+                        this.codePart(issueType?.code_num, 3),
+                        this.codePart(priority?.code_num, 1),
+                        'xxxxx',
+                    ].join('');
                 },
 
                 slaPreview() {
+                    const priority = (this.selectedPriority()?.code || '').toLowerCase();
+
                     const map = {
                         critical: { response: '30m', resolve: '2hr' },
                         high: { response: '1hr', resolve: '6hr' },
@@ -578,7 +924,7 @@
                         low: { response: '8hr', resolve: '24hr' },
                     };
 
-                    return map[this.form.priority] || { response: '-', resolve: '-' };
+                    return map[priority] || { response: '-', resolve: '-' };
                 },
 
                 requiredFieldMap() {
@@ -588,10 +934,10 @@
                         { key: 'client_email', label: 'Client Email', selector: 'field-client_email', filled: !!this.form.client_email },
                         { key: 'title', label: 'Title', selector: 'field-title', filled: !!this.form.title },
                         { key: 'description', label: 'Description', selector: 'field-description', filled: !!this.form.description },
-                        { key: 'priority', label: 'Priority', selector: 'field-priority', filled: !!this.form.priority },
-                        { key: 'team', label: 'Owner Team', selector: 'field-team', filled: !!this.form.team },
-                        { key: 'category', label: 'Category', selector: 'field-category', filled: !!this.form.category },
-                        { key: 'issue_type', label: 'Issue Type', selector: 'field-issue_type', filled: !!this.form.issue_type },
+                        { key: 'priority_id', label: 'Priority', selector: 'field-priority', filled: !!this.form.priority_id },
+                        { key: 'team_id', label: 'Owner Team', selector: 'field-team', filled: !!this.form.team_id },
+                        { key: 'category_id', label: 'Category', selector: 'field-category', filled: !!this.form.category_id },
+                        { key: 'issue_type_id', label: 'Issue Type', selector: 'field-issue_type', filled: !!this.form.issue_type_id },
                         { key: 'platform_type', label: 'Platform', selector: 'field-platform', filled: !!this.form.platform_type },
                     ];
                 },
@@ -601,7 +947,7 @@
                 },
 
                 isFormReady() {
-                    return this.missingFields().length === 0;
+                    return this.missingFields().length === 0 && !this.optionsLoading && !this.issueTypesLoading;
                 },
 
                 scrollToField(key) {
@@ -634,7 +980,10 @@
                 },
 
                 async loadSimilarTickets() {
-                    if (!this.form.title || !this.form.team || !this.form.category) {
+                    const team = this.selectedTeam();
+                    const category = this.selectedCategory();
+
+                    if (!this.form.title || !team || !category) {
                         this.similarTickets = [];
                         return;
                     }
@@ -642,11 +991,13 @@
                     this.similarLoading = true;
 
                     try {
-                        const q = encodeURIComponent(this.form.title);
-                        const team = encodeURIComponent(this.form.team);
-                        const category = encodeURIComponent(this.form.category);
+                        const params = new URLSearchParams({
+                            q: this.form.title,
+                            team: team.code || team.name || '',
+                            category: category.name || category.slug || '',
+                        });
 
-                        const response = await fetch(`/api/tickets-similar?q=${q}&team=${team}&category=${category}`, {
+                        const response = await fetch(`/api/tickets-similar?${params.toString()}`, {
                             method: 'GET',
                             credentials: 'same-origin',
                             headers: {
@@ -679,11 +1030,12 @@
                         const formData = new FormData();
 
                         formData.append('title', this.form.title || '');
+                        formData.append('client_id', this.form.client_id || '');
                         formData.append('description', this.form.description || '');
-                        formData.append('priority', this.form.priority || '');
-                        formData.append('team', this.form.team || '');
-                        formData.append('category', this.form.category || '');
-                        formData.append('issue_type', this.form.issue_type || '');
+                        formData.append('priority_id', this.form.priority_id || '');
+                        formData.append('team_id', this.form.team_id || '');
+                        formData.append('category_id', this.form.category_id || '');
+                        formData.append('issue_type_id', this.form.issue_type_id || '');
 
                         formData.append('client_name', this.form.client_name || '');
                         formData.append('client_contact', this.form.client_contact || '');
@@ -704,7 +1056,7 @@
                             headers: {
                                 'Accept': 'application/json',
                                 'X-Requested-With': 'XMLHttpRequest',
-                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                                'X-CSRF-TOKEN': this.csrf(),
                             },
                             body: formData,
                         });

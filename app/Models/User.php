@@ -12,9 +12,22 @@ class User extends Authenticatable
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
 
-    public function isAdmin(): bool { return $this->role === 'admin'; }
-    public function isCS(): bool { return $this->role === 'cs'; }
-    public function isIT(): bool { return $this->role === 'it'; }
+    public const ROLE_ADMIN = 'admin';
+    public const ROLE_CS = 'cs';
+    public const ROLE_IT = 'it';
+    public const ROLE_SUPERVISOR = 'supervisor';
+
+    public const ROLES = [
+        self::ROLE_ADMIN,
+        self::ROLE_CS,
+        self::ROLE_IT,
+        self::ROLE_SUPERVISOR,
+    ];
+
+    public function isAdmin(): bool { return $this->role === self::ROLE_ADMIN; }
+    public function isCS(): bool { return $this->role === self::ROLE_CS; }
+    public function isIT(): bool { return $this->role === self::ROLE_IT; }
+    public function isSupervisor(): bool { return $this->role === self::ROLE_SUPERVISOR; }
 
     /**
      * The attributes that are mass assignable.
@@ -26,6 +39,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'is_active',
     ];
 
     /**
@@ -48,6 +62,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_active' => 'boolean',
         ];
     }
 }

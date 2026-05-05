@@ -56,18 +56,26 @@
                     <div
                         x-show="exportOpen"
                         x-transition
-                        class="absolute right-0 z-50 mt-2 w-36 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
+                        class="absolute right-0 z-50 mt-2 w-40 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
                         style="display:none;">
                         <button
                             type="button"
                             @click="exportData('csv')"
-                            class="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+                            class="block w-full px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50">
                             Export CSV
                         </button>
+
+                        <button
+                            type="button"
+                            @click="exportData('excel')"
+                            class="block w-full px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50">
+                            Export Excel
+                        </button>
+
                         <button
                             type="button"
                             @click="exportData('pdf')"
-                            class="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+                            class="block w-full px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50">
                             Export PDF
                         </button>
                     </div>
@@ -318,6 +326,38 @@
                     }
                 },
 
+                paginationItems() {
+                    const current = Number(this.meta.current_page || 1);
+                    const last = Number(this.meta.last_page || 1);
+
+                    if (last <= 7) {
+                        return Array.from({
+                            length: last
+                        }, (_, i) => i + 1);
+                    }
+
+                    const items = [1];
+
+                    if (current > 4) {
+                        items.push('...');
+                    }
+
+                    const start = Math.max(2, current - 1);
+                    const end = Math.min(last - 1, current + 1);
+
+                    for (let i = start; i <= end; i++) {
+                        items.push(i);
+                    }
+
+                    if (current < last - 3) {
+                        items.push('...');
+                    }
+
+                    items.push(last);
+
+                    return items;
+                },
+
                 renderPagination() {
                     const container = document.getElementById('history-pagination');
                     if (!container) return;
@@ -327,39 +367,47 @@
                         return;
                     }
 
+                    const items = this.paginationItems();
                     let html = '';
 
                     if (this.meta.current_page > 1) {
                         html += `
-                            <button
-                                type="button"
-                                onclick="window.historyPageRef.goToPage(${this.meta.current_page - 1})"
-                                class="px-3 py-1 border rounded text-sm bg-white text-slate-700 hover:bg-slate-50">
-                                ‹
-                            </button>
-                        `;
+            <button
+                type="button"
+                onclick="window.historyPageRef.goToPage(${this.meta.current_page - 1})"
+                class="px-3 py-1 border rounded text-sm bg-white text-slate-700 hover:bg-slate-50">
+                ‹
+            </button>
+        `;
                     }
 
-                    for (let i = 1; i <= this.meta.last_page; i++) {
+                    items.forEach((item) => {
+                        if (item === '...') {
+                            html += `
+                <span class="px-2 py-1 text-sm text-slate-500 select-none">...</span>
+            `;
+                            return;
+                        }
+
                         html += `
-                            <button
-                                type="button"
-                                onclick="window.historyPageRef.goToPage(${i})"
-                                class="px-3 py-1 border rounded text-sm ${i === this.meta.current_page ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 hover:bg-slate-50'}">
-                                ${i}
-                            </button>
-                        `;
-                    }
+            <button
+                type="button"
+                onclick="window.historyPageRef.goToPage(${item})"
+                class="px-3 py-1 border rounded text-sm ${item === this.meta.current_page ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 hover:bg-slate-50'}">
+                ${item}
+            </button>
+        `;
+                    });
 
                     if (this.meta.current_page < this.meta.last_page) {
                         html += `
-                            <button
-                                type="button"
-                                onclick="window.historyPageRef.goToPage(${this.meta.current_page + 1})"
-                                class="px-3 py-1 border rounded text-sm bg-white text-slate-700 hover:bg-slate-50">
-                                ›
-                            </button>
-                        `;
+            <button
+                type="button"
+                onclick="window.historyPageRef.goToPage(${this.meta.current_page + 1})"
+                class="px-3 py-1 border rounded text-sm bg-white text-slate-700 hover:bg-slate-50">
+                ›
+            </button>
+        `;
                     }
 
                     container.innerHTML = html;
@@ -412,8 +460,7 @@
                                 shortcuts.className = 'lp-shortcuts';
 
                                 const today = new Date();
-                                const items = [
-                                    {
+                                const items = [{
                                         label: 'Today',
                                         from: today,
                                         to: today
@@ -504,9 +551,7 @@
                 },
 
                 ticketLabel(t) {
-                    let ticketNumber = t.ticket_code || t.id;
-                    ticketNumber = String(ticketNumber).replace('#', '').replace(/^T-?/i, '');
-                    return `#T-${ticketNumber}`;
+                    return window.HenanApp?.ticketLabel(t) ?? '-';
                 },
 
                 resolvedLabel(t) {
@@ -538,13 +583,13 @@
 
                 durationText(t) {
                     const start = t.created_at ? new Date(t.created_at) : null;
-                    const end = t.resolved_at
-                        ? new Date(t.resolved_at)
-                        : t.closed_at
-                            ? new Date(t.closed_at)
-                            : t.updated_at
-                                ? new Date(t.updated_at)
-                                : null;
+                    const end = t.resolved_at ?
+                        new Date(t.resolved_at) :
+                        t.closed_at ?
+                        new Date(t.closed_at) :
+                        t.updated_at ?
+                        new Date(t.updated_at) :
+                        null;
 
                     if (!start || !end) return '-';
 
@@ -607,8 +652,8 @@
             padding: 8px 16px;
         }
 
-        .litepicker .month-item-header div > .month-item-name,
-        .litepicker .month-item-header div > .month-item-year {
+        .litepicker .month-item-header div>.month-item-name,
+        .litepicker .month-item-header div>.month-item-year {
             color: #0f172a;
             font-weight: 600;
         }

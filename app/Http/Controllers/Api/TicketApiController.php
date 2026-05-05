@@ -2,14 +2,23 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\Category;
+use App\Models\IssueType;
+use App\Models\Priority;
+use App\Models\Team;
 use App\Models\Ticket;
-use App\Models\TicketAttachment;
 use App\Models\TicketStatusHistory;
+use App\Services\TicketService;
+use App\Support\AuditLogger;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class TicketApiController extends BaseApiController
 {
+    public function __construct(
+        private TicketService $ticketService
+    ) {
+    }
+
     public function index(Request $request)
     {
         $q        = trim((string) $request->query('q', ''));
@@ -18,10 +27,15 @@ class TicketApiController extends BaseApiController
         $dateFrom = (string) $request->query('date_from', '');
         $dateTo   = (string) $request->query('date_to', '');
         $focus    = (string) $request->query('focus', '');
+        $sortBy   = (string) $request->query('sort_by', 'created_at');
+        $sortDir  = strtolower((string) $request->query('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $perPage  = (int) $request->query('per_page', 10);
 
-        $query = Ticket::query()
-            ->with(['creator', 'holder'])
-            ->latest();
+        if (!in_array($perPage, [10, 25, 50], true)) {
+            $perPage = 10;
+        }
+
+        $query = Ticket::query()->with(['creator', 'holder']);
 
         if ($q !== '') {
             $query->where(function ($qq) use ($q) {
@@ -70,7 +84,30 @@ class TicketApiController extends BaseApiController
             }
         }
 
-        $tickets = $query->paginate(10)->withQueryString();
+        $allowedSorts = ['ticket_code', 'title', 'priority', 'category', 'team', 'status', 'created_at'];
+        if (!in_array($sortBy, $allowedSorts, true)) {
+            $sortBy = 'created_at';
+        }
+
+        switch ($sortBy) {
+            case 'priority':
+                $query->orderByRaw("FIELD(priority, 'critical', 'high', 'medium', 'low') " . $sortDir);
+                break;
+
+            case 'status':
+                $query->orderByRaw("FIELD(status, 'new', 'in_progress', 'waiting_info', 'resolved', 'closed') " . $sortDir);
+                break;
+
+            default:
+                $query->orderBy($sortBy, $sortDir);
+                break;
+        }
+
+        if ($sortBy !== 'created_at') {
+            $query->orderByDesc('created_at');
+        }
+
+        $tickets = $query->paginate($perPage)->withQueryString();
 
         return $this->paginated($tickets, 'Tickets loaded');
     }
@@ -80,15 +117,62 @@ class TicketApiController extends BaseApiController
         $ticket->load([
             'creator',
             'holder',
+            'client',
             'attachments',
             'statusHistories.changer',
-            'resolverMessages',
+            'resolverMessages' => function ($query) {
+                $query->with(['sender', 'recipient'])
+                    ->latest();
+            },
         ]);
 
         $data = $ticket->toArray();
         $data['viewer_role'] = $request->user()->role;
+        $data['viewer_id'] = $request->user()->id;
 
         return $this->success($data, 'Ticket detail loaded');
+    }
+
+    /**
+     * Read-only options for Create/Edit Ticket form.
+     */
+    public function formOptions(Request $request)
+    {
+        return $this->success([
+            'teams' => Team::query()
+                ->where('is_active', true)
+                ->orderBy('code_num')
+                ->get(['id', 'code_num', 'name', 'code']),
+
+            'categories' => Category::query()
+                ->where('is_active', true)
+                ->orderBy('code_num')
+                ->get(['id', 'code_num', 'name', 'slug']),
+
+            'priorities' => Priority::query()
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->orderBy('code_num')
+                ->get(['id', 'code_num', 'name', 'code']),
+        ], 'Ticket form options loaded');
+    }
+
+    /**
+     * Read-only issue types for selected category.
+     */
+    public function issueTypesByCategory(Request $request)
+    {
+        $validated = $request->validate([
+            'category_id' => ['required', 'exists:categories,id'],
+        ]);
+
+        $rows = IssueType::query()
+            ->where('category_id', $validated['category_id'])
+            ->where('is_active', true)
+            ->orderBy('code_num')
+            ->get(['id', 'category_id', 'code_num', 'name', 'slug']);
+
+        return $this->success($rows, 'Issue types loaded');
     }
 
     public function store(Request $request)
@@ -96,11 +180,11 @@ class TicketApiController extends BaseApiController
         $validated = $request->validate([
             'title'           => ['required', 'string', 'max:255'],
             'description'     => ['required', 'string'],
-            'priority'        => ['required', 'in:low,medium,high,critical'],
-            'team'            => ['required', 'in:it,finance,compliance'],
-            'category'        => ['required', 'string', 'max:50'],
-            'issue_type'      => ['required', 'string', 'max:80'],
-
+            'team_id'         => ['required', 'integer', 'exists:teams,id'],
+            'category_id'     => ['required', 'integer', 'exists:categories,id'],
+            'issue_type_id'   => ['required', 'integer', 'exists:issue_types,id'],
+            'priority_id'     => ['required', 'integer', 'exists:priorities,id'],
+            'client_id'       => ['nullable', 'integer', 'exists:clients,id'],
             'client_name'     => ['nullable', 'string', 'max:255'],
             'client_contact'  => ['nullable', 'string', 'max:100'],
             'client_email'    => ['nullable', 'email', 'max:255'],
@@ -109,97 +193,25 @@ class TicketApiController extends BaseApiController
             'flow_type'       => ['nullable', 'string', 'max:50'],
             'request_time'    => ['nullable', 'date'],
             'internal_notes'  => ['nullable', 'string'],
-
             'attachment'      => ['nullable', 'file', 'max:5120'],
         ]);
 
-        $priorityMap = [
-            'critical' => '10',
-            'high'     => '20',
-            'medium'   => '30',
-            'low'      => '40',
-        ];
-        $prefix = '10' . $priorityMap[$validated['priority']];
+        $ticket = $this->ticketService->create(
+            $validated,
+            $request->user(),
+            $request->file('attachment')
+        );
 
-        $slaHoursByPriority = [
-            'critical' => 2,
-            'high'     => 6,
-            'medium'   => 12,
-            'low'      => 24,
-        ];
-        $slaHours = $slaHoursByPriority[$validated['priority']] ?? null;
-
-        $status = $validated['team'] === 'it' ? 'new' : 'closed';
-
-        $ticket = DB::transaction(function () use ($request, $validated, $prefix, $slaHours, $status) {
-            $lastCode = Ticket::where('ticket_code', 'like', $prefix . '%')
-                ->orderBy('ticket_code', 'desc')
-                ->value('ticket_code');
-
-            $nextSeq = 10;
-            if ($lastCode) {
-                $lastSeqStr = substr($lastCode, strlen($prefix));
-                $nextSeq = ((int) $lastSeqStr) + 1;
-            }
-
-            $seqPart = str_pad((string) $nextSeq, 2, '0', STR_PAD_LEFT);
-            $ticketCode = $prefix . $seqPart;
-
-            $slaDeadline = null;
-            if ($validated['team'] === 'it' && $slaHours) {
-                $slaDeadline = now()->addHours($slaHours);
-            }
-
-            $ticket = Ticket::create([
-                'ticket_code'     => $ticketCode,
-                'title'           => $validated['title'],
-                'description'     => $validated['description'],
-                'priority'        => $validated['priority'],
-                'team'            => $validated['team'],
-                'status'          => $status,
-                'created_by'      => $request->user()->id,
-                'sla_deadline_at' => $slaDeadline,
-                'category'        => $validated['category'],
-                'issue_type'      => $validated['issue_type'],
-
-                'client_name'     => $validated['client_name'] ?? null,
-                'client_contact'  => $validated['client_contact'] ?? null,
-                'client_email'    => $validated['client_email'] ?? null,
-                'platform_type'   => $validated['platform_type'] ?? null,
-                'amount'          => $validated['amount'] ?? null,
-                'flow_type'       => $validated['flow_type'] ?? null,
-                'request_time'    => $validated['request_time'] ?? null,
-                'internal_notes'  => $validated['internal_notes'] ?? null,
-
-                'resolved_at'     => $status === 'resolved' ? now() : null,
-                'closed_at'       => $status === 'closed' ? now() : null,
-            ]);
-
-            TicketStatusHistory::create([
-                'ticket_id'   => $ticket->id,
-                'from_status' => null,
-                'to_status'   => $status,
-                'changed_by'  => $request->user()->id,
-                'changed_at'  => now(),
-                'note'        => 'Initial status on ticket creation',
-            ]);
-
-            if ($request->hasFile('attachment')) {
-                $file = $request->file('attachment');
-                $path = $file->store('ticket-attachments', 'public');
-
-                TicketAttachment::create([
-                    'ticket_id'   => $ticket->id,
-                    'file_name'   => $file->getClientOriginalName(),
-                    'file_path'   => $path,
-                    'file_type'   => $file->getClientMimeType(),
-                    'file_size'   => $file->getSize(),
-                    'uploaded_by' => $request->user()->id,
-                ]);
-            }
-
-            return $ticket->load(['creator', 'holder', 'attachments']);
-        });
+        AuditLogger::record(
+            $request,
+            'created',
+            'ticket',
+            $ticket->id,
+            AuditLogger::ticketLabel($ticket),
+            'Created ticket ' . AuditLogger::ticketLabel($ticket) . ': ' . $ticket->title,
+            null,
+            $this->ticketService->snapshot($ticket)
+        );
 
         return $this->success($ticket, 'Ticket created successfully', 201);
     }
@@ -207,68 +219,53 @@ class TicketApiController extends BaseApiController
     public function update(Request $request, Ticket $ticket)
     {
         $validated = $request->validate([
-            'title'       => ['required', 'string', 'max:255'],
-            'description' => ['required', 'string'],
-            'priority'    => ['required', 'in:low,medium,high,critical'],
-            'team'        => ['required', 'in:it,finance,compliance'],
-            'status'      => ['required', 'in:new,in_progress,waiting_info,resolved,closed'],
-            'category'    => ['required', 'string', 'max:50'],
-            'issue_type'  => ['required', 'string', 'max:80'],
+            'title'           => ['required', 'string', 'max:255'],
+            'description'     => ['required', 'string'],
+            'status'          => ['required', 'in:new,in_progress,waiting_info,resolved,closed'],
+            'team_id'         => ['required', 'integer', 'exists:teams,id'],
+            'category_id'     => ['required', 'integer', 'exists:categories,id'],
+            'issue_type_id'   => ['required', 'integer', 'exists:issue_types,id'],
+            'priority_id'     => ['required', 'integer', 'exists:priorities,id'],
         ]);
 
-        DB::transaction(function () use ($request, $ticket, $validated) {
-            $oldStatus = $ticket->status;
-            $newTeam   = $validated['team'];
-            $newStatus = $validated['status'];
+        $before = $this->ticketService->snapshot($ticket);
+        $freshTicket = $this->ticketService->update($ticket, $validated, $request->user());
 
-            if ($newTeam !== 'it') {
-                $newStatus = 'closed';
-                $ticket->sla_deadline_at = null;
-                $ticket->holder_id = null;
-                $ticket->claimed_at = null;
-            }
-
-            $ticket->fill([
-                'title'       => $validated['title'],
-                'description' => $validated['description'],
-                'priority'    => $validated['priority'],
-                'team'        => $newTeam,
-                'status'      => $newStatus,
-                'category'    => $validated['category'],
-                'issue_type'  => $validated['issue_type'],
-            ]);
-
-            if ($newStatus === 'resolved' && !$ticket->resolved_at) {
-                $ticket->resolved_at = now();
-            }
-
-            if ($newStatus === 'closed' && !$ticket->closed_at) {
-                $ticket->closed_at = now();
-            }
-
-            $ticket->save();
-
-            if ($oldStatus !== $newStatus) {
-                TicketStatusHistory::create([
-                    'ticket_id'   => $ticket->id,
-                    'from_status' => $oldStatus,
-                    'to_status'   => $newStatus,
-                    'changed_by'  => $request->user()->id,
-                    'changed_at'  => now(),
-                    'note'        => 'Status updated from API',
-                ]);
-            }
-        });
+        AuditLogger::record(
+            $request,
+            'updated',
+            'ticket',
+            $freshTicket->id,
+            AuditLogger::ticketLabel($freshTicket),
+            'Updated ticket ' . AuditLogger::ticketLabel($freshTicket) . ': ' . $freshTicket->title,
+            $before,
+            $this->ticketService->snapshot($freshTicket)
+        );
 
         return $this->success(
-            $ticket->fresh(['creator', 'holder', 'attachments']),
+            $freshTicket,
             'Ticket updated successfully'
         );
     }
 
-    public function destroy(Ticket $ticket)
+    public function destroy(Request $request, Ticket $ticket)
     {
+        $before = $this->ticketService->snapshot($ticket);
+        $ticketLabel = AuditLogger::ticketLabel($ticket);
+        $title = $ticket->title;
+
         $ticket->delete();
+
+        AuditLogger::record(
+            $request,
+            'deleted',
+            'ticket',
+            $ticket->id,
+            $ticketLabel,
+            'Deleted ticket ' . $ticketLabel . ': ' . $title,
+            $before,
+            null
+        );
 
         return $this->success(null, 'Ticket deleted successfully');
     }

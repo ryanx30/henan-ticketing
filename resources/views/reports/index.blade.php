@@ -51,14 +51,33 @@
                         <select
                             x-model="filters.scope"
                             @change="applyFilters()"
-                            class="h-10 w-[100px] rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none">
+                            class="h-10 w-[150px] rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none">
                             <option value="my">My Tickets</option>
-                            <option value="team">Team</option>
-                            <option value="all">All</option>
+
+                            @if(auth()->user()->role === 'cs')
+                                <option value="team">All CS Tickets</option>
+                            @elseif(auth()->user()->role === 'it')
+                                <option value="team">Team IT</option>
+                            @elseif(in_array(auth()->user()->role, ['admin', 'supervisor'], true))
+                                <option value="team">All CS Tickets</option>
+                                <option value="all">All Tickets</option>
+                            @endif
                         </select>
                     </div>
 
                     <div class="ml-auto flex items-center gap-2">
+                        <div class="flex items-center gap-2 text-sm text-slate-700">
+                            <span>Show:</span>
+                            <select
+                                x-model="filters.per_page"
+                                @change="applyFilters()"
+                                class="h-10 w-[90px] rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none">
+                                <option value="10">10</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                            </select>
+                        </div>
+
                         <button
                             type="button"
                             @click="applyFilters()"
@@ -79,17 +98,17 @@
             {{-- KPI CARDS --}}
             <div class="mb-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <div class="rounded bg-white p-6 text-center shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
-                    <div class="text-lg text-slate-700">Resolved</div>
+                    <div class="text-lg text-slate-700">Resolved / Closed</div>
                     <div class="mt-2 text-[52px] leading-none text-[#2f6f8f]" x-text="cards.resolved"></div>
                 </div>
 
                 <div class="rounded bg-white p-6 text-center shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
-                    <div class="text-lg text-slate-700">Avg Response</div>
+                    <div class="text-lg text-slate-700">Avg First Response (IT)</div>
                     <div class="mt-2 text-[52px] leading-none text-[#2f6f8f]" x-text="cards.avg_response_label"></div>
                 </div>
 
                 <div class="rounded bg-white p-6 text-center shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
-                    <div class="text-lg text-slate-700">Reopen Rate</div>
+                    <div class="text-lg text-slate-700">Reopen Rate (IT)</div>
                     <div class="mt-2 text-[52px] leading-none text-[#2f6f8f]" x-text="`${cards.reopen_rate}%`"></div>
                 </div>
 
@@ -101,7 +120,7 @@
 
             {{-- TREND --}}
             <div class="mb-5 rounded bg-white p-6 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
-                <div class="mb-6 text-[28px] font-semibold text-slate-800">Trend (Resolved per day)</div>
+                <div class="mb-6 text-[28px] font-semibold text-slate-800">Trend (Resolved / Closed)</div>
 
                 <div class="rounded border border-slate-200 bg-slate-50 p-5">
                     <div class="h-[360px]">
@@ -121,7 +140,7 @@
             {{-- TABLE --}}
             <div class="overflow-hidden rounded bg-white shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
                 <div class="bg-[#051823] px-5 py-3">
-                    <h2 class="text-[20px] font-semibold text-white">Messages</h2>
+                    <h2 class="text-[20px] font-semibold text-white">SLA Tracking</h2>
                 </div>
 
                 <div class="overflow-x-auto">
@@ -131,9 +150,9 @@
                                 <th class="px-5 py-3 font-semibold">Ticket</th>
                                 <th class="px-5 py-3 font-semibold">Status</th>
                                 <th class="px-5 py-3 font-semibold">Team</th>
-                                <th class="px-5 py-3 font-semibold">SLA Time</th>
-                                <th class="px-5 py-3 font-semibold">Resp Time</th>
-                                <th class="px-5 py-3 font-semibold">Result</th>
+                                <th class="px-5 py-3 font-semibold" x-text="meta.table_labels.sla_time"></th>
+                                <th class="px-5 py-3 font-semibold">Response Time</th>
+                                <th class="px-5 py-3 font-semibold" x-text="meta.table_labels.result"></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -151,26 +170,96 @@
 
                             <template x-for="(row, index) in rows" :key="row.id">
                                 <tr :class="index % 2 === 0 ? 'border-t border-slate-200 bg-white' : 'border-t border-slate-200 bg-[#dfe8ee]'">
-                                    <td class="px-5 py-3" x-text="row.ticket_code"></td>
+                                    <td class="px-5 py-3 font-medium" x-text="row.ticket_code"></td>
+
                                     <td class="px-5 py-3">
                                         <span
                                             class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
                                             :class="statusBadgeClass(row.status)"
-                                            x-text="statusLabel(row.status)"></span>
+                                            x-text="statusLabel(row.status)">
+                                        </span>
                                     </td>
+
                                     <td class="px-5 py-3" x-text="row.team"></td>
-                                    <td class="px-5 py-3" x-text="row.sla_time"></td>
+
+                                    <td class="px-5 py-3">
+                                        <span
+                                            class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
+                                            :class="slaTimeBadgeClass(row.sla_time, row.result)"
+                                            x-text="row.sla_time">
+                                        </span>
+                                    </td>
+
                                     <td class="px-5 py-3" x-text="row.response_time"></td>
+
                                     <td class="px-5 py-3">
                                         <span
                                             class="inline-flex rounded px-2.5 py-1 text-xs font-semibold"
-                                            :class="row.result === 'OK' ? 'bg-green-500 text-white' : (row.result === 'Breach' ? 'bg-red-500 text-white' : 'bg-slate-200 text-slate-700')"
-                                            x-text="row.result"></span>
+                                            :class="resultBadgeClass(row.result)"
+                                            x-text="row.result">
+                                        </span>
                                     </td>
                                 </tr>
                             </template>
                         </tbody>
                     </table>
+                </div>
+
+                <div
+                    x-show="!loading && pagination.last_page > 1"
+                    class="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 md:flex-row md:items-center md:justify-between">
+
+                    <div class="text-sm text-slate-600">
+                        Showing
+                        <span class="font-semibold" x-text="pagination.from ?? 0"></span>
+                        -
+                        <span class="font-semibold" x-text="pagination.to ?? 0"></span>
+                        of
+                        <span class="font-semibold" x-text="pagination.total ?? 0"></span>
+                        tickets
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button
+                            type="button"
+                            @click="goToPage(pagination.current_page - 1)"
+                            :disabled="pagination.current_page <= 1"
+                            class="rounded border px-3 py-1 text-sm"
+                            :class="pagination.current_page <= 1
+                                ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'">
+                            ‹
+                        </button>
+
+                        <template x-for="(item, idx) in visiblePages()" :key="`page-${idx}-${item}`">
+                            <template x-if="item === '...'">
+                                <span class="px-2 py-1 text-sm text-slate-500">...</span>
+                            </template>
+
+                            <template x-if="item !== '...'">
+                                <button
+                                    type="button"
+                                    @click="goToPage(item)"
+                                    class="rounded border px-3 py-1 text-sm"
+                                    :class="item === pagination.current_page
+                                        ? 'border-slate-900 bg-slate-900 text-white'
+                                        : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'">
+                                    <span x-text="item"></span>
+                                </button>
+                            </template>
+                        </template>
+
+                        <button
+                            type="button"
+                            @click="goToPage(pagination.current_page + 1)"
+                            :disabled="pagination.current_page >= pagination.last_page"
+                            class="rounded border px-3 py-1 text-sm"
+                            :class="pagination.current_page >= pagination.last_page
+                                ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'">
+                            ›
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -189,6 +278,7 @@
                     date_from: '',
                     date_to: '',
                     scope: 'my',
+                    per_page: '10',
                 },
 
                 cards: {
@@ -204,6 +294,22 @@
                     values: [],
                 },
 
+                pagination: {
+                    current_page: 1,
+                    last_page: 1,
+                    per_page: 10,
+                    total: 0,
+                    from: null,
+                    to: null,
+                },
+
+                meta: {
+                    table_labels: {
+                        sla_time: 'SLA Remaining / Outcome',
+                        result: 'SLA Result',
+                    },
+                },
+
                 rows: [],
                 picker: null,
                 trendChart: null,
@@ -214,6 +320,8 @@
                     this.filters.date_from = params.get('date_from') || '';
                     this.filters.date_to = params.get('date_to') || '';
                     this.filters.scope = params.get('scope') || 'my';
+                    this.filters.per_page = params.get('per_page') || '10';
+                    this.pagination.current_page = Number(params.get('page') || 1);
 
                     this.$nextTick(() => {
                         this.initDatePicker();
@@ -259,20 +367,26 @@
                     this.applyFilters();
                 },
 
-                buildQuery() {
+                buildQuery(includePage = true) {
                     const params = new URLSearchParams();
                     params.set('range', this.filters.range);
                     params.set('scope', this.filters.scope);
+                    params.set('per_page', this.filters.per_page);
 
                     if (this.filters.range === 'custom') {
                         if (this.filters.date_from) params.set('date_from', this.filters.date_from);
                         if (this.filters.date_to) params.set('date_to', this.filters.date_to);
                     }
 
+                    if (includePage) {
+                        params.set('page', this.pagination.current_page || 1);
+                    }
+
                     return params;
                 },
 
                 applyFilters() {
+                    this.pagination.current_page = 1;
                     const params = this.buildQuery();
                     window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
                     this.loadReports();
@@ -301,6 +415,8 @@
                         this.cards = data.cards || this.cards;
                         this.trend = data.trend || this.trend;
                         this.rows = data.rows || [];
+                        this.pagination = data.pagination || this.pagination;
+                        this.meta = data.meta || this.meta;
                     } catch (error) {
                         console.error(error);
                         this.showAlert(error.message || 'Failed to load reports', 'error');
@@ -315,8 +431,47 @@
                     }
                 },
 
-                exportCsv() {
+                goToPage(page) {
+                    if (page < 1 || page > this.pagination.last_page) return;
+
+                    this.pagination.current_page = page;
                     const params = this.buildQuery();
+                    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+                    this.loadReports();
+                },
+
+                visiblePages() {
+                    const current = this.pagination.current_page || 1;
+                    const last = this.pagination.last_page || 1;
+
+                    if (last <= 7) {
+                        return Array.from({ length: last }, (_, i) => i + 1);
+                    }
+
+                    const pages = [1];
+
+                    if (current > 3) {
+                        pages.push('...');
+                    }
+
+                    const start = Math.max(2, current - 1);
+                    const end = Math.min(last - 1, current + 1);
+
+                    for (let i = start; i <= end; i++) {
+                        pages.push(i);
+                    }
+
+                    if (current < last - 2) {
+                        pages.push('...');
+                    }
+
+                    pages.push(last);
+
+                    return pages;
+                },
+
+                exportCsv() {
+                    const params = this.buildQuery(false);
                     window.location.href = `/api/reports/export?${params.toString()}`;
                 },
 
@@ -425,6 +580,38 @@
                     }
                 },
 
+                resultBadgeClass(result) {
+                    if (result === 'OK') return 'bg-green-500 text-white';
+                    if (result === 'Breach') return 'bg-red-500 text-white';
+                    if (result === 'Open') return 'bg-blue-100 text-blue-700';
+                    if (result === 'Closed') return 'bg-slate-500 text-white';
+                    return 'bg-slate-200 text-slate-700';
+                },
+
+                slaTimeBadgeClass(slaTime, result) {
+                    if (!slaTime || slaTime === '-') {
+                        return 'bg-slate-100 text-slate-600';
+                    }
+
+                    if (result === 'Breach' || String(slaTime).startsWith('Overdue') || String(slaTime).startsWith('Breached by')) {
+                        return 'bg-red-50 text-red-700';
+                    }
+
+                    if (result === 'OK' || String(slaTime).startsWith('Met by')) {
+                        return 'bg-green-50 text-green-700';
+                    }
+
+                    if (result === 'Closed' || String(slaTime).startsWith('Direct close')) {
+                        return 'bg-slate-100 text-slate-700';
+                    }
+
+                    if (result === 'Open' || String(slaTime).endsWith('left') || String(slaTime).startsWith('No SLA')) {
+                        return 'bg-blue-50 text-blue-700';
+                    }
+
+                    return 'bg-slate-100 text-slate-700';
+                },
+
                 computedYMax() {
                     const values = Array.isArray(this.trend.values) ? this.trend.values : [];
                     const maxValue = Math.max(...values, 0);
@@ -480,7 +667,7 @@
                         data: {
                             labels,
                             datasets: [{
-                                label: 'Resolved Tickets',
+                                label: 'Resolved / Closed Tickets',
                                 data: values,
                                 borderColor: '#051823',
                                 backgroundColor: '#051823',

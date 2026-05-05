@@ -1,9 +1,11 @@
 <x-app-layout>
     <div
-        x-data="ticketDetailPage({ ticketId: @json($ticketId) })"
+        x-data="ticketDetailPage({ ticketId: @json($ticketId), currentUserId: @json(auth()->id()) })"
         x-init="init()"
         class="min-h-screen bg-[#eef1f5] px-8 py-7">
         <div class="mx-auto w-full max-w-[1400px]">
+            <div id="page-alert" class="mb-6 hidden rounded-lg border px-4 py-3 text-sm shadow-sm"></div>
+
             {{-- Header --}}
             <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
@@ -25,7 +27,7 @@
 
                     <div class="flex flex-wrap items-center gap-2 pl-[52px]">
                         <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700"
-                            x-text="ticket.ticket_code || '-'"></span>
+                            x-text="currentTicketLabel()"></span>
 
                         <span class="rounded-full px-3 py-1 text-xs font-semibold"
                             :class="priorityBadgeClass(ticket.priority)"
@@ -36,7 +38,7 @@
                             x-text="formatStatus(ticket.status)"></span>
 
                         <span class="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700"
-                            x-text="ticket.team ? ticket.team.toUpperCase() : '-'"></span>
+                            x-text="formatTeam(ticket.team)"></span>
                     </div>
                 </div>
 
@@ -65,7 +67,7 @@
                         <div class="grid grid-cols-1 gap-5 px-6 py-6 md:grid-cols-2">
                             <div>
                                 <div class="mb-1 text-sm font-medium text-slate-500">Ticket Code</div>
-                                <div class="text-[15px] font-semibold text-slate-900" x-text="ticket.ticket_code || '-'"></div>
+                                <div class="text-[15px] font-semibold text-slate-900" x-text="currentTicketLabel()"></div>
                             </div>
 
                             <div>
@@ -80,17 +82,17 @@
 
                             <div>
                                 <div class="mb-1 text-sm font-medium text-slate-500">Team</div>
-                                <div class="text-[15px] font-semibold text-slate-900" x-text="ticket.team ? ticket.team.toUpperCase() : '-'"></div>
+                                <div class="text-[15px] font-semibold text-slate-900" x-text="formatTeam(ticket.team)"></div>
                             </div>
 
                             <div>
                                 <div class="mb-1 text-sm font-medium text-slate-500">Category</div>
-                                <div class="text-[15px] font-semibold text-slate-900" x-text="ticket.category || '-'"></div>
+                                <div class="text-[15px] font-semibold text-slate-900" x-text="formatCategory(ticket.category)"></div>
                             </div>
 
                             <div>
                                 <div class="mb-1 text-sm font-medium text-slate-500">Issue Type</div>
-                                <div class="text-[15px] font-semibold text-slate-900" x-text="ticket.issue_type || '-'"></div>
+                                <div class="text-[15px] font-semibold text-slate-900" x-text="formatIssueType(ticket.issue_type)"></div>
                             </div>
 
                             <div>
@@ -206,9 +208,9 @@
                                 <tbody>
                                     <template x-for="item in similarTickets" :key="item.id">
                                         <tr
-                                            class="border-b border-slate-100 cursor-pointer transition-colors hover:bg-slate-200/70"
+                                            class="cursor-pointer border-b border-slate-100 transition-colors hover:bg-slate-200/70"
                                             @click="window.location.href = `/tickets/${item.id}`">
-                                            <td class="px-3 py-3 font-semibold text-slate-800" x-text="item.ticket_code || '-'"></td>
+                                            <td class="px-3 py-3 font-semibold text-slate-800 whitespace-nowrap" x-text="ticketLabel(item)"></td>
                                             <td class="px-3 py-3 text-slate-700" x-text="item.title || '-'"></td>
                                             <td class="px-3 py-3">
                                                 <span
@@ -246,12 +248,61 @@
 
                             <div class="space-y-4" x-show="updates.length > 0">
                                 <template x-for="item in updates" :key="item.id || item.created_at">
-                                    <div class="rounded-md border border-slate-200 bg-slate-50 px-4 py-4">
-                                        <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                                            <div class="text-sm font-semibold text-slate-900" x-text="item.subject || 'Resolver Update'"></div>
-                                            <div class="text-xs text-slate-500" x-text="formatDateTime(item.created_at)"></div>
+                                    <div class="group rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 transition hover:border-slate-300 hover:bg-white">
+                                        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                            <div class="min-w-0 flex-1">
+                                                <div class="flex flex-wrap items-center gap-2">
+                                                    <span class="inline-flex rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-sky-700">
+                                                        Message
+                                                    </span>
+
+                                                    <template x-if="isUnreadUpdate(item)">
+                                                        <span class="inline-flex rounded-full bg-slate-300 px-2.5 py-1 text-[11px] font-bold text-white">
+                                                            New
+                                                        </span>
+                                                    </template>
+                                                </div>
+
+                                                <div class="mt-3 text-[15px] font-semibold text-slate-900" x-text="displayUpdateTitle(item)"></div>
+
+                                                <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                                    <span class="font-mono text-slate-600" x-text="currentTicketLabel()"></span>
+                                                    <span>•</span>
+                                                    <span x-text="updateParticipants(item)"></span>
+                                                </div>
+                                            </div>
+
+                                            <div class="flex items-center justify-between gap-3 md:flex-col md:items-end">
+                                                <div class="text-xs text-slate-500" x-text="formatDateTime(item.created_at)"></div>
+
+                                                <div class="flex items-center gap-2 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
+                                                    <template x-if="isUnreadUpdate(item)">
+                                                        <button
+                                                            type="button"
+                                                            @click.stop="markUpdateAsRead(item)"
+                                                            class="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                                                            Mark as Read
+                                                        </button>
+                                                    </template>
+
+                                                    <button
+                                                        type="button"
+                                                        @click.stop="openCompose(item)"
+                                                        class="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                                                        Reply
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        @click.stop="openMessageDetail(item)"
+                                                        class="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                                                        Open Message
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div class="mt-2 text-sm leading-6 text-slate-700" x-text="item.message || item.body || '-'"></div>
+
+                                        <div class="mt-3 whitespace-pre-line text-sm leading-6 text-slate-700" x-text="updateBody(item)"></div>
                                     </div>
                                 </template>
                             </div>
@@ -273,6 +324,13 @@
                                 <div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800"
                                     x-text="formatStatus(ticket.status)"></div>
                             </div>
+
+                            <button
+                                type="button"
+                                @click="openCompose()"
+                                class="inline-flex w-full items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                                Send Message
+                            </button>
 
                             <template x-if="canClaimTicket()">
                                 <button
@@ -381,12 +439,96 @@
             </div>
         </div>
 
+        {{-- Compose / Reply modal --}}
+        <div
+            x-show="showCompose"
+            x-transition
+            class="fixed inset-0 z-50"
+            style="display:none;">
+            <div class="absolute inset-0 bg-black/20" @click="discardDraft()"></div>
+
+            <div class="pointer-events-auto fixed bottom-0 right-6 z-50 w-full max-w-3xl overflow-hidden rounded-t-2xl bg-white shadow-2xl">
+                <div class="flex items-center justify-between bg-slate-100 px-5 py-3">
+                    <h3 class="text-[18px] font-semibold text-slate-900" x-text="composeMode === 'reply' ? 'Reply Message' : 'New Message'"></h3>
+
+                    <div class="flex items-center gap-4 text-slate-500">
+                        <button type="button" @click="discardDraft()">✕</button>
+                    </div>
+                </div>
+
+                <form @submit.prevent="submitMessage" class="p-5" enctype="multipart/form-data">
+                    <div class="border-b border-slate-200 py-2">
+                        <div class="flex items-center gap-4">
+                            <span class="w-14 text-sm text-slate-700">Ticket</span>
+                            <div class="w-full text-sm text-slate-800" x-text="currentTicketLabel()"></div>
+                        </div>
+                    </div>
+
+                    <div class="border-b border-slate-200 py-2">
+                        <div class="flex items-center gap-4">
+                            <span class="w-14 text-sm text-slate-700">To</span>
+                            <div class="w-full text-sm text-slate-800" x-text="composeRecipientLabel()"></div>
+                        </div>
+                    </div>
+
+                    <div class="border-b border-slate-200 py-2">
+                        <div class="flex items-center gap-4">
+                            <span class="w-14 text-sm text-slate-700">Subject</span>
+                            <input type="text" x-model="composeForm.subject" class="w-full border-0 bg-transparent text-sm outline-none" placeholder="Message subject">
+                        </div>
+                    </div>
+
+                    <div class="py-4">
+                        <textarea
+                            x-model="composeForm.body"
+                            rows="10"
+                            class="w-full resize-none border-0 text-sm outline-none"
+                            placeholder="Write your message..."></textarea>
+                    </div>
+
+                    <div class="mb-4 flex items-center gap-3">
+                        <label class="cursor-pointer text-slate-600 hover:text-slate-900" title="Attach file">
+                            <input type="file" class="hidden" @change="handleAttachment($event)">
+                            <span class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 6.5l-7.8 7.8a3 3 0 104.2 4.2l8.5-8.5a5 5 0 00-7.1-7.1l-9 9a7 7 0 009.9 9.9l7.1-7.1" />
+                                </svg>
+                                Attach file
+                            </span>
+                        </label>
+
+                        <template x-if="composeForm.attachmentName">
+                            <span class="text-sm text-slate-500" x-text="composeForm.attachmentName"></span>
+                        </template>
+                    </div>
+
+                    <div class="flex items-center justify-between border-t border-slate-200 pt-4">
+                        <button
+                            type="submit"
+                            class="rounded-full bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                            :disabled="messageSubmitting || !composeForm.body.trim()">
+                            <span x-text="messageSubmitting ? 'Sending...' : 'Send'"></span>
+                        </button>
+
+                        <button
+                            type="button"
+                            @click="discardDraft()"
+                            class="text-slate-500 hover:text-red-600">
+                            Discard
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <script>
             function ticketDetailPage({
-                ticketId
+                ticketId,
+                currentUserId
             }) {
                 return {
                     ticketId,
+                    currentUserId,
                     loading: true,
                     errorMessage: '',
                     ticket: {},
@@ -395,13 +537,49 @@
                     similarTickets: [],
                     statusSubmitting: false,
                     claimSubmitting: false,
+                    showCompose: false,
+                    messageSubmitting: false,
+                    composeMode: 'new',
+                    composeForm: {
+                        subject: '',
+                        body: '',
+                        attachment: null,
+                        attachmentName: '',
+                    },
                     statusForm: {
                         status: '',
                         note: '',
                     },
+                    master: {
+                        teams: [],
+                        categories: [],
+                        priorities: [],
+                    },
+                    now: Date.now(),
+                    slaTicker: null,
 
                     async init() {
+                        this.startLiveClock();
                         await this.loadAll();
+                    },
+
+                    destroy() {
+                        if (this.slaTicker) {
+                            clearInterval(this.slaTicker);
+                            this.slaTicker = null;
+                        }
+                    },
+
+                    startLiveClock() {
+                        this.now = Date.now();
+
+                        if (this.slaTicker) {
+                            clearInterval(this.slaTicker);
+                        }
+
+                        this.slaTicker = setInterval(() => {
+                            this.now = Date.now();
+                        }, 1000);
                     },
 
                     async loadAll() {
@@ -419,6 +597,30 @@
                         } finally {
                             this.loading = false;
                         }
+                    },
+
+                    csrf() {
+                        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                    },
+
+                    showAlert(message, type = 'success') {
+                        const el = document.getElementById('page-alert');
+                        if (!el) return;
+
+                        el.className = 'mb-6 rounded-lg border px-4 py-3 text-sm shadow-sm';
+                        el.classList.remove('hidden');
+
+                        if (type === 'success') {
+                            el.classList.add('border-green-200', 'bg-green-50', 'text-green-700');
+                        } else {
+                            el.classList.add('border-red-200', 'bg-red-50', 'text-red-700');
+                        }
+
+                        el.textContent = message;
+
+                        setTimeout(() => {
+                            el.classList.add('hidden');
+                        }, 3000);
                     },
 
                     async loadDetail() {
@@ -439,7 +641,12 @@
 
                         this.ticket = result.data || {};
                         this.statusHistories = this.ticket.status_histories || this.ticket.statusHistories || [];
-                        this.updates = this.ticket.resolver_messages || this.ticket.resolverMessages || [];
+
+                        const rawUpdates = this.ticket.resolver_messages || this.ticket.resolverMessages || [];
+                        this.updates = [...rawUpdates].sort((a, b) => {
+                            return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+                        });
+
                         this.statusForm.status = this.ticket.status || '';
                     },
 
@@ -475,7 +682,7 @@
                                     'Accept': 'application/json',
                                     'Content-Type': 'application/json',
                                     'X-Requested-With': 'XMLHttpRequest',
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                                    'X-CSRF-TOKEN': this.csrf(),
                                 },
                             });
 
@@ -485,10 +692,11 @@
                                 throw new Error(result.message || 'Failed to claim ticket.');
                             }
 
+                            this.showAlert(result.message || 'Ticket claimed successfully.', 'success');
                             await this.loadAll();
                         } catch (error) {
                             console.error(error);
-                            alert(error.message || 'Failed to claim ticket.');
+                            this.showAlert(error.message || 'Failed to claim ticket.', 'error');
                         } finally {
                             this.claimSubmitting = false;
                         }
@@ -507,7 +715,7 @@
                                     'Accept': 'application/json',
                                     'Content-Type': 'application/json',
                                     'X-Requested-With': 'XMLHttpRequest',
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                                    'X-CSRF-TOKEN': this.csrf(),
                                 },
                                 body: JSON.stringify({
                                     status: this.statusForm.status,
@@ -522,13 +730,173 @@
                             }
 
                             this.statusForm.note = '';
+                            this.showAlert(result.message || 'Status updated successfully.', 'success');
                             await this.loadAll();
                         } catch (error) {
                             console.error(error);
-                            alert(error.message || 'Failed to update status.');
+                            this.showAlert(error.message || 'Failed to update status.', 'error');
                         } finally {
                             this.statusSubmitting = false;
                         }
+                    },
+
+                    openCompose(item = null) {
+                        this.composeMode = item ? 'reply' : 'new';
+                        this.composeForm.subject = this.buildReplySubject();
+                        this.composeForm.body = '';
+                        this.composeForm.attachment = null;
+                        this.composeForm.attachmentName = '';
+                        this.showCompose = true;
+                    },
+
+                    discardDraft() {
+                        this.showCompose = false;
+                        this.composeMode = 'new';
+                        this.composeForm.subject = '';
+                        this.composeForm.body = '';
+                        this.composeForm.attachment = null;
+                        this.composeForm.attachmentName = '';
+                    },
+
+                    handleAttachment(event) {
+                        const file = event.target.files?.[0] || null;
+                        this.composeForm.attachment = file;
+                        this.composeForm.attachmentName = file ? file.name : '';
+                    },
+
+                    async submitMessage() {
+                        if (this.messageSubmitting) return;
+                        if (!this.composeForm.body.trim()) return;
+
+                        this.messageSubmitting = true;
+
+                        try {
+                            const formData = new FormData();
+                            formData.append('ticket_id', this.ticketId);
+                            formData.append('subject', this.composeForm.subject || '');
+                            formData.append('body', this.composeForm.body || '');
+
+                            if (this.composeForm.attachment) {
+                                formData.append('attachment', this.composeForm.attachment);
+                            }
+
+                            const response = await fetch('/api/resolver-inbox', {
+                                method: 'POST',
+                                credentials: 'same-origin',
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'X-Requested-With': 'XMLHttpRequest',
+                                    'X-CSRF-TOKEN': this.csrf(),
+                                },
+                                body: formData,
+                            });
+
+                            const result = await response.json();
+
+                            if (!response.ok || !result.success) {
+                                throw new Error(result.message || 'Failed to send message.');
+                            }
+
+                            this.showAlert(result.message || 'Message sent successfully.', 'success');
+                            this.discardDraft();
+                            await this.loadDetail();
+                        } catch (error) {
+                            console.error(error);
+                            this.showAlert(error.message || 'Failed to send message.', 'error');
+                        } finally {
+                            this.messageSubmitting = false;
+                        }
+                    },
+
+                    async markUpdateAsRead(item) {
+                        if (!item?.id || !this.isUnreadUpdate(item)) return;
+
+                        try {
+                            const response = await fetch(`/api/resolver-inbox/${item.id}/read`, {
+                                method: 'PATCH',
+                                credentials: 'same-origin',
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'X-Requested-With': 'XMLHttpRequest',
+                                    'X-CSRF-TOKEN': this.csrf(),
+                                },
+                            });
+
+                            const result = await response.json();
+
+                            if (!response.ok || !result.success) {
+                                throw new Error(result.message || 'Failed to mark message as read.');
+                            }
+
+                            item.is_read = true;
+                            item.read_at = result.data?.read_at || item.read_at;
+                            this.showAlert(result.message || 'Message marked as read.', 'success');
+                        } catch (error) {
+                            console.error(error);
+                            this.showAlert(error.message || 'Failed to mark message as read.', 'error');
+                        }
+                    },
+
+                    openMessageDetail(item) {
+                        if (!item?.id) return;
+                        window.location.href = `/resolver-inbox/${item.id}`;
+                    },
+
+                    ticketLabel(ticket = null) {
+                    return window.HenanApp?.ticketLabel(ticket) ?? '-';
+                },
+
+                    currentTicketLabel() {
+                        return this.ticketLabel(this.ticket?.ticket_code ? this.ticket : { id: this.ticketId });
+                    },
+
+                    buildReplySubject() {
+                        const ticketLabel = this.currentTicketLabel();
+                        const ticketTitle = this.ticket?.title || 'Message';
+                        return `Reply for ${ticketLabel} - ${ticketTitle}`;
+                    },
+
+                    composeRecipientLabel() {
+                        const role = (this.ticket.viewer_role || '').toLowerCase();
+
+                        if (role === 'it' || role === 'admin') {
+                            return this.ticket.creator
+                                ? `${this.ticket.creator.name}${this.ticket.creator.email ? ' <' + this.ticket.creator.email + '>' : ''}`
+                                : 'Ticket creator';
+                        }
+
+                        return this.ticket.holder
+                            ? `${this.ticket.holder.name}${this.ticket.holder.email ? ' <' + this.ticket.holder.email + '>' : ''}`
+                            : 'Ticket holder';
+                    },
+
+                    displayUpdateTitle(item) {
+                        if (this.ticket?.title) {
+                            return this.ticket.title;
+                        }
+
+                        const normalized = this.normalizedUpdateSubject(item);
+                        return normalized || 'Resolver Update';
+                    },
+
+                    normalizedUpdateSubject(item) {
+                        const raw = (item?.subject || '').trim();
+                        if (!raw) return '';
+                        return raw.replace(/^Reply for\s+#?T-[A-Za-z0-9-]+\s*-\s*/i, '').trim();
+                    },
+
+                    updateParticipants(item) {
+                        const fromName = item?.sender?.name || 'Unknown sender';
+                        const toName = item?.recipient?.name || 'Unknown recipient';
+                        return `${fromName} → ${toName}`;
+                    },
+
+                    updateBody(item) {
+                        return item?.body || item?.message || '-';
+                    },
+
+                    isUnreadUpdate(item) {
+                        return !!item && !item.is_read && Number(item.to_user_id) === Number(this.currentUserId);
                     },
 
                     canManageStatus() {
@@ -539,12 +907,56 @@
                     canClaimTicket() {
                         const role = (this.ticket.viewer_role || '').toLowerCase();
                         if (!(role === 'it' || role === 'admin')) return false;
-
-                        // Only show claim when ticket belongs to IT team
                         if ((this.ticket.team || '').toLowerCase() !== 'it') return false;
-
-                        // Hide claim when ticket already has a holder
                         return !this.ticket.holder_id;
+                    },
+
+                    slugify(value) {
+                        return String(value || '')
+                            .toLowerCase()
+                            .trim()
+                            .replace(/[^a-z0-9]+/g, '_')
+                            .replace(/^_+|_+$/g, '');
+                    },
+
+                    masterLabel(collection, value) {
+                        const target = this.slugify(value);
+                        if (!target) return '-';
+
+                        const found = collection.find(item => {
+                            const candidates = [
+                                item.name,
+                                item.code,
+                                item.slug,
+                                item.code_num,
+                                this.slugify(item.name),
+                            ];
+
+                            return candidates.some(candidate => this.slugify(candidate) === target);
+                        });
+
+                        return found?.name || this.humanLabel(value);
+                    },
+
+                    humanLabel(value) {
+                        if (!value) return '-';
+
+                        return String(value)
+                            .replaceAll('_', ' ')
+                            .replaceAll('-', ' ')
+                            .replace(/\b\w/g, c => c.toUpperCase());
+                    },
+
+                    formatTeam(value) {
+                        return this.masterLabel(this.master.teams, value).toUpperCase();
+                    },
+
+                    formatCategory(value) {
+                        return this.masterLabel(this.master.categories, value);
+                    },
+
+                    formatIssueType(value) {
+                        return this.humanLabel(value);
                     },
 
                     formatStatus(value) {
@@ -619,8 +1031,7 @@
                         if (this.ticket.status === 'resolved' || this.ticket.status === 'closed') return 'Completed';
 
                         const deadline = new Date(this.ticket.sla_deadline_at).getTime();
-                        const now = Date.now();
-                        const diff = deadline - now;
+                        const diff = deadline - this.now;
 
                         if (diff < 0) return 'Breached';
                         if (diff <= 2 * 60 * 60 * 1000) return 'At Risk';
@@ -636,37 +1047,40 @@
                         return 'bg-[#2f88d8]';
                     },
 
+                    formatLiveDuration(diffMs) {
+                        const safeDiff = Math.max(0, Math.abs(Number(diffMs) || 0));
+                        const totalSeconds = Math.floor(safeDiff / 1000);
+                        const days = Math.floor(totalSeconds / 86400);
+                        const hours = Math.floor((totalSeconds % 86400) / 3600);
+                        const minutes = Math.floor((totalSeconds % 3600) / 60);
+                        const seconds = totalSeconds % 60;
+                        const pad = (value) => String(value).padStart(2, '0');
+
+                        if (days > 0) {
+                            return `${days}d ${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
+                        }
+
+                        return `${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
+                    },
+
                     remainingSlaText() {
                         if (!this.ticket.sla_deadline_at) return '-';
                         if (this.ticket.status === 'resolved' || this.ticket.status === 'closed') return 'Finished';
 
                         const deadline = new Date(this.ticket.sla_deadline_at).getTime();
-                        const now = Date.now();
-                        let diff = deadline - now;
+                        const diff = deadline - this.now;
+                        const suffix = diff < 0 ? 'overdue' : 'left';
 
-                        const overdue = diff < 0;
-                        diff = Math.abs(diff);
-
-                        const hours = Math.floor(diff / (1000 * 60 * 60));
-                        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-                        return overdue ?
-                            `${hours}h ${minutes}m overdue` :
-                            `${hours}h ${minutes}m left`;
+                        return `${this.formatLiveDuration(diff)} ${suffix}`;
                     },
 
                     ticketAgeText() {
                         if (!this.ticket.created_at) return '-';
 
                         const created = new Date(this.ticket.created_at).getTime();
-                        const now = Date.now();
-                        const diff = now - created;
+                        const diff = this.now - created;
 
-                        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-                        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-
-                        if (days > 0) return `${days} day(s) ${hours} hour(s)`;
-                        return `${hours} hour(s)`;
+                        return this.formatLiveDuration(diff);
                     },
                 }
             }

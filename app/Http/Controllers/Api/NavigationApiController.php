@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\ResolverMessage;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 class NavigationApiController extends BaseApiController
 {
@@ -18,86 +19,112 @@ class NavigationApiController extends BaseApiController
             ->count();
 
         $menus = [
+            // =========================
+            // Operations
+            // =========================
             [
                 'key' => 'dashboard',
                 'label' => 'Dashboard',
                 'href' => route('dashboard'),
-                'active' => request()->routeIs('dashboard'),
                 'icon' => 'dashboard',
-                'section' => 'top',
+                'group' => 'operations',
                 'show' => true,
             ],
             [
                 'key' => 'new-ticket',
                 'label' => 'New Ticket',
                 'href' => route('tickets.create'),
-                'active' => request()->routeIs('tickets.create'),
                 'icon' => 'new-tickets',
-                'section' => 'top',
-                'show' => in_array($role, ['cs', 'admin'], true),
-            ],
-            [
-                'key' => 'case-analytics',
-                'label' => 'Case Analytics',
-                'href' => route('case-analytics.index'),
-                'active' => request()->routeIs('case-analytics.index'),
-                'icon' => 'analytics',
-                'section' => 'top',
-                'show' => in_array($role, ['it', 'admin'], true),
-            ],
-            [
-                'key' => 'my-queue',
-                'label' => 'My Queue',
-                'href' => route('it.my-queue'),
-                'active' => request()->routeIs('it.my-queue'),
-                'icon' => 'queue',
-                'section' => 'top',
-                'show' => in_array($role, ['it', 'admin'], true),
-            ],
-            [
-                'key' => 'team-queue',
-                'label' => 'Team Queue',
-                'href' => route('it.team-queue'),
-                'active' => request()->routeIs('it.team-queue'),
-                'icon' => 'team-queue',
-                'section' => 'top',
-                'show' => in_array($role, ['it', 'admin'], true),
-            ],
-            [
-                'key' => 'history',
-                'label' => 'History',
-                'href' => route('it.history'),
-                'active' => request()->routeIs('it.history'),
-                'icon' => 'history',
-                'section' => 'top',
-                'show' => in_array($role, ['it', 'admin'], true),
+                'group' => 'operations',
+                'show' => in_array($role, ['cs', 'admin', 'supervisor'], true),
             ],
             [
                 'key' => 'tickets',
                 'label' => 'Tickets',
                 'href' => route('tickets.index'),
-                'active' => request()->routeIs('tickets.index'),
                 'icon' => 'ticket',
-                'section' => 'bottom',
-                'show' => in_array($role, ['cs', 'admin'], true),
+                'group' => 'operations',
+                'show' => in_array($role, ['cs', 'admin', 'supervisor'], true),
             ],
             [
                 'key' => 'resolver-inbox',
                 'label' => 'Resolver Inbox',
                 'href' => route('resolver-inbox.index'),
-                'active' => request()->routeIs('resolver-inbox.index') || request()->routeIs('resolver-inbox.show'),
                 'icon' => 'inbox',
-                'section' => 'bottom',
+                'group' => 'operations',
                 'show' => true,
             ],
             [
                 'key' => 'reports',
                 'label' => 'Reports',
                 'href' => route('reports.index'),
-                'active' => request()->routeIs('reports.index'),
                 'icon' => 'reports',
-                'section' => 'bottom',
+                'group' => 'operations',
                 'show' => true,
+            ],
+
+            // =========================
+            // IT Monitoring
+            // =========================
+            [
+                'key' => 'case-analytics',
+                'label' => 'Case Analytics',
+                'href' => route('case-analytics.index'),
+                'icon' => 'analytics',
+                'group' => 'it_monitoring',
+                'show' => in_array($role, ['it', 'admin', 'supervisor'], true),
+            ],
+            [
+                'key' => 'my-queue',
+                'label' => 'My Queue',
+                'href' => route('it.my-queue'),
+                'icon' => 'queue',
+                'group' => 'it_monitoring',
+                'show' => in_array($role, ['it', 'admin', 'supervisor'], true),
+            ],
+            [
+                'key' => 'team-queue',
+                'label' => 'Team Queue',
+                'href' => route('it.team-queue'),
+                'icon' => 'team-queue',
+                'group' => 'it_monitoring',
+                'show' => in_array($role, ['it', 'admin', 'supervisor'], true),
+            ],
+            [
+                'key' => 'history',
+                'label' => 'History',
+                'href' => route('it.history'),
+                'icon' => 'history',
+                'group' => 'it_monitoring',
+                'show' => in_array($role, ['it', 'admin', 'supervisor'], true),
+            ],
+
+            // =========================
+            // System Control
+            // =========================
+            [
+                'key' => 'users',
+                'label' => 'Users',
+                'href' => Route::has('admin.users.index') ? route('admin.users.index') : '#',
+                'icon' => 'users',
+                'group' => 'system_control',
+                'show' => $role === 'admin' && Route::has('admin.users.index'),
+            ],
+            [
+                'key' => 'master-data',
+                'label' => 'Master Data',
+                'href' => Route::has('admin.master-data.index') ? route('admin.master-data.index') : '#',
+                'icon' => 'database',
+                'group' => 'system_control',
+                'show' => in_array($role, ['admin', 'supervisor'], true) && Route::has('admin.master-data.index'),
+            ],
+            [
+                'key' => 'audit-logs',
+                'label' => 'Audit Logs',
+                'href' => Route::has('admin.audit-logs.index') ? route('admin.audit-logs.index') : '#',
+                'icon' => 'clipboard',
+                'group' => 'system_control',
+                'show' => $role === 'admin' && Route::has('admin.audit-logs.index'),
             ],
         ];
 
@@ -106,7 +133,13 @@ class NavigationApiController extends BaseApiController
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $user->role,
-                'role_label' => $role === 'cs' ? 'Customer Service' : ucfirst($role),
+                'role_label' => match ($role) {
+                    'cs' => 'Customer Service',
+                    'it' => 'IT',
+                    'admin' => 'Administrator',
+                    'supervisor' => 'Supervisor',
+                    default => ucfirst($role),
+                },
             ],
             'notification_count' => $notificationCount,
             'menus' => array_values(array_filter($menus, fn ($m) => $m['show'])),

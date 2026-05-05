@@ -33,7 +33,7 @@
                     </select>
                 </div>
 
-                <div>
+                <div class="flex flex-wrap items-center gap-3">
                     <button
                         id="applyFiltersBtn"
                         type="button"
@@ -44,6 +44,35 @@
                         </svg>
                         Apply Filters
                     </button>
+
+                    <div class="relative">
+                        <button
+                            id="exportMenuBtn"
+                            type="button"
+                            class="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2f80d1] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#246bb0]">
+                            <span>Export Data</span>
+                            <svg id="exportMenuIcon" class="h-4 w-4 transition-transform" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.51a.75.75 0 01-1.08 0l-4.25-4.51a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+
+                        <div
+                            id="exportMenu"
+                            class="hidden absolute right-0 z-30 mt-2 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                            <button
+                                type="button"
+                                data-export-format="excel"
+                                class="block w-full px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50">
+                                Export Excel
+                            </button>
+                            <button
+                                type="button"
+                                data-export-format="pdf"
+                                class="block w-full px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50">
+                                Export PDF
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -155,6 +184,7 @@
 
     <script>
         const analyticsApiUrl = "<?php echo e(route('api.case_analytics.index')); ?>";
+        const analyticsExportUrl = "<?php echo e(route('api.case_analytics.export')); ?>";
 
         const analyticsState = {
             ticketVolumeChart: null,
@@ -177,6 +207,10 @@
             analyticsError: document.getElementById('analyticsError'),
             metricsGrid: document.getElementById('metricsGrid'),
             leaderboardBody: document.getElementById('leaderboardBody'),
+            exportMenuBtn: document.getElementById('exportMenuBtn'),
+            exportMenu: document.getElementById('exportMenu'),
+            exportMenuIcon: document.getElementById('exportMenuIcon'),
+            exportButtons: document.querySelectorAll('[data-export-format]'),
         };
 
         document.addEventListener('DOMContentLoaded', async () => {
@@ -189,6 +223,24 @@
                 analyticsState.filters.time_range = els.timeRange.value;
                 analyticsState.filters.team = els.teamFilter.value;
                 await loadAnalytics(true, false);
+            });
+
+            els.exportMenuBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                toggleExportMenu();
+            });
+
+            els.exportButtons.forEach((button) => {
+                button.addEventListener('click', () => {
+                    exportAnalytics(button.dataset.exportFormat);
+                    closeExportMenu();
+                });
+            });
+
+            document.addEventListener('click', (event) => {
+                if (!els.exportMenu.contains(event.target) && !els.exportMenuBtn.contains(event.target)) {
+                    closeExportMenu();
+                }
             });
         }
 
@@ -257,6 +309,36 @@
                     <option value="all">All Teams</option>
                     ${teams.map(team => `<option value="${team.id}">${team.name}</option>`).join('')}
                 `;
+        }
+
+
+        function toggleExportMenu() {
+            const isHidden = els.exportMenu.classList.contains('hidden');
+
+            if (isHidden) {
+                els.exportMenu.classList.remove('hidden');
+                els.exportMenuIcon.classList.add('rotate-180');
+            } else {
+                closeExportMenu();
+            }
+        }
+
+        function closeExportMenu() {
+            els.exportMenu.classList.add('hidden');
+            els.exportMenuIcon.classList.remove('rotate-180');
+        }
+
+        function exportAnalytics(format = 'excel') {
+            analyticsState.filters.time_range = els.timeRange.value || analyticsState.filters.time_range || '1y';
+            analyticsState.filters.team = els.teamFilter.value || analyticsState.filters.team || 'all';
+
+            const params = new URLSearchParams({
+                time_range: analyticsState.filters.time_range,
+                team: analyticsState.filters.team,
+                format,
+            });
+
+            window.open(`${analyticsExportUrl}?${params.toString()}`, '_blank');
         }
 
         function renderMetrics(metrics) {

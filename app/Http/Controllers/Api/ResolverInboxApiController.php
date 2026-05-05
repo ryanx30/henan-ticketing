@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Models\ResolverMessage;
+use App\Support\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -143,15 +144,28 @@ class ResolverInboxApiController extends BaseApiController
             'ticket_id' => $ticket->id,
             'from_user_id' => $user->id,
             'to_user_id' => $toUserId,
-            'subject' => $validated['subject'] ?: 'Reply for ' . ($ticket->ticket_code ? '#T-' . $ticket->ticket_code : 'Ticket #' . $ticket->id),
+            'subject' => 'Reply for ' . AuditLogger::ticketLabel($ticket) . ' - ' . $ticket->title,
             'body' => $validated['body'],
             'attachment_path' => $attachmentPath,
             'attachment_name' => $attachmentName,
             'is_read' => false,
         ]);
 
+        $message->load(['ticket', 'sender', 'recipient']);
+
+        AuditLogger::record(
+            $request,
+            'sent',
+            'resolver_message',
+            $message->id,
+            $message->subject,
+            'Sent resolver message for ' . AuditLogger::ticketLabel($ticket),
+            null,
+            $this->snapshotMessage($message)
+        );
+
         return $this->success(
-            $message->load(['ticket', 'sender', 'recipient']),
+            $message,
             'Message sent successfully',
             201
         );
@@ -163,10 +177,23 @@ class ResolverInboxApiController extends BaseApiController
             return $this->error('Forbidden', 403);
         }
 
+        $before = $this->snapshotMessage($resolverMessage);
+
         $resolverMessage->update([
             'is_read' => true,
             'read_at' => now(),
         ]);
+
+        AuditLogger::record(
+            $request,
+            'read',
+            'resolver_message',
+            $resolverMessage->id,
+            $resolverMessage->subject,
+            'Marked resolver message as read',
+            $before,
+            $this->snapshotMessage($resolverMessage)
+        );
 
         return $this->success($resolverMessage, 'Message marked as read');
     }
@@ -183,27 +210,55 @@ class ResolverInboxApiController extends BaseApiController
             return $this->error('Forbidden', 403);
         }
 
+        $before = $this->snapshotMessage($resolverMessage);
+        $subject = $resolverMessage->subject;
+
         if ($resolverMessage->attachment_path) {
             Storage::disk('public')->delete($resolverMessage->attachment_path);
         }
 
         $resolverMessage->delete();
 
+        AuditLogger::record(
+            $request,
+            'deleted',
+            'resolver_message',
+            $resolverMessage->id,
+            $subject,
+            'Deleted resolver message: ' . $subject,
+            $before,
+            null
+        );
+
         return $this->success(null, 'Message deleted');
+    }
+
+    protected function snapshotMessage(ResolverMessage $message): array
+    {
+        return [
+            'id' => $message->id,
+            'ticket_id' => $message->ticket_id,
+            'from_user_id' => $message->from_user_id,
+            'to_user_id' => $message->to_user_id,
+            'subject' => $message->subject,
+            'is_read' => (bool) $message->is_read,
+            'read_at' => optional($message->read_at)?->toISOString(),
+            'attachment_name' => $message->attachment_name,
+        ];
     }
 
     protected function getComposeRecipients(User $user)
     {
         if ($user->role === 'cs') {
             return User::query()
-                ->whereIn('role', ['it', 'admin'])
+                ->whereIn('role', ['it', 'admin', 'supervisor'])
                 ->orderBy('name')
                 ->get();
         }
 
         if ($user->role === 'it') {
             return User::query()
-                ->whereIn('role', ['cs', 'admin'])
+                ->whereIn('role', ['cs', 'admin', 'supervisor'])
                 ->orderBy('name')
                 ->get();
         }
