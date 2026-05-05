@@ -44,15 +44,14 @@ This project **digitizes the entire complaint lifecycle**:
    ```bash
    git clone [https://github.com/ryanx30/internal-ticketing.git](https://github.com/ryanx30/internal-ticketing.git)
    cd internal-ticketing
-Install Dependencies
 
-2. 
+2. **Install Dependencies**
    ```bash
    composer install
    npm install && npm run build
-   Environment Setup
+   
 
-3. 
+3. **Environment Setup**
    ```Bash
    cp .env.example .env
    php artisan key:generate
@@ -62,12 +61,10 @@ Install Dependencies
 4. **Run Migrations & Seeders**
    ```bash
    php artisan migrate --seed
-Start Development Server
 
-5. 
+5. **Start Development Server**
    ```bash
    php artisan serve
-
 
 ## 📊 Analytics & Insights
 
