@@ -1,3 +1,5 @@
+/* stylelint-disable at-rule-no-unknown */
+
 @font-face {
   font-family: "TT Commons";
   src: url("/fonts/tt-commons/TTCommons-Regular.otf") format("opentype");
@@ -27,11 +29,208 @@
 @tailwind utilities;
 
 @layer base {
-    html {
-        font-family: "TT Commons", ui-sans-serif, system-ui, sans-serif;
-    }
 
-    body {
-        font-family: "TT Commons", ui-sans-serif, system-ui, sans-serif;
-    }
+  html,
+  body {
+    font-family: "TT Commons", ui-sans-serif, system-ui, sans-serif;
+  }
 }
+
+/*
+  GLOBAL BADGES
+  --------------------------------------------------------------
+  This section defines the base styles for all badges, 
+  as well as specific styles for priority and status badges.
+*/
+
+.badge-priority-critical,
+.badge-priority-high,
+.badge-priority-medium,
+.badge-priority-low,
+.badge-priority-default,
+.badge-status-new,
+.badge-status-ongoing,
+.badge-status-waiting,
+.badge-status-resolved,
+.badge-status-closed,
+.badge-status-default {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 9999px !important;
+    padding: 0.25rem 0.75rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 700 !important;
+    line-height: 1rem !important;
+    white-space: nowrap !important;
+    border: none !important;
+}
+
+/* PRIORITY BADGES */
+.badge-priority-critical {
+    background-color: #fecaca !important;
+    color: #b91c1c !important;
+}
+
+.badge-priority-high {
+    background-color: #fbcfe8 !important;
+    color: #be185d !important;
+}
+
+.badge-priority-medium {
+    background-color: #fde68a !important;
+    color: #92400e !important;
+}
+
+.badge-priority-low {
+    background-color: #bbf7d0 !important;
+    color: #15803d !important;
+}
+
+.badge-priority-default {
+    background-color: #e2e8f0 !important;
+    color: #334155 !important;
+}
+
+/* STATUS BADGES */
+.badge-status-new {
+    background-color: #e2e8f0 !important;
+    color: #334155 !important;
+}
+
+.badge-status-ongoing {
+    background-color: #fde68a !important;
+    color: #92400e !important;
+}
+
+.badge-status-waiting {
+    background-color: #fed7aa !important;
+    color: #c2410c !important;
+}
+
+.badge-status-resolved {
+    background-color: #bbf7d0 !important;
+    color: #15803d !important;
+}
+
+.badge-status-closed {
+    background-color: #bae6fd !important;
+    color: #0369a1 !important;
+}
+
+.badge-status-default {
+    background-color: #e2e8f0 !important;
+    color: #334155 !important;
+}
+
+
+/* STATUS LEGEND DOTS */
+.legend-status-dot {
+  display: inline-flex !important;
+  height: 0.75rem !important;
+  width: 0.75rem !important;
+  flex-shrink: 0 !important;
+  border-radius: 9999px !important;
+  border: none !important;
+}
+
+.legend-status-new {
+  background-color: #e2e8f0 !important;
+}
+
+.legend-status-ongoing {
+  background-color: #fde68a !important;
+}
+
+.legend-status-waiting {
+  background-color: #fed7aa !important;
+}
+
+.legend-status-resolved {
+  background-color: #bbf7d0 !important;
+}
+
+.legend-status-closed {
+  background-color: #bae6fd !important;
+}
+
+/*
+  SLA REPORT BADGES
+  --------------------------------------------------------------
+  These classes are used by the Reports SLA Tracking table.
+  They avoid Tailwind dynamic-class issues from JavaScript-rendered rows.
+*/
+.badge-sla-result-ok,
+.badge-sla-result-breach,
+.badge-sla-result-open,
+.badge-sla-result-closed,
+.badge-sla-result-default,
+.badge-sla-time-met,
+.badge-sla-time-breach,
+.badge-sla-time-open,
+.badge-sla-time-closed,
+.badge-sla-time-default {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 9999px !important;
+  padding: 0.25rem 0.75rem !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  line-height: 1rem !important;
+  white-space: nowrap !important;
+  border: none !important;
+}
+
+/* SLA result badge colors */
+.badge-sla-result-ok {
+  background-color: #bbf7d0 !important;
+  color: #15803d !important;
+}
+
+.badge-sla-result-breach {
+  background-color: #fecaca !important;
+  color: #b91c1c !important;
+}
+
+.badge-sla-result-open {
+  background-color: #bae6fd !important;
+  color: #0369a1 !important;
+}
+
+.badge-sla-result-closed {
+  background-color: #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+.badge-sla-result-default {
+  background-color: #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+/* SLA remaining / outcome badge colors */
+.badge-sla-time-met {
+  background-color: #dcfce7 !important;
+  color: #15803d !important;
+}
+
+.badge-sla-time-breach {
+  background-color: #fee2e2 !important;
+  color: #b91c1c !important;
+}
+
+.badge-sla-time-open {
+  background-color: #dbeafe !important;
+  color: #1d4ed8 !important;
+}
+
+.badge-sla-time-closed {
+  background-color: #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+.badge-sla-time-default {
+  background-color: #e2e8f0 !important;
+  color: #334155 !important;
+}
+

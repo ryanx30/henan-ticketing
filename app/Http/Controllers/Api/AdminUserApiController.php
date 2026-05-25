@@ -6,12 +6,15 @@ use App\Models\User;
 use App\Support\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
 class AdminUserApiController extends BaseApiController
 {
     public function index(Request $request)
     {
+        Gate::authorize('viewAny', User::class);
+
         $search = trim((string) $request->query('q', ''));
         $role = (string) $request->query('role', 'all');
         $status = (string) $request->query('status', 'all');
@@ -61,11 +64,15 @@ class AdminUserApiController extends BaseApiController
 
     public function show(Request $request, User $user)
     {
+        Gate::authorize('view', $user);
+
         return $this->success($this->mapUser($user), 'User loaded');
     }
 
     public function store(Request $request)
     {
+        Gate::authorize('create', User::class);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email:rfc,dns', 'max:255', 'unique:users,email'],
@@ -98,6 +105,8 @@ class AdminUserApiController extends BaseApiController
 
     public function update(Request $request, User $user)
     {
+        Gate::authorize('update', $user);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => [
@@ -157,6 +166,8 @@ class AdminUserApiController extends BaseApiController
 
     public function toggleStatus(Request $request, User $user)
     {
+        Gate::authorize('toggleStatus', $user);
+
         $actor = $request->user();
 
         if ($actor->id === $user->id) {

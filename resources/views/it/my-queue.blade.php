@@ -13,9 +13,10 @@
                 <h1 class="text-3xl font-bold">My Queue</h1>
             </div>
 
-            {{-- ===== NEW ===== --}}
+            {{-- ===== NEW / UNCLAIMED ===== --}}
             <div class="mb-10">
-                <div class="font-semibold text-lg mb-3">New Tickets</div>
+                <div class="mb-1 font-semibold text-lg">New Tickets</div>
+                <p class="mb-3 text-sm text-slate-500">Unclaimed IT tickets that are ready to be claimed.</p>
 
                 <div class="bg-white rounded shadow overflow-hidden">
                     <div class="overflow-x-auto">
@@ -36,7 +37,7 @@
                                 </template>
 
                                 <template x-if="!loading && newTickets.length === 0">
-                                    <tr><td colspan="5" class="py-10 text-center text-gray-500">No tickets.</td></tr>
+                                    <tr><td colspan="5" class="py-10 text-center text-gray-500">No new unclaimed tickets.</td></tr>
                                 </template>
 
                                 <template x-for="t in newTickets" :key="t.id">
@@ -61,16 +62,13 @@
                                                   x-text="slaCountdown(t.sla_deadline_at)"></span>
                                         </td>
 
-                                        <td class="px-3">
-                                            <select class="border rounded px-2 py-2 text-xs w-[140px]"
-                                                    :value="t.status"
-                                                    @change="updateStatus(t.id, $event.target.value)">
-                                                <option value="new">New</option>
-                                                <option value="in_progress">On Going</option>
-                                                <option value="waiting_info">Waiting Info</option>
-                                                <option value="resolved">Resolved</option>
-                                                <option value="closed">Closed</option>
-                                            </select>
+                                        <td class="px-3 text-right">
+                                            <button
+                                                type="button"
+                                                @click="claimTicket(t.id)"
+                                                class="rounded bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-800">
+                                                Claim
+                                            </button>
                                         </td>
                                     </tr>
                                 </template>
@@ -80,9 +78,9 @@
                 </div>
             </div>
 
-            {{-- ===== ON GOING ===== --}}
+            {{-- ===== ONGOING ===== --}}
             <div class="mb-10">
-                <div class="font-semibold text-lg mb-3">On Going Tickets</div>
+                <div class="font-semibold text-lg mb-3">Ongoing Tickets</div>
 
                 <div class="bg-white rounded shadow overflow-hidden">
                     <div class="overflow-x-auto">
@@ -129,7 +127,7 @@
                                                     :value="t.status"
                                                     @change="updateStatus(t.id, $event.target.value)">
                                                 <option value="new">New</option>
-                                                <option value="in_progress">On Going</option>
+                                                <option value="in_progress">Ongoing</option>
                                                 <option value="waiting_info">Waiting Info</option>
                                                 <option value="resolved">Resolved</option>
                                                 <option value="closed">Closed</option>
@@ -192,7 +190,7 @@
                                                     :value="t.status"
                                                     @change="updateStatus(t.id, $event.target.value)">
                                                 <option value="new">New</option>
-                                                <option value="in_progress">On Going</option>
+                                                <option value="in_progress">Ongoing</option>
                                                 <option value="waiting_info">Waiting Info</option>
                                                 <option value="resolved">Resolved</option>
                                                 <option value="closed">Closed</option>
@@ -265,173 +263,4 @@
         </div>
     </div>
 
-    <script>
-        function myQueuePage() {
-            return {
-                loading: false,
-                timer: null,
-                newTickets: [],
-                ongoingTickets: [],
-                waitingTickets: [],
-                resolvedTickets: [],
-
-                init() {
-                    this.loadQueue();
-
-                    this.timer = setInterval(() => {
-                        this.newTickets = [...this.newTickets];
-                        this.ongoingTickets = [...this.ongoingTickets];
-                        this.waitingTickets = [...this.waitingTickets];
-                    }, 1000);
-                },
-
-                destroy() {
-                    if (this.timer) clearInterval(this.timer);
-                },
-
-                csrf() {
-                    return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-                },
-
-                ticketUrl(ticketId) {
-                    return `/tickets/${ticketId}`;
-                },
-
-                showAlert(message, type = 'success') {
-                    const el = document.getElementById('page-alert');
-                    el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
-                    el.textContent = message;
-
-                    if (type === 'success') {
-                        el.classList.add('bg-green-100', 'text-green-800');
-                    } else {
-                        el.classList.add('bg-red-100', 'text-red-800');
-                    }
-
-                    setTimeout(() => {
-                        el.classList.add('hidden');
-                    }, 3000);
-                },
-
-                async loadQueue() {
-                    this.loading = true;
-
-                    try {
-                        const response = await fetch('/api/it/my-queue', {
-                            headers: {
-                                'Accept': 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
-                            credentials: 'same-origin'
-                        });
-
-                        const result = await response.json();
-
-                        if (!response.ok || !result.success) {
-                            throw new Error(result.message || 'Failed to load my queue');
-                        }
-
-                        const data = result.data || {};
-                        this.newTickets = data.new_tickets || [];
-                        this.ongoingTickets = data.ongoing_tickets || [];
-                        this.waitingTickets = data.waiting_tickets || [];
-                        this.resolvedTickets = data.resolved_tickets || [];
-                    } catch (error) {
-                        console.error(error);
-                        this.showAlert(error.message || 'Failed to load my queue', 'error');
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-
-                async updateStatus(ticketId, status) {
-                    try {
-                        const response = await fetch(`/api/it/tickets/${ticketId}/status`, {
-                            method: 'PATCH',
-                            headers: {
-                                'Accept': 'application/json',
-                                'Content-Type': 'application/json',
-                                'X-CSRF-TOKEN': this.csrf(),
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
-                            credentials: 'same-origin',
-                            body: JSON.stringify({ status })
-                        });
-
-                        const result = await response.json();
-
-                        if (!response.ok || !result.success) {
-                            throw new Error(result.message || 'Failed to update status');
-                        }
-
-                        this.showAlert(result.message || 'Status updated successfully', 'success');
-                        await this.loadQueue();
-                    } catch (error) {
-                        console.error(error);
-                        this.showAlert(error.message || 'Failed to update status', 'error');
-                        await this.loadQueue();
-                    }
-                },
-                ticketLabel(ticket) {
-                    return window.HenanApp?.ticketLabel(ticket) ?? '-';
-                },
-
-
-                ucfirst(value) {
-                    if (!value) return '-';
-                    value = String(value);
-                    return value.charAt(0).toUpperCase() + value.slice(1);
-                },
-
-                statusLabel(status) {
-                    const map = {
-                        new: 'New',
-                        in_progress: 'On Going',
-                        waiting_info: 'Waiting Info',
-                        resolved: 'Resolved',
-                        closed: 'Closed',
-                    };
-                    return map[status] || status || '-';
-                },
-
-                priorityBadgeClass(priority) {
-                    switch (priority) {
-                        case 'critical': return 'bg-red-600 text-white';
-                        case 'high': return 'bg-orange-500 text-white';
-                        case 'medium': return 'bg-amber-300 text-slate-900';
-                        case 'low': return 'bg-green-600 text-white';
-                        default: return 'bg-gray-200 text-slate-900';
-                    }
-                },
-
-                statusBadgeClass(status) {
-                    switch (status) {
-                        case 'new': return 'bg-gray-200 text-slate-900';
-                        case 'in_progress': return 'bg-orange-500 text-white';
-                        case 'waiting_info': return 'bg-amber-400 text-slate-900';
-                        case 'resolved': return 'bg-green-600 text-white';
-                        case 'closed': return 'bg-sky-700 text-white';
-                        default: return 'bg-gray-200 text-slate-900';
-                    }
-                },
-
-                slaCountdown(deadline) {
-                    if (!deadline) return '-';
-
-                    const end = new Date(deadline).getTime();
-                    const now = Date.now();
-                    const diff = end - now;
-
-                    if (diff <= 0) return 'OVERDUE';
-
-                    const totalSeconds = Math.floor(diff / 1000);
-                    const hours = Math.floor(totalSeconds / 3600);
-                    const minutes = Math.floor((totalSeconds % 3600) / 60);
-                    const seconds = totalSeconds % 60;
-
-                    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-                }
-            }
-        }
-    </script>
 </x-app-layout>

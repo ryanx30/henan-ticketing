@@ -1,22 +1,34 @@
 @props(['value'])
 
 @php
-  $class = match($value) {
-    'new' => 'bg-gray-200 text-slate-900',
-    'in_progress' => 'bg-orange-500 text-white',
-    'waiting_info' => 'bg-amber-400 text-slate-900',
-    'resolved' => 'bg-green-600 text-white',
-    'closed' => 'bg-sky-700 text-white',
-    default => 'bg-gray-200 text-slate-900',
-  };
+    $normalized = strtolower(trim((string) $value));
+    $normalized = str_replace([' ', '-'], '_', $normalized);
 
-  $label = match($value) {
-    'in_progress' => 'On Going',
-    'waiting_info' => 'Wait Info',
-    default => ucfirst(str_replace('_',' ', $value)),
-  };
+    $normalized = match ($normalized) {
+        'ongoing', 'on_going' => 'in_progress',
+        'waiting', 'waiting_user' => 'waiting_info',
+        default => $normalized,
+    };
+
+    $class = match ($normalized) {
+        'new' => 'badge-status-new',
+        'in_progress' => 'badge-status-ongoing',
+        'waiting_info' => 'badge-status-waiting',
+        'resolved' => 'badge-status-resolved',
+        'closed' => 'badge-status-closed',
+        default => 'badge-status-default',
+    };
+
+    $label = match ($normalized) {
+        'in_progress' => 'Ongoing',
+        'waiting_info' => 'Waiting Info',
+        'new' => 'New',
+        'resolved' => 'Resolved',
+        'closed' => 'Closed',
+        default => $value ? ucwords(str_replace('_', ' ', strtolower((string) $value))) : '-',
+    };
 @endphp
 
-<span {{ $attributes->merge(['class' => "px-3 py-1 rounded-full text-xs font-semibold {$class}"]) }}>
-  {{ $label }}
+<span {{ $attributes->merge(['class' => $class]) }}>
+    {{ $label }}
 </span>

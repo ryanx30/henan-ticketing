@@ -22,10 +22,10 @@ return new class extends Migration
             $table->enum('status', ['new', 'in_progress', 'waiting_info', 'resolved', 'closed'])
                 ->default('new');
 
-            $table->enum('priority', ['low', 'medium', 'high', 'critical'])
+            $table->string('priority', 50)
                 ->default('medium');
 
-            $table->enum('team', ['it', 'finance', 'compliance'])
+            $table->string('team', 50)
                 ->default('it');
 
             // Classification

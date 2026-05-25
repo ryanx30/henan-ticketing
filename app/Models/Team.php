@@ -18,6 +18,24 @@ class Team extends Model
         'is_active' => 'boolean',
     ];
 
+
+    protected static function booted(): void
+    {
+        static::saving(function (Team $team) {
+            Ticket::forgetTeamCodeCache($team->code);
+            Ticket::forgetTeamCodeCache($team->getOriginal('code'));
+        });
+
+        static::saved(function (Team $team) {
+            Ticket::forgetTeamCodeCache($team->code);
+        });
+
+        static::deleted(function (Team $team) {
+            Ticket::forgetTeamCodeCache($team->code);
+            Ticket::forgetTeamCodeCache($team->getOriginal('code'));
+        });
+    }
+
     public function slaRules(): HasMany
     {
         return $this->hasMany(SlaRule::class, 'team_id');

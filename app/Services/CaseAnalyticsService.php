@@ -3,11 +3,13 @@
 namespace App\Services;
 
 use App\Models\Ticket;
+use App\Models\Team;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -24,6 +26,14 @@ class CaseAnalyticsService
         }
 
         return $this->exportPdf($payload, $fileBaseName . '.pdf');
+    }
+
+
+    public function exportTicketCount(string $timeRange, string $team): int
+    {
+        [$start, $end] = $this->currentPeriodOnly($timeRange);
+
+        return $this->ticketVolume($team, $start, $end);
     }
 
     public function analyticsPayload(string $timeRange, string $team): array
@@ -107,7 +117,23 @@ class CaseAnalyticsService
             'top_issues_by_category' => $this->topIssuesByCategory($team, $currentStart, $currentEnd),
             'top_issue_types' => $this->topIssueTypes($team, $currentStart, $currentEnd),
             'agent_performance_leaderboard' => $this->agentLeaderboard($team, $currentStart, $currentEnd),
+            'top_teams' => $this->topTeams($team, $currentStart, $currentEnd),
             'peak_time_ticket_volume' => $this->peakTimeVolume($team, $currentStart, $currentEnd),
+        ];
+    }
+
+    public function exportViewData(array $payload): array
+    {
+        return [
+            'payload' => $payload,
+            'metricRows' => $this->metricExportRows($payload['metrics'] ?? []),
+            'topCategoryRows' => $this->topCategoryExportRows($payload['top_issues_by_category']['items'] ?? []),
+            'topIssueRows' => $this->topIssueExportRows($payload['top_issue_types']['items'] ?? []),
+            'leaderboardRows' => $this->leaderboardExportRows($payload['agent_performance_leaderboard'] ?? []),
+            'topTeamRows' => $this->topTeamExportRows($payload['top_teams']['items'] ?? []),
+            'trendRows' => $this->trendExportRows($payload['ticket_volume_trend'] ?? []),
+            'peakTimeRows' => $this->peakTimeExportRows($payload['peak_time_ticket_volume'] ?? []),
+            'generatedAt' => now()->format('d M Y, H:i:s'),
         ];
     }
 
@@ -185,9 +211,10 @@ class CaseAnalyticsService
             echo '<p><strong>Generated:</strong> ' . e(now()->format('d M Y, H:i:s')) . '</p>';
 
             $this->excelTable('Summary KPI', ['Metric', 'Current', 'Previous', 'Change', 'Trend'], $this->metricExportRows($payload['metrics'] ?? []));
-            $this->excelTable('Top Categories', ['Category', 'Tickets', 'Top Team'], $this->topCategoryExportRows($payload['top_issues_by_category']['items'] ?? []));
-            $this->excelTable('Top Issues', ['Issue Type', 'Category', 'Tickets', 'Top Team'], $this->topIssueExportRows($payload['top_issue_types']['items'] ?? []));
-            $this->excelTable('Team Performance', ['Rank', 'Agent', 'Resolved', 'Avg. Resolution Time', 'CSAT'], $this->leaderboardExportRows($payload['agent_performance_leaderboard'] ?? []));
+            $this->excelTable('Top Categories', ['Category', 'Tickets', 'Team with Most Tickets'], $this->topCategoryExportRows($payload['top_issues_by_category']['items'] ?? []));
+            $this->excelTable('Top Issues', ['Issue Type', 'Category', 'Tickets', 'Team with Most Tickets'], $this->topIssueExportRows($payload['top_issue_types']['items'] ?? []));
+            $this->excelTable('Agent Performance', ['Rank', 'Agent', 'Resolved', 'Avg. Resolution Time', 'CSAT'], $this->leaderboardExportRows($payload['agent_performance_leaderboard'] ?? []));
+            $this->excelTable('Top Teams', ['Rank', 'Team', 'Tickets', 'Resolved', 'Avg. Resolution Time'], $this->topTeamExportRows($payload['top_teams']['items'] ?? []));
             $this->excelTable('Monthly Trend', ['Month', 'Incoming', 'Resolved'], $this->trendExportRows($payload['ticket_volume_trend'] ?? []));
             $this->excelTable('Peak Time Ticket Volume', ['Hour', 'Tickets'], $this->peakTimeExportRows($payload['peak_time_ticket_volume'] ?? []));
             $this->excelRawAnalyticsTable('Raw Analytics Data', $this->rawExportHeaders(), $team, $start, $end);
@@ -201,16 +228,10 @@ class CaseAnalyticsService
 
     private function exportPdf(array $payload, string $filename)
     {
-        $pdf = Pdf::loadView('exports.case-analytics-pdf', [
-            'payload' => $payload,
-            'metricRows' => $this->metricExportRows($payload['metrics'] ?? []),
-            'topCategoryRows' => $this->topCategoryExportRows($payload['top_issues_by_category']['items'] ?? []),
-            'topIssueRows' => $this->topIssueExportRows($payload['top_issue_types']['items'] ?? []),
-            'leaderboardRows' => $this->leaderboardExportRows($payload['agent_performance_leaderboard'] ?? []),
-            'trendRows' => $this->trendExportRows($payload['ticket_volume_trend'] ?? []),
-            'peakTimeRows' => $this->peakTimeExportRows($payload['peak_time_ticket_volume'] ?? []),
-            'generatedAt' => now()->format('d M Y, H:i:s'),
-        ])->setPaper('a4', 'landscape');
+        $pdf = Pdf::loadView(
+            'exports.case-analytics-pdf',
+            $this->exportViewData($payload)
+        )->setPaper('a4', 'landscape');
 
         return $pdf->download($filename);
     }
@@ -286,6 +307,17 @@ class CaseAnalyticsService
             (int) ($row['resolved_count'] ?? 0),
             $row['avg_resolution_display'] ?? '-',
             ($row['csat'] ?? null) !== null ? number_format((float) $row['csat'], 2) : '-',
+        ])->toArray();
+    }
+
+    private function topTeamExportRows(array $rows): array
+    {
+        return collect($rows)->map(fn (array $row) => [
+            $row['rank'] ?? '-',
+            $row['team_name'] ?? '-',
+            (int) ($row['tickets_count'] ?? 0),
+            (int) ($row['resolved_count'] ?? 0),
+            $row['avg_resolution_display'] ?? '-',
         ])->toArray();
     }
 
@@ -379,7 +411,7 @@ class CaseAnalyticsService
     private function rawAnalyticsQuery(string $team, Carbon $start, Carbon $end)
     {
         return (clone $this->baseTicketQuery($team))
-            ->with('holder')
+            ->with(['holder', 'teamMaster', 'priorityMaster', 'categoryMaster', 'issueTypeMaster'])
             ->whereBetween('created_at', [$start, $end])
             ->latest('created_at');
     }
@@ -391,11 +423,11 @@ class CaseAnalyticsService
             $ticket->title ?? '-',
             optional($ticket->created_at)?->format('Y-m-d H:i:s') ?? '-',
             $this->resolvedAtLabel($ticket),
-            strtoupper((string) ($ticket->team ?? '-')),
-            $this->labelText($ticket->priority ?? '-'),
+            strtoupper($ticket->displayTeamCode() ?: '-'),
+            $this->labelText($ticket->displayPriorityCode() ?: '-'),
             $this->statusText($ticket->status ?? '-'),
-            $this->labelText($ticket->category ?? '-'),
-            $this->labelText($ticket->issue_type ?? '-'),
+            $this->labelText($ticket->displayCategoryName() ?: '-'),
+            $this->labelText($ticket->displayIssueTypeName() ?: '-'),
             $ticket->holder?->name ?? '-',
             $this->resolutionDurationText($ticket),
             $this->slaStatusText($ticket),
@@ -463,11 +495,18 @@ class CaseAnalyticsService
         return [$currentStart, $currentEnd, $previousStart, $previousEnd, $labels];
     }
 
-    private function baseTicketQuery(string $team = 'all')
+    private function teamIdByCode(string $code): ?int
+    {
+        return Team::query()
+            ->where('code', $code)
+            ->value('id');
+    }
+
+    private function baseTicketQuery(string $team = 'all'): Builder
     {
         return Ticket::query()
-            ->when($team !== 'all', function ($query) use ($team) {
-                $query->where('team', $team);
+            ->when($team !== 'all', function (Builder $query) use ($team) {
+                $query->forTeamCode($team);
             });
     }
 
@@ -480,29 +519,30 @@ class CaseAnalyticsService
 
     private function avgResolutionMinutes(string $team, Carbon $start, Carbon $end): float
     {
-        $value = (clone $this->baseTicketQuery($team))
+        $average = (clone $this->baseTicketQuery($team))
             ->whereNotNull('claimed_at')
-            ->where(function ($query) {
-                $query->whereNotNull('resolved_at')
-                    ->orWhereNotNull('closed_at');
+            ->where(function (Builder $query) use ($start, $end) {
+                $query->whereBetween('resolved_at', [$start, $end])
+                    ->orWhereBetween('closed_at', [$start, $end]);
             })
-            ->whereRaw('COALESCE(resolved_at, closed_at) BETWEEN ? AND ?', [$start, $end])
-            ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, claimed_at, COALESCE(resolved_at, closed_at))) as avg_minutes')
+            ->selectRaw("AVG(TIMESTAMPDIFF(MINUTE, claimed_at, COALESCE(resolved_at, closed_at))) as avg_minutes")
             ->value('avg_minutes');
 
-        return round((float) ($value ?? 0), 1);
+        return round((float) ($average ?? 0), 1);
     }
+
 
     private function firstResponseMinutes(string $team, Carbon $start, Carbon $end): float
     {
-        $value = (clone $this->baseTicketQuery($team))
+        $average = (clone $this->baseTicketQuery($team))
             ->whereNotNull('claimed_at')
             ->whereBetween('created_at', [$start, $end])
             ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, created_at, claimed_at)) as avg_minutes')
             ->value('avg_minutes');
 
-        return round((float) ($value ?? 0), 1);
+        return round((float) ($average ?? 0), 1);
     }
+
 
     private function reopenRate(string $team, Carbon $start, Carbon $end): float
     {
@@ -526,7 +566,18 @@ class CaseAnalyticsService
             ->whereIn('b.to_status', ['new', 'in_progress', 'waiting_info'])
             ->whereColumn('b.changed_at', '>', 'a.changed_at')
             ->when($team !== 'all', function ($query) use ($team) {
-                $query->where('tickets.team', $team);
+                $teamId = $this->teamIdByCode($team);
+
+                $query->where(function ($query) use ($team, $teamId) {
+                    if ($teamId) {
+                        $query->where('tickets.team_id', $teamId)
+                            ->orWhere('tickets.team', $team);
+
+                        return;
+                    }
+
+                    $query->where('tickets.team', $team);
+                });
             })
             ->distinct()
             ->count('a.ticket_id');
@@ -536,70 +587,62 @@ class CaseAnalyticsService
 
     private function slaBreachRate(string $team, Carbon $start, Carbon $end): float
     {
-        $base = (clone $this->baseTicketQuery($team))
+        $summary = (clone $this->baseTicketQuery($team))
             ->whereBetween('created_at', [$start, $end])
-            ->whereNotNull('sla_deadline_at');
+            ->whereNotNull('sla_deadline_at')
+            ->selectRaw("
+                COUNT(*) as total,
+                SUM(CASE
+                    WHEN COALESCE(resolved_at, closed_at, NOW()) > sla_deadline_at
+                    THEN 1 ELSE 0
+                END) as breached
+            ")
+            ->first();
 
-        $total = (clone $base)->count();
+        $total = (int) ($summary?->total ?? 0);
 
         if ($total === 0) {
             return 0;
         }
 
-        $breached = (clone $base)
-            ->whereRaw('COALESCE(resolved_at, closed_at, NOW()) > sla_deadline_at')
-            ->count();
-
-        return round(($breached / $total) * 100, 1);
+        return round((((int) ($summary?->breached ?? 0)) / $total) * 100, 1);
     }
+
 
     private function ticketVolumeTrend(string $team, Carbon $start, Carbon $end, array $labels): array
     {
-        $incomingRows = (clone $this->baseTicketQuery($team))
+        $incomingMap = (clone $this->baseTicketQuery($team))
             ->whereBetween('created_at', [$start, $end])
-            ->selectRaw('YEAR(created_at) as year_num, MONTH(created_at) as month_num, COUNT(*) as total')
-            ->groupBy('year_num', 'month_num')
-            ->orderBy('year_num')
-            ->orderBy('month_num')
-            ->get();
+            ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as month_key, COUNT(*) as total")
+            ->groupByRaw("DATE_FORMAT(created_at, '%Y-%m')")
+            ->pluck('total', 'month_key')
+            ->all();
 
-        $resolvedRows = (clone $this->baseTicketQuery($team))
+        $resolvedMap = (clone $this->baseTicketQuery($team))
             ->whereIn('status', ['resolved', 'closed'])
-            ->where(function ($query) {
-                $query->whereNotNull('resolved_at')
-                    ->orWhereNotNull('closed_at');
+            ->where(function (Builder $query) use ($start, $end) {
+                $query->whereBetween('resolved_at', [$start, $end])
+                    ->orWhereBetween('closed_at', [$start, $end]);
             })
-            ->whereRaw('COALESCE(resolved_at, closed_at) BETWEEN ? AND ?', [$start, $end])
-            ->selectRaw('YEAR(COALESCE(resolved_at, closed_at)) as year_num, MONTH(COALESCE(resolved_at, closed_at)) as month_num, COUNT(*) as total')
-            ->groupBy('year_num', 'month_num')
-            ->orderBy('year_num')
-            ->orderBy('month_num')
-            ->get();
-
-        $incomingMap = [];
-        foreach ($incomingRows as $row) {
-            $incomingMap[sprintf('%04d-%02d', $row->year_num, $row->month_num)] = (int) $row->total;
-        }
-
-        $resolvedMap = [];
-        foreach ($resolvedRows as $row) {
-            $resolvedMap[sprintf('%04d-%02d', $row->year_num, $row->month_num)] = (int) $row->total;
-        }
+            ->selectRaw("DATE_FORMAT(COALESCE(resolved_at, closed_at), '%Y-%m') as month_key, COUNT(*) as total")
+            ->groupByRaw("DATE_FORMAT(COALESCE(resolved_at, closed_at), '%Y-%m')")
+            ->pluck('total', 'month_key')
+            ->all();
 
         $incomingSeries = [];
         $resolvedSeries = [];
 
-        $period = CarbonPeriod::create(
-            $start->copy()->startOfMonth(),
-            '1 month',
-            $end->copy()->startOfMonth()
-        );
+        $cursor = $start->copy()->startOfMonth();
+        $endMonth = $end->copy()->startOfMonth();
 
-        foreach ($period as $date) {
-            $key = $date->format('Y-m');
-            $incomingSeries[] = $incomingMap[$key] ?? 0;
-            $resolvedSeries[] = $resolvedMap[$key] ?? 0;
+        while ($cursor->lte($endMonth)) {
+            $key = $cursor->format('Y-m');
+            $incomingSeries[] = (int) ($incomingMap[$key] ?? 0);
+            $resolvedSeries[] = (int) ($resolvedMap[$key] ?? 0);
+            $cursor->addMonth();
         }
+
+        $axisMax = $this->roundedAxisMax(array_merge($incomingSeries, $resolvedSeries));
 
         return [
             'labels' => $labels,
@@ -607,45 +650,57 @@ class CaseAnalyticsService
                 ['label' => 'Incoming', 'data' => $incomingSeries],
                 ['label' => 'Resolved', 'data' => $resolvedSeries],
             ],
-            'y_axis_max' => $this->roundedAxisMax(array_merge($incomingSeries, $resolvedSeries)),
-            'step_size' => 10,
+            'incoming' => $incomingSeries,
+            'resolved' => $resolvedSeries,
+            'y_axis_max' => $axisMax,
+            'step_size' => $axisMax <= 10 ? 2 : 10,
         ];
     }
 
+
+
     private function topIssuesByCategory(string $team, Carbon $start, Carbon $end): array
     {
+        $categoryKeyExpression = "COALESCE(CAST(tickets.category_id AS CHAR), CONCAT('snapshot:', COALESCE(NULLIF(tickets.category, ''), 'uncategorized')))";
+        $categoryLabelExpression = "COALESCE(categories.name, NULLIF(tickets.category, ''), 'Uncategorized')";
+        $teamCodeExpression = "LOWER(COALESCE(teams.code, NULLIF(tickets.team, ''), '-'))";
+
         $rows = (clone $this->baseTicketQuery($team))
-            ->whereBetween('created_at', [$start, $end])
-            ->whereNotNull('category')
-            ->where('category', '<>', '')
-            ->selectRaw('category, COUNT(*) as total')
-            ->groupBy('category')
-            ->orderByDesc('total')
-            ->limit(7)
+            ->leftJoin('categories', 'categories.id', '=', 'tickets.category_id')
+            ->leftJoin('teams', 'teams.id', '=', 'tickets.team_id')
+            ->whereBetween('tickets.created_at', [$start, $end])
+            ->where(function (Builder $query) {
+                $query->whereNotNull('tickets.category_id')
+                    ->orWhere(function (Builder $query) {
+                        $query->whereNotNull('tickets.category')
+                            ->where('tickets.category', '<>', '');
+                    });
+            })
+            ->selectRaw("{$categoryKeyExpression} as category_key")
+            ->selectRaw("{$categoryLabelExpression} as category")
+            ->selectRaw("{$teamCodeExpression} as team_code")
+            ->selectRaw('COUNT(*) as total')
+            ->groupByRaw("{$categoryKeyExpression}, {$categoryLabelExpression}, {$teamCodeExpression}")
             ->get();
 
-        $items = [];
+        $items = $rows
+            ->groupBy('category_key')
+            ->map(function (Collection $group) {
+                $teamCounts = $group
+                    ->groupBy('team_code')
+                    ->map(fn (Collection $teamRows) => $teamRows->sum(fn ($row) => (int) $row->total));
 
-        foreach ($rows as $row) {
-            $topTeamRow = Ticket::query()
-                ->whereBetween('created_at', [$start, $end])
-                ->where('category', $row->category)
-                ->when($team !== 'all', function ($query) use ($team) {
-                    $query->where('team', $team);
-                })
-                ->selectRaw('team, COUNT(*) as c')
-                ->groupBy('team')
-                ->orderByDesc('c')
-                ->first();
+                return [
+                    'category' => (string) ($group->first()?->category ?: 'Uncategorized'),
+                    'count' => (int) $group->sum(fn ($row) => (int) $row->total),
+                    'top_team' => (string) ($teamCounts->sortDesc()->keys()->first() ?: '-'),
+                ];
+            })
+            ->sortByDesc('count')
+            ->take(7)
+            ->values();
 
-            $items[] = [
-                'category' => $row->category,
-                'count' => (int) $row->total,
-                'top_team' => $topTeamRow?->team ?? '-',
-            ];
-        }
-
-        $counts = collect($items)->pluck('count')->toArray();
+        $counts = $items->pluck('count')->map(fn ($value) => (int) $value)->toArray();
         $max = max($counts ?: [0]);
 
         if ($max <= 10) {
@@ -660,113 +715,174 @@ class CaseAnalyticsService
         }
 
         return [
-            'labels' => collect($items)->pluck('category')->toArray(),
+            'labels' => $items->pluck('category')->toArray(),
             'values' => $counts,
-            'items' => $items,
+            'items' => $items->toArray(),
             'y_axis_max' => $axisMax,
             'step_size' => $stepSize,
         ];
     }
 
+
     private function topIssueTypes(string $team, Carbon $start, Carbon $end): array
     {
+        $issueKeyExpression = "COALESCE(CAST(tickets.issue_type_id AS CHAR), CONCAT('snapshot:', COALESCE(NULLIF(tickets.issue_type, ''), 'unknown')))";
+        $issueLabelExpression = "COALESCE(issue_types.name, NULLIF(tickets.issue_type, ''), 'Unknown Issue')";
+        $categoryLabelExpression = "COALESCE(categories.name, NULLIF(tickets.category, ''), '-')";
+        $teamCodeExpression = "LOWER(COALESCE(teams.code, NULLIF(tickets.team, ''), '-'))";
+
         $rows = (clone $this->baseTicketQuery($team))
-            ->whereBetween('created_at', [$start, $end])
-            ->whereNotNull('issue_type')
-            ->where('issue_type', '<>', '')
-            ->selectRaw('issue_type, category, COUNT(*) as total')
-            ->groupBy('issue_type', 'category')
-            ->orderByDesc('total')
-            ->limit(7)
+            ->leftJoin('issue_types', 'issue_types.id', '=', 'tickets.issue_type_id')
+            ->leftJoin('categories', 'categories.id', '=', 'tickets.category_id')
+            ->leftJoin('teams', 'teams.id', '=', 'tickets.team_id')
+            ->whereBetween('tickets.created_at', [$start, $end])
+            ->where(function (Builder $query) {
+                $query->whereNotNull('tickets.issue_type_id')
+                    ->orWhere(function (Builder $query) {
+                        $query->whereNotNull('tickets.issue_type')
+                            ->where('tickets.issue_type', '<>', '');
+                    });
+            })
+            ->selectRaw("{$issueKeyExpression} as issue_key")
+            ->selectRaw("{$issueLabelExpression} as issue_type")
+            ->selectRaw("{$categoryLabelExpression} as category")
+            ->selectRaw("{$teamCodeExpression} as team_code")
+            ->selectRaw('COUNT(*) as total')
+            ->groupByRaw("{$issueKeyExpression}, {$issueLabelExpression}, {$categoryLabelExpression}, {$teamCodeExpression}")
             ->get();
 
-        $items = [];
+        $items = $rows
+            ->groupBy('issue_key')
+            ->map(function (Collection $group) {
+                $teamCounts = $group
+                    ->groupBy('team_code')
+                    ->map(fn (Collection $teamRows) => $teamRows->sum(fn ($row) => (int) $row->total));
 
-        foreach ($rows as $row) {
-            $topTeamRow = Ticket::query()
-                ->whereBetween('created_at', [$start, $end])
-                ->where('issue_type', $row->issue_type)
-                ->when($team !== 'all', function ($query) use ($team) {
-                    $query->where('team', $team);
-                })
-                ->selectRaw('team, COUNT(*) as c')
-                ->groupBy('team')
-                ->orderByDesc('c')
-                ->first();
-
-            $items[] = [
-                'issue_type' => $row->issue_type,
-                'category' => $row->category ?? '-',
-                'count' => (int) $row->total,
-                'top_team' => $topTeamRow?->team ?? '-',
-            ];
-        }
+                return [
+                    'issue_type' => (string) ($group->first()?->issue_type ?: 'Unknown Issue'),
+                    'category' => (string) ($group->first()?->category ?: '-'),
+                    'count' => (int) $group->sum(fn ($row) => (int) $row->total),
+                    'top_team' => (string) ($teamCounts->sortDesc()->keys()->first() ?: '-'),
+                ];
+            })
+            ->sortByDesc('count')
+            ->take(7)
+            ->values();
 
         return [
-            'labels' => collect($items)->pluck('issue_type')->toArray(),
-            'values' => collect($items)->pluck('count')->toArray(),
-            'items' => $items,
+            'labels' => $items->pluck('issue_type')->toArray(),
+            'values' => $items->pluck('count')->toArray(),
+            'items' => $items->toArray(),
         ];
     }
+
 
     private function agentLeaderboard(string $team, Carbon $start, Carbon $end): array
     {
         $rows = (clone $this->baseTicketQuery($team))
-            ->join('users', 'users.id', '=', 'tickets.holder_id')
+            ->leftJoin('users as holders', 'holders.id', '=', 'tickets.holder_id')
             ->whereNotNull('tickets.holder_id')
             ->whereNotNull('tickets.claimed_at')
-            ->where(function ($query) {
-                $query->whereNotNull('tickets.resolved_at')
-                    ->orWhereNotNull('tickets.closed_at');
+            ->where(function (Builder $query) use ($start, $end) {
+                $query->whereBetween('tickets.resolved_at', [$start, $end])
+                    ->orWhereBetween('tickets.closed_at', [$start, $end]);
             })
-            ->whereRaw('COALESCE(tickets.resolved_at, tickets.closed_at) BETWEEN ? AND ?', [$start, $end])
-            ->selectRaw('
-            users.id,
-            users.name,
-            COUNT(tickets.id) as resolved_count,
-            AVG(TIMESTAMPDIFF(MINUTE, tickets.claimed_at, COALESCE(tickets.resolved_at, tickets.closed_at))) as avg_resolution_minutes
-        ')
-            ->groupBy('users.id', 'users.name')
+            ->selectRaw("
+                tickets.holder_id,
+                COALESCE(holders.name, 'Unassigned') as agent_name,
+                COUNT(*) as resolved_count,
+                AVG(TIMESTAMPDIFF(MINUTE, tickets.claimed_at, COALESCE(tickets.resolved_at, tickets.closed_at))) as avg_resolution_minutes
+            ")
+            ->groupBy('tickets.holder_id', 'holders.name')
             ->orderByDesc('resolved_count')
             ->orderBy('avg_resolution_minutes')
             ->limit(10)
             ->get();
 
-        $rank = 1;
+        return $rows
+            ->values()
+            ->map(function ($row, int $index) {
+                $average = round((float) ($row->avg_resolution_minutes ?? 0), 1);
 
-        return $rows->map(function ($row) use (&$rank) {
-            return [
-                'rank' => $rank++,
-                'agent_name' => $row->name,
-                'resolved_count' => (int) $row->resolved_count,
-                'avg_resolution_minutes' => round((float) ($row->avg_resolution_minutes ?? 0), 1),
-                'avg_resolution_display' => $this->minutesToHuman((float) ($row->avg_resolution_minutes ?? 0)),
-                'csat' => null,
-            ];
-        })->values()->toArray();
+                return [
+                    'agent_name' => (string) ($row->agent_name ?: 'Unassigned'),
+                    'resolved_count' => (int) $row->resolved_count,
+                    'avg_resolution_minutes' => $average,
+                    'rank' => $index + 1,
+                    'avg_resolution_display' => $this->minutesToHuman($average),
+                    'csat' => null,
+                ];
+            })
+            ->toArray();
     }
+
+
+
+    private function topTeams(string $team, Carbon $start, Carbon $end): array
+    {
+        $teamKeyExpression = "COALESCE(CAST(tickets.team_id AS CHAR), CONCAT('snapshot:', LOWER(COALESCE(NULLIF(tickets.team, ''), 'unknown'))))";
+        $teamCodeExpression = "LOWER(COALESCE(teams.code, NULLIF(tickets.team, ''), 'unknown'))";
+        $teamNameExpression = "COALESCE(teams.name, NULLIF(tickets.team, ''), 'Unknown Team')";
+
+        $items = (clone $this->baseTicketQuery($team))
+            ->leftJoin('teams', 'teams.id', '=', 'tickets.team_id')
+            ->whereBetween('tickets.created_at', [$start, $end])
+            ->selectRaw("{$teamKeyExpression} as team_key")
+            ->selectRaw("{$teamCodeExpression} as team_code")
+            ->selectRaw("{$teamNameExpression} as team_name")
+            ->selectRaw('COUNT(*) as tickets_count')
+            ->selectRaw("SUM(CASE WHEN tickets.resolved_at IS NOT NULL OR tickets.closed_at IS NOT NULL THEN 1 ELSE 0 END) as resolved_count")
+            ->selectRaw("AVG(CASE WHEN tickets.claimed_at IS NOT NULL AND (tickets.resolved_at IS NOT NULL OR tickets.closed_at IS NOT NULL) THEN TIMESTAMPDIFF(MINUTE, tickets.claimed_at, COALESCE(tickets.resolved_at, tickets.closed_at)) ELSE NULL END) as avg_resolution_minutes")
+            ->groupByRaw("{$teamKeyExpression}, {$teamCodeExpression}, {$teamNameExpression}")
+            ->orderByDesc('tickets_count')
+            ->orderByDesc('resolved_count')
+            ->orderBy('avg_resolution_minutes')
+            ->limit(5)
+            ->get()
+            ->values()
+            ->map(function ($row, int $index) {
+                $average = round((float) ($row->avg_resolution_minutes ?? 0), 1);
+
+                return [
+                    'team_code' => (string) ($row->team_code ?: 'unknown'),
+                    'team_name' => $row->team_name ? $this->labelText((string) $row->team_name) : 'Unknown Team',
+                    'tickets_count' => (int) $row->tickets_count,
+                    'resolved_count' => (int) $row->resolved_count,
+                    'avg_resolution_minutes' => $average,
+                    'rank' => $index + 1,
+                    'avg_resolution_display' => $average > 0 ? $this->minutesToHuman($average) : '-',
+                ];
+            });
+
+        $values = $items->pluck('tickets_count')->map(fn ($value) => (int) $value)->toArray();
+
+        return [
+            'labels' => $items->pluck('team_name')->toArray(),
+            'values' => $values,
+            'items' => $items->toArray(),
+            'y_axis_max' => $this->roundedAxisMax($values),
+            'step_size' => max(1, min(10, $this->roundedAxisMax($values) <= 10 ? 2 : 10)),
+        ];
+    }
+
+
 
     private function peakTimeVolume(string $team, Carbon $start, Carbon $end): array
     {
-        $rows = (clone $this->baseTicketQuery($team))
+        $map = (clone $this->baseTicketQuery($team))
             ->whereBetween('created_at', [$start, $end])
             ->whereRaw('HOUR(created_at) BETWEEN 8 AND 17')
-            ->selectRaw('HOUR(created_at) as hour_num, COUNT(*) as total')
-            ->groupBy('hour_num')
-            ->orderBy('hour_num')
-            ->get();
-
-        $map = [];
-        foreach ($rows as $row) {
-            $map[(int) $row->hour_num] = (int) $row->total;
-        }
+            ->selectRaw('HOUR(created_at) as hour_key, COUNT(*) as total')
+            ->groupByRaw('HOUR(created_at)')
+            ->pluck('total', 'hour_key')
+            ->all();
 
         $labels = [];
         $values = [];
 
         for ($hour = 8; $hour <= 17; $hour++) {
             $labels[] = str_pad((string) $hour, 2, '0', STR_PAD_LEFT) . ':00';
-            $values[] = $map[$hour] ?? 0;
+            $values[] = (int) ($map[$hour] ?? 0);
         }
 
         return [
@@ -776,6 +892,7 @@ class CaseAnalyticsService
             'step_size' => 10,
         ];
     }
+
 
     private function buildMetric(string $key, string $title, float|int $current, float|int $previous, string $type, string $semantic = 'neutral'): array
     {
@@ -829,6 +946,7 @@ class CaseAnalyticsService
 
         if ($hours < 24) {
             $remainingMinutes = $minutes % 60;
+
             return $remainingMinutes > 0
                 ? $hours . 'h ' . $remainingMinutes . 'm'
                 : $hours . 'h';

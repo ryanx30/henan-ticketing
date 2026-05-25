@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Jobs\ExportDataJob;
 use App\Models\AuditLog;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Str;
 
 class AdminAuditLogApiController extends BaseApiController
 {
@@ -49,13 +52,26 @@ class AdminAuditLogApiController extends BaseApiController
         }
 
         $extension = $format === 'csv' ? 'csv' : 'xls';
-        $fileName = 'audit-logs-' . now()->format('Ymd-His') . '.' . $extension;
+        $fileName = 'audit-logs-' . now()->format('Ymd-His') . '-' . Str::lower(Str::random(6)) . '.' . $extension;
 
-        if ($format === 'csv') {
-            return $this->exportCsv($request, $fileName);
-        }
+        $batch = Bus::batch([
+            new ExportDataJob('audit_logs_' . ($format === 'csv' ? 'csv' : 'excel'), $request->user()->id, [
+                'q' => (string) $request->query('q', ''),
+                'action' => (string) $request->query('action', 'all'),
+                'entity' => (string) $request->query('entity', 'all'),
+                'date_range' => (string) $request->query('date_range', '30d'),
+                'date_from' => (string) $request->query('date_from', ''),
+                'date_to' => (string) $request->query('date_to', ''),
+            ], $fileName),
+        ])->name('audit-log-export-' . $fileName)->dispatch();
 
-        return $this->exportExcel($request, $fileName);
+        return $this->success([
+            'queued' => true,
+            'batch_id' => $batch->id,
+            'filename' => $fileName,
+            'storage_disk' => 'local',
+            'storage_path' => 'exports/audit-logs/' . $fileName,
+        ], 'Audit log export has been queued.', 202);
     }
 
     protected function filteredAuditLogQuery(Request $request)
@@ -92,121 +108,22 @@ class AdminAuditLogApiController extends BaseApiController
         }
 
         if ($dateRange === 'today') {
-            $query->whereDate('created_at', now()->toDateString());
+            $query->whereBetween('created_at', [now()->startOfDay(), now()->endOfDay()]);
         } elseif ($dateRange === '7d') {
             $query->where('created_at', '>=', now()->copy()->subDays(7));
         } elseif ($dateRange === '30d') {
             $query->where('created_at', '>=', now()->copy()->subDays(30));
         } elseif ($dateRange === 'custom') {
             if ($dateFrom !== '') {
-                $query->whereDate('created_at', '>=', $dateFrom);
+                $query->where('created_at', '>=', $dateFrom . ' 00:00:00');
             }
 
             if ($dateTo !== '') {
-                $query->whereDate('created_at', '<=', $dateTo);
+                $query->where('created_at', '<=', $dateTo . ' 23:59:59');
             }
         }
 
         return $query;
-    }
-
-    protected function exportCsv(Request $request, string $fileName)
-    {
-        return response()->streamDownload(function () use ($request) {
-            echo "\xEF\xBB\xBF";
-
-            $handle = fopen('php://output', 'w');
-            fputcsv($handle, $this->exportHeaders());
-
-            $this->filteredAuditLogQuery($request)
-                ->with('actor')
-                ->orderByDesc('id')
-                ->chunk(500, function ($logs) use ($handle) {
-                    foreach ($logs as $log) {
-                        fputcsv($handle, $this->exportRow($log));
-                    }
-                });
-
-            fclose($handle);
-        }, $fileName, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-        ]);
-    }
-
-    protected function exportExcel(Request $request, string $fileName)
-    {
-        return response()->streamDownload(function () use ($request) {
-            echo '<html>';
-            echo '<head>';
-            echo '<meta charset="UTF-8">';
-            echo '</head>';
-            echo '<body>';
-            echo '<table border="1">';
-
-            echo '<thead><tr>';
-            foreach ($this->exportHeaders() as $header) {
-                echo '<th>' . e($header) . '</th>';
-            }
-            echo '</tr></thead>';
-
-            echo '<tbody>';
-
-            $this->filteredAuditLogQuery($request)
-                ->with('actor')
-                ->orderByDesc('id')
-                ->chunk(500, function ($logs) {
-                    foreach ($logs as $log) {
-                        echo '<tr>';
-
-                        foreach ($this->exportRow($log) as $cell) {
-                            echo '<td style="vertical-align: top; white-space: pre-wrap;">' . e($cell) . '</td>';
-                        }
-
-                        echo '</tr>';
-                    }
-                });
-
-            echo '</tbody>';
-            echo '</table>';
-            echo '</body>';
-            echo '</html>';
-        }, $fileName, [
-            'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
-        ]);
-    }
-
-    protected function exportHeaders(): array
-    {
-        return [
-            'Timestamp',
-            'Actor',
-            'Role',
-            'Action',
-            'Entity',
-            'Entity ID',
-            'Description',
-            'IP Address',
-            'User Agent',
-            'Before Values',
-            'After Values',
-        ];
-    }
-
-    protected function exportRow(AuditLog $log): array
-    {
-        return [
-            optional($log->created_at)?->format('Y-m-d H:i:s') ?? '',
-            $log->actor_name ?: $log->actor?->name ?: 'System',
-            $log->actor_role ?: $log->actor?->role ?: '',
-            $this->titleLabel($log->action),
-            $this->titleLabel($log->entity_type),
-            $log->entity_id ?? '',
-            $log->description ?? '',
-            $log->ip_address ?? '',
-            $log->user_agent ?? '',
-            $this->exportValue($log->before_values),
-            $this->exportValue($log->after_values),
-        ];
     }
 
     protected function exportValue(mixed $value): string
@@ -255,7 +172,7 @@ class AdminAuditLogApiController extends BaseApiController
     {
         return [
             'total' => AuditLog::query()->count(),
-            'today' => AuditLog::query()->whereDate('created_at', now()->toDateString())->count(),
+            'today' => AuditLog::query()->whereBetween('created_at', [now()->startOfDay(), now()->endOfDay()])->count(),
             'last_7_days' => AuditLog::query()->where('created_at', '>=', now()->copy()->subDays(7))->count(),
             'critical_changes' => AuditLog::query()
                 ->whereIn('action', ['deleted', 'deactivated', 'status_changed'])

@@ -2,416 +2,238 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Jobs\ExportDataJob;
+use App\Queries\TicketHistoryQuery;
 use App\Models\Ticket;
-use App\Models\TicketStatusHistory;
-use App\Support\AuditLogger;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Services\TicketWorkflowService;
+use App\Http\Resources\TicketResource;
+use App\Support\TicketStatus;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Symfony\Component\HttpFoundation\StreamedResponse;
-use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Bus;
 
 class ITQueueApiController extends BaseApiController
 {
     private const PDF_EXPORT_LIMIT = 1000;
+    private const PDF_ASYNC_EXPORT_LIMIT = 10000;
+    private const DEFAULT_QUEUE_LIMIT = 50;
+    private const MAX_QUEUE_LIMIT = 100;
+
+    public function __construct(
+        private TicketWorkflowService $ticketWorkflowService,
+        private TicketHistoryQuery $ticketHistoryQuery
+    ) {
+    }
 
     public function myQueue(Request $request)
     {
+        Gate::authorize('viewAny', Ticket::class);
+
         $userId = $request->user()->id;
 
-        $baseQuery = Ticket::with(['creator', 'holder'])
-            ->where('team', 'it')
+        $limit = $this->queueLimit($request);
+
+        $baseQuery = Ticket::with(['creator', 'holder', 'teamMaster', 'priorityMaster'])
+            ->forTeamCode('it')
             ->where('holder_id', $userId);
 
-        $newTickets = (clone $baseQuery)
+        // My Queue keeps an action-oriented unclaimed section so IT can claim new tickets
+        // without leaving the page. Claimed work still remains scoped by holder_id below.
+        $newTickets = Ticket::with(['creator', 'holder', 'teamMaster', 'priorityMaster'])
+            ->forTeamCode('it')
             ->where('status', 'new')
+            ->whereNull('holder_id')
             ->latest()
+            ->take($limit)
             ->get();
 
         $ongoingTickets = (clone $baseQuery)
             ->where('status', 'in_progress')
             ->latest()
+            ->take($limit)
             ->get();
 
         $waitingTickets = (clone $baseQuery)
             ->where('status', 'waiting_info')
             ->latest()
+            ->take($limit)
             ->get();
 
         $resolvedTickets = (clone $baseQuery)
             ->whereIn('status', ['resolved', 'closed'])
             ->latest()
+            ->take($limit)
             ->get();
 
         return $this->success([
-            'new_tickets' => $newTickets,
-            'ongoing_tickets' => $ongoingTickets,
-            'waiting_tickets' => $waitingTickets,
-            'resolved_tickets' => $resolvedTickets,
+            'new_tickets' => TicketResource::collection($newTickets),
+            'ongoing_tickets' => TicketResource::collection($ongoingTickets),
+            'waiting_tickets' => TicketResource::collection($waitingTickets),
+            'resolved_tickets' => TicketResource::collection($resolvedTickets),
+            'meta' => [
+                'per_section_limit' => $limit,
+            ],
         ], 'My queue loaded');
     }
 
     public function teamQueue(Request $request)
     {
-        $baseQuery = Ticket::with(['creator', 'holder'])
-            ->where('team', 'it');
+        Gate::authorize('viewAny', Ticket::class);
+
+        $limit = $this->queueLimit($request);
+
+        $baseQuery = Ticket::with(['creator', 'holder', 'teamMaster', 'priorityMaster'])
+            ->forTeamCode('it');
 
         $newTickets = (clone $baseQuery)
             ->where('status', 'new')
             ->whereNull('holder_id')
             ->latest()
+            ->take($limit)
             ->get();
 
         $ongoingTickets = (clone $baseQuery)
             ->where('status', 'in_progress')
             ->latest()
+            ->take($limit)
             ->get();
 
         $waitingTickets = (clone $baseQuery)
             ->where('status', 'waiting_info')
             ->latest()
+            ->take($limit)
             ->get();
 
         $resolvedTickets = (clone $baseQuery)
             ->whereIn('status', ['resolved', 'closed'])
             ->latest()
+            ->take($limit)
             ->get();
 
         return $this->success([
-            'new_tickets' => $newTickets,
-            'ongoing_tickets' => $ongoingTickets,
-            'waiting_tickets' => $waitingTickets,
-            'resolved_tickets' => $resolvedTickets,
+            'new_tickets' => TicketResource::collection($newTickets),
+            'ongoing_tickets' => TicketResource::collection($ongoingTickets),
+            'waiting_tickets' => TicketResource::collection($waitingTickets),
+            'resolved_tickets' => TicketResource::collection($resolvedTickets),
+            'meta' => [
+                'per_section_limit' => $limit,
+            ],
         ], 'Team queue loaded');
+    }
+
+    private function queueLimit(Request $request): int
+    {
+        $limit = (int) $request->query('limit', self::DEFAULT_QUEUE_LIMIT);
+
+        if ($limit <= 0) {
+            return self::DEFAULT_QUEUE_LIMIT;
+        }
+
+        return min($limit, self::MAX_QUEUE_LIMIT);
     }
 
     public function history(Request $request)
     {
+        Gate::authorize('viewAny', Ticket::class);
+
         $perPage = (int) $request->query('per_page', 10);
 
         if (!in_array($perPage, [10, 25, 50], true)) {
             $perPage = 10;
         }
 
-        $tickets = $this->buildHistoryQuery($request)
+        $tickets = $this->ticketHistoryQuery->build($request)
             ->paginate($perPage)
             ->withQueryString();
+
+        $tickets->setCollection(
+            TicketResource::collection($tickets->getCollection())->collection
+        );
 
         return $this->paginated($tickets, 'History loaded');
     }
 
     public function exportHistory(Request $request)
     {
+        Gate::authorize('viewAny', Ticket::class);
+
         $format = strtolower((string) $request->query('format', 'csv'));
 
         if (!in_array($format, ['csv', 'excel', 'xls', 'pdf'], true)) {
             return $this->error('Invalid export format', 422);
         }
 
-        $filename = 'ticket-history-' . now()->format('Ymd-His');
+        $extension = $format === 'pdf' ? 'pdf' : ($format === 'csv' ? 'csv' : 'xls');
+        $filename = 'ticket-history-' . now()->format('Ymd-His') . '-' . Str::lower(Str::random(6)) . '.' . $extension;
 
-        if ($format === 'csv') {
-            return $this->exportHistoryCsv($request, $filename . '.csv');
-        }
+        $batch = Bus::batch([
+            new ExportDataJob('ticket_history_' . ($format === 'xls' ? 'excel' : $format), $request->user()->id, $this->historyExportFilters($request), $filename),
+        ])->name('ticket-history-export-' . $filename)->dispatch();
 
-        if (in_array($format, ['excel', 'xls'], true)) {
-            return $this->exportHistoryExcel($request, $filename . '.xls');
-        }
-
-        return $this->exportHistoryPdf($request, $filename . '.pdf');
+        return $this->success([
+            'queued' => true,
+            'batch_id' => $batch->id,
+            'filename' => $filename,
+            'storage_disk' => 'local',
+            'storage_path' => 'exports/ticket-history/' . $filename,
+        ], 'Ticket history export has been queued.', 202);
     }
 
-    private function buildHistoryQuery(Request $request)
-    {
-        $q = trim((string) $request->query('q', ''));
-        $dateFrom = (string) $request->query('date_from', '');
-        $dateTo = (string) $request->query('date_to', '');
-        $sortBy = (string) $request->query('sort_by', 'resolved_at');
-        $sortDir = strtolower((string) $request->query('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
-
-        $allowedSorts = ['ticket_code', 'resolved_at', 'category', 'team', 'duration'];
-
-        if (!in_array($sortBy, $allowedSorts, true)) {
-            $sortBy = 'resolved_at';
-        }
-
-        $query = Ticket::with(['creator', 'holder'])
-            ->whereIn('status', ['resolved', 'closed']);
-
-        if ($q !== '') {
-            $query->where(function ($qq) use ($q) {
-                $qq->where('ticket_code', 'like', "%{$q}%")
-                    ->orWhere('title', 'like', "%{$q}%")
-                    ->orWhere('description', 'like', "%{$q}%")
-                    ->orWhere('issue_type', 'like', "%{$q}%")
-                    ->orWhere('category', 'like', "%{$q}%")
-                    ->orWhere('team', 'like', "%{$q}%");
-            });
-        }
-
-        $effectiveDateSql = 'COALESCE(resolved_at, closed_at, updated_at, created_at)';
-
-        if ($dateFrom !== '') {
-            $query->whereRaw("DATE({$effectiveDateSql}) >= ?", [$dateFrom]);
-        }
-
-        if ($dateTo !== '') {
-            $query->whereRaw("DATE({$effectiveDateSql}) <= ?", [$dateTo]);
-        }
-
-        switch ($sortBy) {
-            case 'resolved_at':
-                $query->orderByRaw("{$effectiveDateSql} {$sortDir}");
-                break;
-
-            case 'duration':
-                $query->orderByRaw("TIMESTAMPDIFF(SECOND, created_at, COALESCE(resolved_at, closed_at, updated_at, created_at)) {$sortDir}");
-                break;
-
-            default:
-                $query->orderBy($sortBy, $sortDir);
-                break;
-        }
-
-        return $query;
-    }
-
-    private function historyExportHeaders(): array
+    private function historyExportFilters(Request $request): array
     {
         return [
-            'Ticket',
-            'Resolved Date',
-            'Category',
-            'Team',
-            'Resolution Note',
-            'Duration (SLA)',
-        ];
-    }
-
-    private function historyExportRow(Ticket $ticket): array
-    {
-        return [
-            $this->ticketLabel($ticket),
-            $this->resolvedLabel($ticket),
-            $this->categoryLabel($ticket),
-            strtoupper((string) ($ticket->team ?? '-')),
-            $this->resolutionLabel($ticket),
-            $this->durationSlaText($ticket),
-        ];
-    }
-
-    private function durationSlaText(Ticket $ticket): string
-    {
-        $duration = $this->durationText($ticket);
-        $sla = $this->slaBadge($ticket);
-
-        if ($sla === '') {
-            return $duration;
-        }
-
-        return $duration . ' (' . $sla . ')';
-    }
-
-    private function exportHistoryCsv(Request $request, string $filename): StreamedResponse
-    {
-        return response()->streamDownload(function () use ($request) {
-            $handle = fopen('php://output', 'w');
-
-            // UTF-8 BOM supaya Excel Windows aman baca karakter.
-            fwrite($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
-
-            fputcsv($handle, $this->historyExportHeaders());
-
-            $this->buildHistoryQuery($request)
-                ->chunk(500, function (Collection $tickets) use ($handle) {
-                    foreach ($tickets as $ticket) {
-                        fputcsv($handle, $this->historyExportRow($ticket));
-                    }
-                });
-
-            fclose($handle);
-        }, $filename, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-        ]);
-    }
-
-    private function exportHistoryExcel(Request $request, string $filename): StreamedResponse
-    {
-        return response()->streamDownload(function () use ($request) {
-            echo '<html>';
-            echo '<head>';
-            echo '<meta charset="UTF-8">';
-            echo '<style>';
-            echo 'body{font-family:Arial,sans-serif;font-size:12px;color:#1e293b;}';
-            echo 'h2{margin:0 0 12px 0;color:#051823;}';
-            echo 'table{width:100%;border-collapse:collapse;}';
-            echo 'th{background:#051823;color:#ffffff;font-weight:700;text-align:left;}';
-            echo 'th,td{border:1px solid #cbd5e1;padding:8px;vertical-align:top;}';
-            echo 'tr:nth-child(even){background:#eef3f7;}';
-            echo '</style>';
-            echo '</head>';
-            echo '<body>';
-
-            echo '<h2>Ticket History Repository</h2>';
-            echo '<table>';
-
-            echo '<thead><tr>';
-            foreach ($this->historyExportHeaders() as $header) {
-                echo '<th>' . e($header) . '</th>';
-            }
-            echo '</tr></thead>';
-
-            echo '<tbody>';
-
-            $this->buildHistoryQuery($request)
-                ->chunk(500, function (Collection $tickets) {
-                    foreach ($tickets as $ticket) {
-                        echo '<tr>';
-
-                        foreach ($this->historyExportRow($ticket) as $cell) {
-                            echo '<td>' . e($cell) . '</td>';
-                        }
-
-                        echo '</tr>';
-                    }
-                });
-
-            echo '</tbody>';
-            echo '</table>';
-            echo '</body>';
-            echo '</html>';
-        }, $filename, [
-            'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
-        ]);
-    }
-
-    private function exportHistoryPdf(Request $request, string $filename)
-    {
-        $filters = [
             'q' => (string) $request->query('q', ''),
             'date_from' => (string) $request->query('date_from', ''),
             'date_to' => (string) $request->query('date_to', ''),
             'sort_by' => (string) $request->query('sort_by', 'resolved_at'),
             'sort_dir' => (string) $request->query('sort_dir', 'desc'),
-            'limit' => self::PDF_EXPORT_LIMIT,
         ];
-
-        $tickets = $this->buildHistoryQuery($request)
-            ->limit(self::PDF_EXPORT_LIMIT)
-            ->get();
-
-        $rows = $tickets
-            ->map(fn (Ticket $ticket) => $this->historyExportRow($ticket))
-            ->values();
-
-        $pdf = Pdf::loadView('exports.history-pdf', [
-            'headers' => $this->historyExportHeaders(),
-            'rows' => $rows,
-            'filters' => $filters,
-            'isLimited' => $tickets->count() >= self::PDF_EXPORT_LIMIT,
-        ])->setPaper('a4', 'landscape');
-
-        return $pdf->download($filename);
     }
 
     public function claim(Request $request, Ticket $ticket)
     {
-        if ($ticket->team !== 'it') {
-            return $this->error('Only IT tickets can be claimed', 422);
-        }
+        Gate::authorize('claim', $ticket);
 
-        if ($ticket->holder_id !== null && (int) $ticket->holder_id !== (int) $request->user()->id) {
-            return $this->error('Ticket already claimed by another resolver', 422);
-        }
-
-        $before = $this->snapshotTicket($ticket);
-
-        DB::transaction(function () use ($request, $ticket) {
-            $oldStatus = $ticket->status;
-
-            $ticket->update([
-                'holder_id' => $request->user()->id,
-                'claimed_at' => now(),
-                'status' => 'in_progress',
-            ]);
-
-            TicketStatusHistory::create([
-                'ticket_id' => $ticket->id,
-                'from_status' => $oldStatus,
-                'to_status' => 'in_progress',
-                'changed_by' => $request->user()->id,
-                'changed_at' => now(),
-                'note' => 'Ticket claimed by IT',
-            ]);
-        });
-
-        $freshTicket = $ticket->fresh(['creator', 'holder']);
-
-        AuditLogger::record(
-            $request,
-            'claimed',
-            'ticket',
-            $freshTicket->id,
-            AuditLogger::ticketLabel($freshTicket),
-            'Claimed ticket ' . AuditLogger::ticketLabel($freshTicket),
-            $before,
-            $this->snapshotTicket($freshTicket)
+        $freshTicket = $this->ticketWorkflowService->claim(
+            $ticket,
+            $request->user(),
+            'Ticket claimed by IT.',
+            [
+                'ip_address' => $request->ip(),
+                'user_agent' => (string) $request->userAgent(),
+            ]
         );
 
         return $this->success(
-            $freshTicket,
+            TicketResource::make($freshTicket),
             'Ticket claimed successfully'
         );
     }
 
     public function updateStatus(Request $request, Ticket $ticket)
     {
+        Gate::authorize('updateStatus', $ticket);
+
         $validated = $request->validate([
-            'status' => ['required', 'in:new,in_progress,waiting_info,resolved,closed'],
+            'status' => ['required', TicketStatus::validationRule()],
             'note' => ['nullable', 'string'],
         ]);
 
-        $oldStatus = $ticket->status;
-        $before = $this->snapshotTicket($ticket);
-
-        DB::transaction(function () use ($request, $ticket, $validated, $oldStatus) {
-            $ticket->status = $validated['status'];
-
-            if ($validated['status'] === 'resolved' && !$ticket->resolved_at) {
-                $ticket->resolved_at = now();
-            }
-
-            if ($validated['status'] === 'closed' && !$ticket->closed_at) {
-                $ticket->closed_at = now();
-            }
-
-            $ticket->save();
-
-            TicketStatusHistory::create([
-                'ticket_id' => $ticket->id,
-                'from_status' => $oldStatus,
-                'to_status' => $validated['status'],
-                'changed_by' => $request->user()->id,
-                'changed_at' => now(),
-                'note' => $validated['note'] ?? 'Status updated by IT',
-            ]);
-        });
-
-        $freshTicket = $ticket->fresh(['creator', 'holder']);
-
-        AuditLogger::record(
-            $request,
-            'status_changed',
-            'ticket',
-            $freshTicket->id,
-            AuditLogger::ticketLabel($freshTicket),
-            'Changed ticket status from ' . $oldStatus . ' to ' . $validated['status'] . ' for ' . AuditLogger::ticketLabel($freshTicket),
-            $before,
-            $this->snapshotTicket($freshTicket)
+        $freshTicket = $this->ticketWorkflowService->transition(
+            $ticket,
+            $validated['status'],
+            $request->user(),
+            $validated['note'] ?? 'Status updated by IT.',
+            [
+                'action' => 'status_changed',
+                'ip_address' => $request->ip(),
+                'user_agent' => (string) $request->userAgent(),
+            ]
         );
 
         return $this->success(
-            $freshTicket,
+            TicketResource::make($freshTicket),
             'Ticket status updated successfully'
         );
     }

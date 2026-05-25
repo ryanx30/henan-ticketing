@@ -98,26 +98,36 @@ class TicketSeeder extends Seeder
 
         $platformTypes = ['web', 'mobile', 'desktop'];
         $flowTypes = ['login', 'order', 'deposit', 'withdrawal', 'verification', 'reporting'];
-        $statuses = ['new', 'in_progress', 'waiting_info', 'resolved', 'closed'];
+
+        // Only IT tickets should enter operational workflow.
+        // Non-IT tickets are seeded as historical/case-analytics records and auto-closed.
+        $itStatuses = ['new', 'in_progress', 'waiting_info', 'resolved', 'closed'];
 
         for ($i = 1; $i <= 80; $i++) {
             $team = $teams->random();
             $category = $usableCategories->random();
             $issueType = $issueTypesByCategory[$category->id]->random();
             $priority = $priorities->random();
-            $status = $faker->randomElement($statuses);
+
+            $isItTeam = $this->isItTeam($team);
+            $status = $isItTeam
+                ? $faker->randomElement($itStatuses)
+                : 'closed';
 
             $createdAt = Carbon::instance($faker->dateTimeBetween('-4 months', '-1 day'));
             $createdBy = $creatorIds->random();
 
-            $needsResolver = in_array($status, ['in_progress', 'waiting_info', 'resolved', 'closed'], true);
+            // Only IT workflow tickets can be assigned to resolver.
+            $needsResolver = $isItTeam && in_array($status, ['in_progress', 'waiting_info', 'resolved', 'closed'], true);
             $holderId = $needsResolver ? $resolverIds->random() : null;
 
             $title = $this->makeTitle($team, $category, $issueType, $faker);
             $description = $this->makeDescription($team, $category, $issueType);
 
             $requestTime = $createdAt->copy()->addMinutes($faker->numberBetween(0, 20));
-            $slaHours = $this->getSlaHoursForTicket($team, $priority);
+
+            // Non-IT tickets are direct-close historical records, so do not attach IT SLA deadlines.
+            $slaHours = $isItTeam ? $this->getSlaHoursForTicket($team, $priority) : null;
             $slaDeadlineAt = $slaHours ? $createdAt->copy()->addHours($slaHours) : null;
 
             $claimedAt = null;
@@ -126,104 +136,122 @@ class TicketSeeder extends Seeder
             $updatedAt = $createdAt->copy();
             $historyRows = [];
 
-            $historyRows[] = $this->makeHistoryRow(
-                fromStatus: null,
-                toStatus: 'new',
-                changedBy: $createdBy,
-                changedAt: $createdAt->copy(),
-                note: 'Initial status on ticket creation'
-            );
-
-            if ($status !== 'new') {
-                $claimedAt = $createdAt->copy()->addMinutes($faker->numberBetween(5, 90));
-                $updatedAt = $claimedAt->copy();
+            if (! $isItTeam) {
+                // Non-IT tickets should not appear as New / In Progress / Waiting Info.
+                // They are created and closed immediately for record/history purpose.
+                $closedAt = $createdAt->copy()->addMinutes($faker->numberBetween(5, 60));
+                $resolvedAt = $closedAt->copy();
+                $updatedAt = $closedAt->copy();
+                $holderId = null;
+                $claimedAt = null;
 
                 $historyRows[] = $this->makeHistoryRow(
-                    fromStatus: 'new',
-                    toStatus: 'in_progress',
-                    changedBy: $holderId,
-                    changedAt: $claimedAt->copy(),
-                    note: 'Ticket claimed by resolver'
+                    fromStatus: null,
+                    toStatus: 'closed',
+                    changedBy: $createdBy,
+                    changedAt: $closedAt->copy(),
+                    note: 'Ticket auto-closed because it is routed to a non-IT team.'
+                );
+            } else {
+                $historyRows[] = $this->makeHistoryRow(
+                    fromStatus: null,
+                    toStatus: 'new',
+                    changedBy: $createdBy,
+                    changedAt: $createdAt->copy(),
+                    note: 'Initial status on ticket creation'
                 );
 
-                if ($status === 'waiting_info') {
-                    $waitingAt = $claimedAt->copy()->addMinutes($faker->numberBetween(15, 120));
-                    $updatedAt = $waitingAt->copy();
+                if ($status !== 'new') {
+                    $claimedAt = $createdAt->copy()->addMinutes($faker->numberBetween(5, 90));
+                    $updatedAt = $claimedAt->copy();
 
                     $historyRows[] = $this->makeHistoryRow(
-                        fromStatus: 'in_progress',
-                        toStatus: 'waiting_info',
+                        fromStatus: 'new',
+                        toStatus: 'in_progress',
                         changedBy: $holderId,
-                        changedAt: $waitingAt->copy(),
-                        note: 'Ticket requires additional customer information'
-                    );
-                }
-
-                if (in_array($status, ['resolved', 'closed'], true)) {
-                    $isBreached = $faker->boolean(30);
-
-                    $baseResolvedAt = $this->makeResolvedAtNearSla(
-                        createdAt: $createdAt,
-                        claimedAt: $claimedAt,
-                        slaDeadlineAt: $slaDeadlineAt,
-                        isBreached: $isBreached,
-                        faker: $faker
+                        changedAt: $claimedAt->copy(),
+                        note: 'Ticket claimed by resolver'
                     );
 
-                    $finalResolvedAt = $baseResolvedAt->copy();
-                    $reopened = $faker->boolean(12);
-
-                    if ($reopened) {
-                        $reopenedAt = $baseResolvedAt->copy()->addMinutes($faker->numberBetween(15, 120));
-                        $finalResolvedAt = $reopenedAt->copy()->addMinutes($faker->numberBetween(20, 180));
+                    if ($status === 'waiting_info') {
+                        $waitingAt = $claimedAt->copy()->addMinutes($faker->numberBetween(15, 120));
+                        $updatedAt = $waitingAt->copy();
 
                         $historyRows[] = $this->makeHistoryRow(
                             fromStatus: 'in_progress',
-                            toStatus: 'resolved',
+                            toStatus: 'waiting_info',
                             changedBy: $holderId,
-                            changedAt: $baseResolvedAt->copy(),
-                            note: 'Issue resolved'
-                        );
-
-                        $historyRows[] = $this->makeHistoryRow(
-                            fromStatus: 'resolved',
-                            toStatus: 'in_progress',
-                            changedBy: $createdBy,
-                            changedAt: $reopenedAt->copy(),
-                            note: 'Ticket reopened due to recurring issue'
-                        );
-
-                        $historyRows[] = $this->makeHistoryRow(
-                            fromStatus: 'in_progress',
-                            toStatus: 'resolved',
-                            changedBy: $holderId,
-                            changedAt: $finalResolvedAt->copy(),
-                            note: 'Issue resolved after reopen'
-                        );
-                    } else {
-                        $historyRows[] = $this->makeHistoryRow(
-                            fromStatus: 'in_progress',
-                            toStatus: 'resolved',
-                            changedBy: $holderId,
-                            changedAt: $finalResolvedAt->copy(),
-                            note: 'Issue resolved'
+                            changedAt: $waitingAt->copy(),
+                            note: 'Ticket requires additional customer information'
                         );
                     }
 
-                    $resolvedAt = $finalResolvedAt->copy();
-                    $updatedAt = $resolvedAt->copy();
+                    if (in_array($status, ['resolved', 'closed'], true)) {
+                        $isBreached = $faker->boolean(30);
 
-                    if ($status === 'closed') {
-                        $closedAt = $resolvedAt->copy()->addMinutes($faker->numberBetween(5, 120));
-                        $updatedAt = $closedAt->copy();
-
-                        $historyRows[] = $this->makeHistoryRow(
-                            fromStatus: 'resolved',
-                            toStatus: 'closed',
-                            changedBy: $createdBy,
-                            changedAt: $closedAt->copy(),
-                            note: 'Ticket closed'
+                        $baseResolvedAt = $this->makeResolvedAtNearSla(
+                            createdAt: $createdAt,
+                            claimedAt: $claimedAt,
+                            slaDeadlineAt: $slaDeadlineAt,
+                            isBreached: $isBreached,
+                            faker: $faker
                         );
+
+                        $finalResolvedAt = $baseResolvedAt->copy();
+                        $reopened = $faker->boolean(12);
+
+                        if ($reopened) {
+                            $reopenedAt = $baseResolvedAt->copy()->addMinutes($faker->numberBetween(15, 120));
+                            $finalResolvedAt = $reopenedAt->copy()->addMinutes($faker->numberBetween(20, 180));
+
+                            $historyRows[] = $this->makeHistoryRow(
+                                fromStatus: 'in_progress',
+                                toStatus: 'resolved',
+                                changedBy: $holderId,
+                                changedAt: $baseResolvedAt->copy(),
+                                note: 'Issue resolved'
+                            );
+
+                            $historyRows[] = $this->makeHistoryRow(
+                                fromStatus: 'resolved',
+                                toStatus: 'in_progress',
+                                changedBy: $createdBy,
+                                changedAt: $reopenedAt->copy(),
+                                note: 'Ticket reopened due to recurring issue'
+                            );
+
+                            $historyRows[] = $this->makeHistoryRow(
+                                fromStatus: 'in_progress',
+                                toStatus: 'resolved',
+                                changedBy: $holderId,
+                                changedAt: $finalResolvedAt->copy(),
+                                note: 'Issue resolved after reopen'
+                            );
+                        } else {
+                            $historyRows[] = $this->makeHistoryRow(
+                                fromStatus: 'in_progress',
+                                toStatus: 'resolved',
+                                changedBy: $holderId,
+                                changedAt: $finalResolvedAt->copy(),
+                                note: 'Issue resolved'
+                            );
+                        }
+
+                        $resolvedAt = $finalResolvedAt->copy();
+                        $updatedAt = $resolvedAt->copy();
+
+                        if ($status === 'closed') {
+                            $closedAt = $resolvedAt->copy()->addMinutes($faker->numberBetween(5, 120));
+                            $updatedAt = $closedAt->copy();
+
+                            $historyRows[] = $this->makeHistoryRow(
+                                fromStatus: 'resolved',
+                                toStatus: 'closed',
+                                changedBy: $createdBy,
+                                changedAt: $closedAt->copy(),
+                                note: 'Ticket closed'
+                            );
+                        }
                     }
                 }
             }
@@ -281,7 +309,7 @@ class TicketSeeder extends Seeder
             }
         }
 
-        $this->command->info('80 tickets seeded successfully with updated Master Data ticket code format.');
+        $this->command->info('80 tickets seeded successfully. Non-IT tickets are auto-closed; IT tickets use workflow statuses.');
     }
 
     private function resetTicketTables(): void
@@ -333,7 +361,7 @@ class TicketSeeder extends Seeder
         bool $isBreached,
         FakerGenerator $faker
     ): Carbon {
-        if (!$slaDeadlineAt) {
+        if (! $slaDeadlineAt) {
             $slaDeadlineAt = $createdAt->copy()->addHours(24);
         }
 
@@ -383,6 +411,11 @@ class TicketSeeder extends Seeder
             ->replace('-', '_')
             ->replace(' ', '_')
             ->toString();
+    }
+
+    private function isItTeam(Team $team): bool
+    {
+        return $this->normalizeCode($team->code ?: $team->name) === 'it';
     }
 
     private function makeTitle(Team $team, Category $category, IssueType $issueType, FakerGenerator $faker): string

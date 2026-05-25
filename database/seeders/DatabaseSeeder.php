@@ -12,14 +12,15 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // 1) Admin utama
+        // 1) Admin utama dan Master Data source of truth
         $this->call([
             AdminUserSeeder::class,
+            MasterDataSeeder::class,
         ]);
 
         // 2) User dummy CS
         User::updateOrCreate(
-            ['email' => 'cs@example.com'],
+            ['email' => 'cs@henanputihrai.com'],
             [
                 'name' => 'Test CS',
                 'role' => 'cs',
@@ -29,7 +30,7 @@ class DatabaseSeeder extends Seeder
 
         // 3) User dummy IT
         User::updateOrCreate(
-            ['email' => 'it@example.com'],
+            ['email' => 'it@henanputihrai.com'],
             [
                 'name' => 'Test IT',
                 'role' => 'it',
@@ -37,7 +38,17 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // 4) Seeder ticket random
+        // 4) User dummy SPV
+        User::updateOrCreate(
+            ['email' => 'spv@henanputihrai.com'],
+            [
+                'name' => 'Test SPV',
+                'role' => 'supervisor',
+                'password' => bcrypt('password'),
+            ]
+        );
+
+        // 5) Seeder ticket random
         $this->call([
             TicketSeeder::class,
         ]);

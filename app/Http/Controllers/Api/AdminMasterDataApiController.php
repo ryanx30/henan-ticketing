@@ -13,15 +13,20 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
 class AdminMasterDataApiController extends BaseApiController
 {
     public function index(Request $request)
     {
+        Gate::authorize('viewAny', Category::class);
+
         $type = (string) $request->query('type', 'categories');
         $search = trim((string) $request->query('q', ''));
         $perPage = (int) $request->query('per_page', 10);
+        $sortBy = (string) $request->query('sort_by', '');
+        $sortDir = strtolower((string) $request->query('sort_dir', 'asc')) === 'desc' ? 'desc' : 'asc';
 
         if (!in_array($perPage, [10, 25, 50], true)) {
             $perPage = 10;
@@ -32,6 +37,8 @@ class AdminMasterDataApiController extends BaseApiController
         if ($search !== '') {
             $this->applySearch($type, $query, $search);
         }
+
+        $this->applySort($type, $query, $sortBy, $sortDir);
 
         $paginator = $query->paginate($perPage)->withQueryString();
 
@@ -55,6 +62,8 @@ class AdminMasterDataApiController extends BaseApiController
 
     public function store(Request $request, string $type)
     {
+        Gate::authorize('create', $this->modelClassForType($type));
+
         $validated = $this->validatePayload($request, $type);
 
         $row = match ($type) {
@@ -76,14 +85,14 @@ class AdminMasterDataApiController extends BaseApiController
             'teams' => Team::create([
                 'code_num' => $this->prepareNumericCode($validated['code_num'], 1),
                 'name' => trim($validated['name']),
-                'code' => Str::slug(trim($validated['code'])),
+                'code' => $this->prepareSystemCode($validated['code']),
                 'is_active' => (bool) ($validated['is_active'] ?? true),
             ]),
 
             'priorities' => Priority::create([
                 'code_num' => $this->prepareNumericCode($validated['code_num'], 1),
                 'name' => trim($validated['name']),
-                'code' => Str::slug(trim($validated['code'])),
+                'code' => $this->prepareSystemCode($validated['code']),
                 'sort_order' => (int) ($validated['sort_order'] ?? 0),
                 'is_active' => (bool) ($validated['is_active'] ?? true),
             ]),
@@ -121,6 +130,7 @@ class AdminMasterDataApiController extends BaseApiController
     public function update(Request $request, string $type, int $id)
     {
         $row = $this->findRow($type, $id);
+        Gate::authorize('update', $row);
         $beforeRow = $this->reloadRelations($type, $row);
         $before = $this->transformRow($type, $beforeRow);
         $validated = $this->validatePayload($request, $type, $id);
@@ -144,14 +154,14 @@ class AdminMasterDataApiController extends BaseApiController
             'teams' => $row->update([
                 'code_num' => $this->prepareNumericCode($validated['code_num'], 1),
                 'name' => trim($validated['name']),
-                'code' => Str::slug(trim($validated['code'])),
+                'code' => $this->prepareSystemCode($validated['code']),
                 'is_active' => (bool) ($validated['is_active'] ?? true),
             ]),
 
             'priorities' => $row->update([
                 'code_num' => $this->prepareNumericCode($validated['code_num'], 1),
                 'name' => trim($validated['name']),
-                'code' => Str::slug(trim($validated['code'])),
+                'code' => $this->prepareSystemCode($validated['code']),
                 'sort_order' => (int) ($validated['sort_order'] ?? 0),
                 'is_active' => (bool) ($validated['is_active'] ?? true),
             ]),
@@ -189,6 +199,7 @@ class AdminMasterDataApiController extends BaseApiController
     public function destroy(Request $request, string $type, int $id)
     {
         $row = $this->findRow($type, $id);
+        Gate::authorize('delete', $row);
         $row = $this->reloadRelations($type, $row);
         $before = $this->transformRow($type, $row);
         $entityLabel = $this->entityLabel($type, $row);
@@ -213,35 +224,109 @@ class AdminMasterDataApiController extends BaseApiController
         return $this->success([], $this->label($type) . ' deleted successfully.');
     }
 
+
+    /**
+     * Resolve the model class for policy checks before creating rows.
+     */
+    protected function modelClassForType(string $type): string
+    {
+        return match ($type) {
+            'categories' => Category::class,
+            'issue-types' => IssueType::class,
+            'teams' => Team::class,
+            'priorities' => Priority::class,
+            'sla-rules' => SlaRule::class,
+            default => abort(404),
+        };
+    }
     protected function resolveQuery(string $type): array
     {
         return match ($type) {
             'categories' => [
                 Category::class,
-                Category::query()->latest('id'),
+                Category::query(),
             ],
 
             'issue-types' => [
                 IssueType::class,
-                IssueType::query()->with('category')->latest('id'),
+                IssueType::query()->with('category'),
             ],
 
             'teams' => [
                 Team::class,
-                Team::query()->latest('id'),
+                Team::query(),
             ],
 
             'priorities' => [
                 Priority::class,
-                Priority::query()->orderBy('sort_order')->orderBy('id'),
+                Priority::query(),
             ],
 
             'sla-rules' => [
                 SlaRule::class,
-                SlaRule::query()->with(['team', 'priority'])->latest('id'),
+                SlaRule::query()->with(['team', 'priority']),
             ],
 
             default => abort(404),
+        };
+    }
+
+    protected function applySort(string $type, Builder $query, string $sortBy, string $sortDir): void
+    {
+        $allowed = [
+            'categories' => ['code_num', 'name', 'slug', 'is_active', 'created_at'],
+            'issue-types' => ['category', 'code_num', 'name', 'slug', 'is_active'],
+            'teams' => ['code_num', 'name', 'code', 'is_active', 'created_at'],
+            'priorities' => ['code_num', 'name', 'code', 'sort_order', 'is_active'],
+            'sla-rules' => ['team', 'priority', 'hours', 'is_active'],
+        ];
+
+        if (!in_array($sortBy, $allowed[$type] ?? [], true)) {
+            $this->applyDefaultSort($type, $query);
+
+            return;
+        }
+
+        match ($type) {
+            'issue-types' => match ($sortBy) {
+                'category' => $query
+                    ->orderBy(Category::query()
+                        ->select('name')
+                        ->whereColumn('categories.id', 'issue_types.category_id'), $sortDir)
+                    ->orderBy('issue_types.id'),
+                default => $query->orderBy('issue_types.' . $sortBy, $sortDir)->orderBy('issue_types.id'),
+            },
+
+            'sla-rules' => match ($sortBy) {
+                'team' => $query
+                    ->orderBy(Team::query()
+                        ->select('name')
+                        ->whereColumn('teams.id', 'sla_rules.team_id'), $sortDir)
+                    ->orderBy('sla_rules.id'),
+                'priority' => $query
+                    ->orderBy(Priority::query()
+                        ->select('name')
+                        ->whereColumn('priorities.id', 'sla_rules.priority_id'), $sortDir)
+                    ->orderBy('sla_rules.id'),
+                default => $query->orderBy('sla_rules.' . $sortBy, $sortDir)->orderBy('sla_rules.id'),
+            },
+
+            'categories' => $query->orderBy('categories.' . $sortBy, $sortDir)->orderBy('categories.id'),
+            'teams' => $query->orderBy('teams.' . $sortBy, $sortDir)->orderBy('teams.id'),
+            'priorities' => $query->orderBy('priorities.' . $sortBy, $sortDir)->orderBy('priorities.id'),
+            default => $this->applyDefaultSort($type, $query),
+        };
+    }
+
+    protected function applyDefaultSort(string $type, Builder $query): void
+    {
+        match ($type) {
+            'categories' => $query->latest('id'),
+            'issue-types' => $query->latest('id'),
+            'teams' => $query->latest('id'),
+            'priorities' => $query->orderBy('sort_order')->orderBy('id'),
+            'sla-rules' => $query->latest('id'),
+            default => null,
         };
     }
 
@@ -349,6 +434,8 @@ class AdminMasterDataApiController extends BaseApiController
                     'required',
                     'string',
                     'max:50',
+                    'regex:/^[A-Za-z][A-Za-z0-9_ -]*$/',
+                    'not_regex:/^\d+$/',
                     Rule::unique('teams', 'code')->ignore($id),
                 ],
                 'is_active' => ['nullable', 'boolean'],
@@ -370,6 +457,8 @@ class AdminMasterDataApiController extends BaseApiController
                     'required',
                     'string',
                     'max:50',
+                    'regex:/^[A-Za-z][A-Za-z0-9_ -]*$/',
+                    'not_regex:/^\d+$/',
                     Rule::unique('priorities', 'code')->ignore($id),
                 ],
                 'sort_order' => ['nullable', 'integer', 'min:0'],
@@ -529,6 +618,17 @@ class AdminMasterDataApiController extends BaseApiController
             'sla-rules' => ($row->team?->name ?? 'Team') . ' / ' . ($row->priority?->name ?? 'Priority'),
             default => (string) ($row->name ?? $row->code ?? $row->slug ?? $row->id),
         };
+    }
+
+    protected function prepareSystemCode(string $value): string
+    {
+        return Str::of($value)
+            ->lower()
+            ->replace(['-', ' '], '_')
+            ->replaceMatches('/[^a-z0-9_]/', '')
+            ->replaceMatches('/_+/', '_')
+            ->trim('_')
+            ->toString();
     }
 
     protected function prepareNumericCode(string $value, int $length): string

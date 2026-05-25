@@ -30,6 +30,9 @@ class UserFactory extends Factory
             'password'          => static::$password ??= Hash::make('password'),
             'remember_token'    => Str::random(10),
 
+            // Keep test and seeded users active by default; inactive users must be explicit.
+            'is_active'         => true,
+
             // default role untuk user hasil factory
             'role'              => 'cs',
         ];

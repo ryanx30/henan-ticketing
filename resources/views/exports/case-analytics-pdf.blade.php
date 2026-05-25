@@ -167,7 +167,7 @@
                         <tr>
                             <th>Category</th>
                             <th>Tickets</th>
-                            <th>Top Team</th>
+                            <th>Team with Most Tickets</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -192,7 +192,7 @@
                             <th>Issue Type</th>
                             <th>Category</th>
                             <th>Tickets</th>
-                            <th>Top Team</th>
+                            <th>Team with Most Tickets</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -264,6 +264,38 @@
                 </table>
             </td>
 
+            <td>
+                <h2>Top Teams</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Team</th>
+                            <th>Tickets</th>
+                            <th>Resolved</th>
+                            <th>Avg. Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse (($topTeamRows ?? []) as $row)
+                            <tr>
+                                <td>{{ $row[0] }}</td>
+                                <td>{{ $row[1] }}</td>
+                                <td>{{ $row[2] }}</td>
+                                <td>{{ $row[3] }}</td>
+                                <td>{{ $row[4] }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="5">No data available</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </td>
+        </tr>
+    </table>
+
+    <table class="two-column">
+        <tr>
             <td>
                 <h2>Peak Time Ticket Volume</h2>
                 <table>

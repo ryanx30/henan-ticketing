@@ -4,12 +4,15 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Cache;
 
 class Ticket extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'ticket_code',
@@ -55,6 +58,146 @@ class Ticket extends Model
         'closed_at' => 'datetime',
         'request_time' => 'datetime',
     ];
+
+
+    public const TEAM_ID_BY_CODE_CACHE_PREFIX = 'tickets:team-id-by-code:';
+    public const PRIORITY_ID_BY_CODE_CACHE_PREFIX = 'tickets:priority-id-by-code:';
+
+    public static function cachedTeamIdForCode(string $code): ?int
+    {
+        $code = self::normalizeLookupCode($code);
+
+        if ($code === '') {
+            return null;
+        }
+
+        $id = Cache::rememberForever(self::TEAM_ID_BY_CODE_CACHE_PREFIX . $code, function () use ($code) {
+            return Team::query()
+                ->where('code', $code)
+                ->value('id');
+        });
+
+        return $id ? (int) $id : null;
+    }
+
+    public static function cachedPriorityIdForCode(string $code): ?int
+    {
+        $code = self::normalizeLookupCode($code);
+
+        if ($code === '') {
+            return null;
+        }
+
+        $id = Cache::rememberForever(self::PRIORITY_ID_BY_CODE_CACHE_PREFIX . $code, function () use ($code) {
+            return Priority::query()
+                ->where('code', $code)
+                ->value('id');
+        });
+
+        return $id ? (int) $id : null;
+    }
+
+    public static function forgetTeamCodeCache(?string $code): void
+    {
+        $code = self::normalizeLookupCode((string) $code);
+
+        if ($code !== '') {
+            Cache::forget(self::TEAM_ID_BY_CODE_CACHE_PREFIX . $code);
+        }
+    }
+
+    public static function forgetPriorityCodeCache(?string $code): void
+    {
+        $code = self::normalizeLookupCode((string) $code);
+
+        if ($code !== '') {
+            Cache::forget(self::PRIORITY_ID_BY_CODE_CACHE_PREFIX . $code);
+        }
+    }
+
+    public function scopeForTeamCode(Builder $query, string $code): Builder
+    {
+        $code = self::normalizeLookupCode($code);
+        $teamId = self::cachedTeamIdForCode($code);
+
+        return $query->where(function (Builder $query) use ($code, $teamId) {
+            if ($teamId) {
+                $query->where('team_id', $teamId)
+                    ->orWhere('team', $code);
+
+                return;
+            }
+
+            $query->where('team', $code);
+        });
+    }
+
+    public function scopeForPriorityCode(Builder $query, string $code): Builder
+    {
+        $code = self::normalizeLookupCode($code);
+        $priorityId = self::cachedPriorityIdForCode($code);
+
+        return $query->where(function (Builder $query) use ($code, $priorityId) {
+            if ($priorityId) {
+                $query->where('priority_id', $priorityId)
+                    ->orWhere('priority', $code);
+
+                return;
+            }
+
+            $query->where('priority', $code);
+        });
+    }
+
+    private static function normalizeLookupCode(string $code): string
+    {
+        return trim(strtolower($code));
+    }
+
+    public function isTeamCode(string $code): bool
+    {
+        if ($this->relationLoaded('teamMaster') && $this->teamMaster) {
+            return $this->teamMaster->code === $code;
+        }
+
+        return $this->team === $code;
+    }
+
+    public function displayTeamCode(): string
+    {
+        if ($this->relationLoaded('teamMaster') && $this->teamMaster) {
+            return (string) $this->teamMaster->code;
+        }
+
+        return (string) $this->team;
+    }
+
+    public function displayPriorityCode(): string
+    {
+        if ($this->relationLoaded('priorityMaster') && $this->priorityMaster) {
+            return (string) $this->priorityMaster->code;
+        }
+
+        return (string) $this->priority;
+    }
+
+    public function displayCategoryName(): string
+    {
+        if ($this->relationLoaded('categoryMaster') && $this->categoryMaster) {
+            return (string) $this->categoryMaster->name;
+        }
+
+        return (string) $this->category;
+    }
+
+    public function displayIssueTypeName(): string
+    {
+        if ($this->relationLoaded('issueTypeMaster') && $this->issueTypeMaster) {
+            return (string) $this->issueTypeMaster->name;
+        }
+
+        return (string) $this->issue_type;
+    }
 
     public function client(): BelongsTo
     {

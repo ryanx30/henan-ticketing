@@ -27,11 +27,11 @@
         <?php echo $__env->make('partials.sidebar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
         
-        <div class="flex-1 flex flex-col">
+        <div class="min-w-0 flex-1 flex flex-col">
             <?php echo $__env->make('layouts.navigation', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
             
-            <main class="flex-1 bg-gray-100">
+            <main class="min-w-0 flex-1 bg-gray-100">
                 <?php echo e($slot); ?>
 
             </main>

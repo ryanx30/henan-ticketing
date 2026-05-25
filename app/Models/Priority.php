@@ -19,6 +19,24 @@ class Priority extends Model
         'is_active' => 'boolean',
     ];
 
+
+    protected static function booted(): void
+    {
+        static::saving(function (Priority $priority) {
+            Ticket::forgetPriorityCodeCache($priority->code);
+            Ticket::forgetPriorityCodeCache($priority->getOriginal('code'));
+        });
+
+        static::saved(function (Priority $priority) {
+            Ticket::forgetPriorityCodeCache($priority->code);
+        });
+
+        static::deleted(function (Priority $priority) {
+            Ticket::forgetPriorityCodeCache($priority->code);
+            Ticket::forgetPriorityCodeCache($priority->getOriginal('code'));
+        });
+    }
+
     public function slaRules(): HasMany
     {
         return $this->hasMany(SlaRule::class, 'priority_id');

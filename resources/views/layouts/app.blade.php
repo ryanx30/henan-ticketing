@@ -27,11 +27,11 @@
         @include('partials.sidebar')
 
         {{-- Main area --}}
-        <div class="flex-1 flex flex-col">
+        <div class="min-w-0 flex-1 flex flex-col">
             @include('layouts.navigation')
 
             {{-- Page Content --}}
-            <main class="flex-1 bg-gray-100">
+            <main class="min-w-0 flex-1 bg-gray-100">
                 {{ $slot }}
             </main>
         </div>

@@ -10,15 +10,16 @@ use App\Models\SlaRule;
 use App\Models\Team;
 use App\Models\Ticket;
 use App\Models\TicketAttachment;
-use App\Models\TicketStatusHistory;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class TicketService
 {
     public function __construct(
-        private TicketCodeService $ticketCodeService
+        private TicketCodeService $ticketCodeService,
+        private TicketWorkflowService $ticketWorkflowService
     ) {
     }
 
@@ -27,18 +28,20 @@ class TicketService
         [$team, $category, $issueType, $priority] = $this->resolveMasterDataFromIds($validated);
 
         $slaHours = $this->getSlaHoursForTicket($team, $priority);
-        $status = $team->code === 'it' ? 'new' : 'closed';
+        $isItTeam = $this->isItTeam($team);
+        $status = $isItTeam ? 'new' : 'closed';
 
-        return DB::transaction(function () use ($validated, $user, $attachment, $team, $category, $issueType, $priority, $slaHours, $status) {
+        return DB::transaction(function () use ($validated, $user, $attachment, $team, $category, $issueType, $priority, $slaHours, $status, $isItTeam) {
             $client = Client::resolveForTicket($validated);
-            $slaDeadline = $team->code === 'it' && $slaHours ? now()->addHours($slaHours) : null;
+            $completedAt = $status === 'closed' ? now() : null;
+            $slaDeadline = $isItTeam && $slaHours ? now()->addHours($slaHours) : null;
 
             $ticket = Ticket::create([
                 'ticket_code'     => $this->ticketCodeService->generate($team, $category, $issueType, $priority),
                 'title'           => $validated['title'],
                 'description'     => $validated['description'],
                 'priority'        => $priority->code,
-                'team'            => $team->code,
+                'team'            => $this->normalizeTeamCode($team),
                 'team_id'         => $team->id,
                 'category_id'     => $category->id,
                 'issue_type_id'   => $issueType->id,
@@ -57,18 +60,27 @@ class TicketService
                 'flow_type'       => $validated['flow_type'] ?? null,
                 'request_time'    => $validated['request_time'] ?? null,
                 'internal_notes'  => $validated['internal_notes'] ?? null,
-                'resolved_at'     => $status === 'resolved' ? now() : null,
-                'closed_at'       => $status === 'closed' ? now() : null,
+                // Non-IT tickets are direct-closed historical records.
+                // They need both completion timestamps so reports/history do not treat them as active work.
+                'resolved_at'     => $completedAt,
+                'closed_at'       => $completedAt,
             ]);
 
-            TicketStatusHistory::create([
-                'ticket_id'   => $ticket->id,
-                'from_status' => null,
-                'to_status'   => $status,
-                'changed_by'  => $user->id,
-                'changed_at'  => now(),
-                'note'        => 'Initial status on ticket creation',
-            ]);
+            $initialStatusNote = $isItTeam
+                ? 'Initial status on ticket creation'
+                : 'Ticket auto-closed because it is routed to a non-IT team.';
+
+            $this->ticketWorkflowService->transition(
+                $ticket,
+                $status,
+                $user,
+                $initialStatusNote,
+                [
+                    'action' => 'created_status',
+                    'description' => 'Created initial ticket status.',
+                    'force_initial_history' => true,
+                ]
+            );
 
             if ($attachment) {
                 $this->storeAttachment($ticket, $attachment, $user);
@@ -83,31 +95,40 @@ class TicketService
         [$team, $category, $issueType, $priority] = $this->resolveMasterDataFromIds($validated);
         $slaHours = $this->getSlaHoursForTicket($team, $priority);
 
-        DB::transaction(function () use ($ticket, $validated, $user, $team, $category, $issueType, $priority, $slaHours) {
-            $oldStatus = $ticket->status;
-            $oldTeam = $ticket->team;
-            $oldPriority = $ticket->priority;
+        return DB::transaction(function () use ($ticket, $validated, $user, $team, $category, $issueType, $priority, $slaHours) {
+            /** @var Ticket $freshTicket */
+            $freshTicket = Ticket::query()
+                ->whereKey($ticket->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-            $newTeam = $team->code;
+            $oldTeam = $freshTicket->team;
+            $oldPriority = $freshTicket->priority;
+
+            $newTeam = $this->normalizeTeamCode($team);
             $newPriority = $priority->code;
-            $newStatus = $validated['status'];
+            $newStatus = $this->ticketWorkflowService->normalizeStatus($validated['status']);
 
             if ($newTeam !== 'it') {
-                $newStatus = 'closed';
-                $ticket->sla_deadline_at = null;
-                $ticket->holder_id = null;
-                $ticket->claimed_at = null;
+                $newStatus = TicketWorkflowService::STATUS_CLOSED;
+                $freshTicket->sla_deadline_at = null;
+                $freshTicket->holder_id = null;
+                $freshTicket->claimed_at = null;
             }
 
             if (
                 $newTeam === 'it' &&
-                in_array($newStatus, ['new', 'in_progress', 'waiting_info'], true) &&
-                ($oldTeam !== $newTeam || $oldPriority !== $newPriority || !$ticket->sla_deadline_at)
+                in_array($newStatus, [
+                    TicketWorkflowService::STATUS_NEW,
+                    TicketWorkflowService::STATUS_IN_PROGRESS,
+                    TicketWorkflowService::STATUS_WAITING_INFO,
+                ], true) &&
+                ($oldTeam !== $newTeam || $oldPriority !== $newPriority || !$freshTicket->sla_deadline_at)
             ) {
-                $ticket->sla_deadline_at = $slaHours ? now()->addHours($slaHours) : null;
+                $freshTicket->sla_deadline_at = $slaHours ? now()->addHours($slaHours) : null;
             }
 
-            $ticket->fill([
+            $freshTicket->fill([
                 'title'         => $validated['title'],
                 'description'   => $validated['description'],
                 'priority'      => $newPriority,
@@ -116,34 +137,27 @@ class TicketService
                 'category_id'   => $category->id,
                 'issue_type_id' => $issueType->id,
                 'priority_id'   => $priority->id,
-                'status'        => $newStatus,
                 'category'      => $category->name,
                 'issue_type'    => $issueType->name,
             ]);
 
-            if ($newStatus === 'resolved' && !$ticket->resolved_at) {
-                $ticket->resolved_at = now();
+            $freshTicket->save();
+
+            if ($this->ticketWorkflowService->normalizeStatus((string) $freshTicket->status) !== $newStatus) {
+                $freshTicket = $this->ticketWorkflowService->transition(
+                    $freshTicket,
+                    $newStatus,
+                    $user,
+                    'Status updated from ticket edit.',
+                    [
+                        'action' => 'status_changed',
+                        'description' => 'Changed ticket status from edit page.',
+                    ]
+                );
             }
 
-            if ($newStatus === 'closed' && !$ticket->closed_at) {
-                $ticket->closed_at = now();
-            }
-
-            $ticket->save();
-
-            if ($oldStatus !== $newStatus) {
-                TicketStatusHistory::create([
-                    'ticket_id'   => $ticket->id,
-                    'from_status' => $oldStatus,
-                    'to_status'   => $newStatus,
-                    'changed_by'  => $user->id,
-                    'changed_at'  => now(),
-                    'note'        => 'Status updated from API',
-                ]);
-            }
+            return $freshTicket->fresh(['creator', 'holder', 'client', 'attachments']);
         });
-
-        return $ticket->fresh(['creator', 'holder', 'client', 'attachments']);
     }
 
     public function snapshot(Ticket $ticket): array
@@ -245,15 +259,32 @@ class TicketService
         };
     }
 
+
+    private function normalizeTeamCode(Team $team): string
+    {
+        return str((string) ($team->code ?: $team->name))
+            ->trim()
+            ->lower()
+            ->replace(['-', ' '], '_')
+            ->toString();
+    }
+
+    private function isItTeam(Team $team): bool
+    {
+        return $this->normalizeTeamCode($team) === 'it';
+    }
+
     private function storeAttachment(Ticket $ticket, UploadedFile $file, User $user): void
     {
-        $path = $file->store('ticket-attachments', 'public');
+        // Store uploads on the private local disk. Files must be downloaded through
+        // an authorized controller endpoint instead of being exposed from /storage.
+        $path = $file->store('ticket-attachments/' . $ticket->id, 'local');
 
         TicketAttachment::create([
             'ticket_id'   => $ticket->id,
-            'file_name'   => $file->getClientOriginalName(),
+            'file_name'   => Str::limit($file->getClientOriginalName(), 180, ''),
             'file_path'   => $path,
-            'file_type'   => $file->getClientMimeType(),
+            'file_type'   => $file->getMimeType() ?: $file->getClientMimeType(),
             'file_size'   => $file->getSize(),
             'uploaded_by' => $user->id,
         ]);

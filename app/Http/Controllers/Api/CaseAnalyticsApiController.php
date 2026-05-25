@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Jobs\ExportDataJob;
 use App\Services\CaseAnalyticsService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Str;
 
 class CaseAnalyticsApiController extends BaseApiController
 {
+    private const PDF_EXPORT_TICKET_LIMIT = 5000;
     public function __construct(
         private CaseAnalyticsService $caseAnalyticsService
     ) {
@@ -35,7 +39,38 @@ class CaseAnalyticsApiController extends BaseApiController
             ], 422);
         }
 
-        return $this->caseAnalyticsService->export($timeRange, $team, $format);
+        if ($format === 'pdf') {
+            $ticketCount = $this->caseAnalyticsService->exportTicketCount($timeRange, $team);
+
+            if ($ticketCount > self::PDF_EXPORT_TICKET_LIMIT) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'PDF export is limited to ' . self::PDF_EXPORT_TICKET_LIMIT . ' tickets. Please reduce the time range or team filter, or export as Excel instead.',
+                    'data' => [
+                        'limit' => self::PDF_EXPORT_TICKET_LIMIT,
+                        'estimated_tickets' => $ticketCount,
+                    ],
+                ], 422);
+            }
+        }
+
+        $extension = $format === 'pdf' ? 'pdf' : 'xls';
+        $filename = 'case-analytics-' . $team . '-' . $timeRange . '-' . now()->format('Ymd-His') . '-' . Str::lower(Str::random(6)) . '.' . $extension;
+
+        $batch = Bus::batch([
+            new ExportDataJob('case_analytics_' . ($format === 'pdf' ? 'pdf' : 'excel'), $request->user()->id, [
+                'time_range' => $timeRange,
+                'team' => $team,
+            ], $filename),
+        ])->name('case-analytics-export-' . $filename)->dispatch();
+
+        return $this->success([
+            'queued' => true,
+            'batch_id' => $batch->id,
+            'filename' => $filename,
+            'storage_disk' => 'local',
+            'storage_path' => 'exports/case-analytics/' . $filename,
+        ], 'Case analytics export has been queued.', 202);
     }
 
     private function validatedFilters(Request $request): array

@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\CaseAnalyticsApiController;
 use App\Http\Controllers\Api\AdminUserApiController;
 use App\Http\Controllers\Api\AdminMasterDataApiController;
 use App\Http\Controllers\Api\AdminAuditLogApiController;
+use App\Http\Controllers\Api\ExportBatchController;
 
 /*
 |--------------------------------------------------------------------------
@@ -23,7 +24,7 @@ use App\Http\Controllers\Api\AdminAuditLogApiController;
 |--------------------------------------------------------------------------
 */
 
-Route::middleware(['web', 'auth'])->group(function () {
+Route::middleware(['web', 'auth', 'active', 'throttle:120,1'])->group(function () {
     Route::get('/me', function (Request $request) {
         return response()->json([
             'success' => true,
@@ -40,15 +41,24 @@ Route::middleware(['web', 'auth'])->group(function () {
     // Sidebar stats
     Route::get('/sidebar', [DashboardApiController::class, 'index']);
 
+    // Queued exports
+    Route::middleware('role:cs,it,admin,supervisor')->group(function () {
+        Route::get('/exports/{batchId}/status', [ExportBatchController::class, 'status']);
+        Route::get('/exports/{batchId}/download', [ExportBatchController::class, 'download']);
+    });
+
     // Reports
     Route::middleware('role:cs,it,admin,supervisor')->group(function () {
         Route::get('/reports', [ReportsApiController::class, 'index']);
         Route::get('/reports/export', [ReportsApiController::class, 'export']);
     });
 
-    // Tickets - list/create/update/delete for CS/Admin/Supervisor
+    // Tickets - list access for CS/Admin/Supervisor, mutations for CS/Admin only
     Route::middleware('role:cs,admin,supervisor')->group(function () {
         Route::get('/tickets', [TicketApiController::class, 'index']);
+    });
+
+    Route::middleware('role:cs,admin')->group(function () {
         Route::post('/tickets', [TicketApiController::class, 'store']);
         Route::patch('/tickets/{ticket}', [TicketApiController::class, 'update']);
         Route::delete('/tickets/{ticket}', [TicketApiController::class, 'destroy']);
@@ -69,23 +79,31 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::middleware('role:cs,it,admin,supervisor')->group(function () {
         Route::get('/tickets/{ticket}', [TicketApiController::class, 'show']);
         Route::get('/tickets/{ticket}/similar', [TicketApiController::class, 'similarByTicket']);
+        Route::get('/tickets/{ticket}/attachments/{attachment}/download', [TicketApiController::class, 'downloadAttachment']);
     });
 
-    // IT Queue
+    // IT Queue monitoring
     Route::middleware('role:it,admin,supervisor')->group(function () {
-        Route::get('/it/my-queue', [ITQueueApiController::class, 'myQueue']);
         Route::get('/it/team-queue', [ITQueueApiController::class, 'teamQueue']);
         Route::get('/it/history', [ITQueueApiController::class, 'history']);
         Route::get('/it/history/export', [ITQueueApiController::class, 'exportHistory']);
+    });
 
+    // IT Queue operational actions
+    Route::middleware('role:it,admin')->group(function () {
+        Route::get('/it/my-queue', [ITQueueApiController::class, 'myQueue']);
         Route::post('/it/tickets/{ticket}/claim', [ITQueueApiController::class, 'claim']);
         Route::patch('/it/tickets/{ticket}/status', [ITQueueApiController::class, 'updateStatus']);
     });
 
-    // Resolver Inbox
+    // Resolver Inbox read access
     Route::middleware('role:cs,it,admin,supervisor')->group(function () {
         Route::get('/resolver-inbox', [ResolverInboxApiController::class, 'index']);
         Route::get('/resolver-inbox/{resolverMessage}', [ResolverInboxApiController::class, 'show']);
+    });
+
+    // Resolver Inbox actions
+    Route::middleware('role:cs,it,admin')->group(function () {
         Route::post('/resolver-inbox', [ResolverInboxApiController::class, 'store']);
         Route::patch('/resolver-inbox/{resolverMessage}/read', [ResolverInboxApiController::class, 'markAsRead']);
         Route::delete('/resolver-inbox/{resolverMessage}', [ResolverInboxApiController::class, 'destroy']);

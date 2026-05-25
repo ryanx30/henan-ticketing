@@ -1,6 +1,6 @@
 <x-app-layout>
     <meta name="csrf-token" content="{{ csrf_token() }}">
-
+    {{-- PAGE ROOT: Resolver inbox detail state and authenticated user context --}}
     <div
         id="resolver-message-detail-page"
         data-message-id="{{ $resolverMessage->id }}"
@@ -12,466 +12,288 @@
 
         <div id="page-alert" class="hidden mb-4 rounded p-3 text-sm"></div>
 
-        <div class="mx-auto max-w-6xl space-y-6">
-            {{-- Top bar --}}
-            <div class="flex items-center justify-between">
-                <div>
+        <div class="mx-auto max-w-7xl space-y-6">
+            {{-- HEADER: Back button, ticket title, priority badge, and status badge --}}
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div class="flex items-start gap-4">
                     <a
                         href="{{ route('resolver-inbox.index') }}"
-                        class="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                        aria-label="Back to inbox"
+                        class="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6" />
                         </svg>
-                        Back to Inbox
                     </a>
 
-                    <h1 class="mt-2 text-2xl font-bold text-slate-900">Message Detail</h1>
-                    <p class="mt-1 text-sm text-slate-500">Detail pesan resolver inbox dan konteks ticket terkait.</p>
-                </div>
+                    <div class="min-w-0">
+                        <div class="text-sm font-semibold text-slate-500">Resolver Conversation</div>
+                        <h1 class="mt-1 text-[28px] font-bold leading-tight text-slate-950" x-text="conversationTitle()">
+                            Resolver Conversation
+                        </h1>
 
-                <button
-                    type="button"
-                    @click="openReply()"
-                    class="inline-flex items-center gap-2 rounded-full bg-sky-200 px-5 py-3 text-sm font-semibold text-slate-800 shadow-md transition hover:shadow-lg">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10M3 10l4-4M3 10l4 4M21 21a8 8 0 00-8-8H7" />
-                    </svg>
-                    Reply
-                </button>
+                        <div class="mt-3 flex flex-wrap items-center gap-2">
+                            <span class="font-mono text-sm font-bold text-slate-900" x-text="ticketLabel(ticket)"></span>
+                            <span :class="priorityBadgeClass(ticket?.priority)" x-text="priorityLabel(ticket?.priority)"></span>
+                            <span :class="statusBadgeClass(ticket?.status)" x-text="statusLabel(ticket?.status)"></span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <template x-if="loading">
-                <div class="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-slate-500 shadow-sm">
-                    Loading message detail...
+                <div class="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-slate-500 shadow-sm">
+                    Loading conversation...
                 </div>
             </template>
 
             <template x-if="!loading && !message.id">
-                <div class="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-slate-500 shadow-sm">
+                <div class="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-slate-500 shadow-sm">
                     Message not found.
                 </div>
             </template>
 
-            <div x-show="!loading && message.id" class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                {{-- Left content --}}
-                <div class="space-y-6 lg:col-span-2">
-                    {{-- Main message --}}
-                    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                        <div class="border-b border-slate-200 px-6 py-4">
-                            <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                                <div>
-                                    <h2 class="text-xl font-bold text-slate-900" x-text="displayMessageTitle()"></h2>
+            {{-- MAIN CONTENT: Conversation thread on the left, conversation contacts and ticket snapshot on the right --}}
+            <div x-show="!loading && message.id" class="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_330px]">
+                {{-- LEFT PANEL: Selected private conversation thread --}}
+                <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+                        <div>
+                            <h2 class="text-xl font-bold text-slate-950">Conversation Thread</h2>
+                            <p class="mt-1 text-sm text-slate-500">
+                                <span x-text="selectedRoom()?.title ? 'Private room with ' + selectedRoom().title : 'Messages related to this ticket.'"></span>
+                            </p>
+                        </div>
 
-                                    <div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-                                        <span>Ticket:</span>
-                                        <a
-                                            :href="message.ticket ? ticketUrl(message.ticket.id) : '#'"
-                                            class="font-mono font-semibold text-slate-700 hover:text-blue-600 hover:underline"
-                                            x-text="ticketLabel(message.ticket)">
-                                        </a>
+                        <div class="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
+                            <span x-text="filteredThreadMessages().length"></span> message(s)
+                        </div>
+                    </div>
 
-                                        <span>•</span>
-                                        <span>From:</span>
-                                        <span class="font-medium text-slate-700" x-text="message.sender?.name || '-'"></span>
+                    {{-- MESSAGE AREA: Keep the outer thread wrapper height unchanged; the compact composer gives this area more vertical room --}}
+                    <div class="flex h-[560px] flex-col bg-slate-50">
+                        <div
+                            x-ref="threadScroll"
+                            class="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pt-5 pb-3">
+                            <template x-if="filteredThreadMessages().length === 0">
+                                <div class="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-8 text-center text-sm text-slate-500">
+                                    No visible messages in this room.
+                                </div>
+                            </template>
 
-                                        <span>•</span>
-                                        <span>To:</span>
-                                        <span class="font-medium text-slate-700" x-text="message.recipient?.name || '-'"></span>
-                                    </div>
-
+                            {{-- MESSAGE LIST: Bubble-style messages, aligned by sender --}}
+                            <template x-for="threadMessage in filteredThreadMessages()" :key="threadMessage.id">
+                                <div
+                                    class="flex"
+                                    :class="isMine(threadMessage) ? 'justify-end' : 'justify-start'">
                                     <div
-                                        class="mt-2 text-xs text-slate-400"
-                                        x-show="normalizedStoredSubject()">
-                                        Stored subject:
-                                        <span class="font-medium text-slate-500" x-text="normalizedStoredSubject()"></span>
+                                        class="relative max-w-[78%] rounded-2xl px-4 py-3 shadow-sm"
+                                        :class="isMine(threadMessage)
+                                            ? 'rounded-br-md bg-[#d9f9c7] text-slate-900'
+                                            : 'rounded-bl-md border border-slate-200 bg-white text-slate-900'">
+                                        <div class="mb-2 flex items-start justify-between gap-3">
+                                            <div class="min-w-0">
+                                                <div class="truncate text-sm font-bold text-slate-950" x-text="participantsLabel(threadMessage)"></div>
+                                                <div class="mt-0.5 text-xs text-slate-500" x-text="formatDateTime(threadMessage.created_at)"></div>
+                                            </div>
+
+                                            <div class="relative shrink-0">
+                                                <button
+                                                    type="button"
+                                                    @click.stop="toggleMessageMenu(threadMessage.id)"
+                                                    class="rounded-full p-1 text-slate-400 transition hover:bg-black/5 hover:text-slate-700"
+                                                    aria-label="Message actions">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 14a1.5 1.5 0 110 3 1.5 1.5 0 010-3z" />
+                                                    </svg>
+                                                </button>
+
+                                                <div
+                                                    x-show="activeMenuId === threadMessage.id"
+                                                    @click.outside="activeMenuId = null"
+                                                    x-transition
+                                                    class="absolute right-0 top-8 z-30 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-sm shadow-xl"
+                                                    style="display:none;">
+                                                    <button
+                                                        type="button"
+                                                        @click.stop="openReply(threadMessage)"
+                                                        class="flex w-full items-center gap-3 px-4 py-2.5 text-left text-slate-700 hover:bg-slate-50">
+                                                        <img src="{{ asset('images/icons/reply.png') }}" alt="" class="h-4 w-4 object-contain">
+                                                        <span>Reply</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        @click.stop="copyMessage(threadMessage)"
+                                                        class="flex w-full items-center gap-3 px-4 py-2.5 text-left text-slate-700 hover:bg-slate-50">
+                                                        <img src="{{ asset('images/icons/copy.png') }}" alt="" class="h-4 w-4 object-contain">
+                                                        <span>Copy</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        @click.stop="deleteMessage(threadMessage)"
+                                                        class="flex w-full items-center gap-3 px-4 py-2.5 text-left text-red-600 hover:bg-red-50">
+                                                        <img src="{{ asset('images/icons/delete.png') }}" alt="" class="h-4 w-4 object-contain">
+                                                        <span>Delete</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <template x-if="replyTarget && replyTarget.id === threadMessage.id && !replyContextDismissed">
+                                            <div class="mb-2 rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-600">
+                                                Replying to this message
+                                            </div>
+                                        </template>
+
+                                        <div class="whitespace-pre-line text-[15px] leading-7" x-text="threadMessage.body || '-'"></div>
+
+                                        <template x-if="threadMessage.attachment_name">
+                                            <div class="mt-3 rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-700">
+                                                Attachment: <span x-text="threadMessage.attachment_name"></span>
+                                            </div>
+                                        </template>
                                     </div>
-                                </div>
-
-                                <div class="text-sm text-slate-500" x-text="formatDateTime(message.created_at)"></div>
-                            </div>
-                        </div>
-
-                        <div class="px-6 py-6">
-                            <div class="whitespace-pre-line text-[15px] leading-7 text-slate-700" x-text="message.body || '-'"></div>
-
-                            <template x-if="message.attachment_name">
-                                <div class="mt-5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                                    <div class="text-sm font-semibold text-slate-800">Attachment</div>
-                                    <div class="mt-1 text-sm text-slate-600" x-text="message.attachment_name"></div>
                                 </div>
                             </template>
                         </div>
-                    </div>
 
-                    {{-- Ticket context --}}
-                    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                        <div class="border-b border-slate-200 px-6 py-4">
-                            <h2 class="text-lg font-bold text-slate-900">Related Ticket</h2>
-                        </div>
-
-                        <div class="px-6 py-5">
-                            <template x-if="message.ticket">
-                                <div class="space-y-4">
-                                    <div class="flex flex-wrap items-center gap-3">
-                                        <a
-                                            :href="ticketUrl(message.ticket.id)"
-                                            class="font-mono text-base font-semibold text-slate-900 hover:text-blue-600 hover:underline"
-                                            x-text="ticketLabel(message.ticket)">
-                                        </a>
-
-                                        <span
-                                            class="inline-flex rounded-full px-3 py-1 text-xs font-bold"
-                                            :class="priorityClass(message.ticket.priority)"
-                                            x-text="ucfirst(message.ticket.priority || '-')">
-                                        </span>
-
-                                        <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 uppercase"
-                                            x-text="message.ticket.team || '-'"></span>
+                        {{-- REPLY COMPOSER: Compact chat input. Enter sends, Shift + Enter creates a new line --}}
+                        <form @submit.prevent="submitReply" class="border-t border-slate-200 bg-white px-5 pt-2 pb-2">
+                            <template x-if="replyTarget && !replyContextDismissed">
+                                <div class="mb-2 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm">
+                                    <div class="min-w-0">
+                                        <div class="font-semibold text-slate-700">
+                                            Replying to <span x-text="reply.to_display || '-'" class="text-slate-950"></span>
+                                        </div>
+                                        <div class="truncate text-xs text-slate-500" x-text="truncate(replyTarget.body || '-', 120)"></div>
                                     </div>
-
-                                    <div>
-                                        <div class="text-sm text-slate-500">Title</div>
-                                        <div class="mt-1 font-semibold text-slate-900" x-text="message.ticket.title || '-'"></div>
-                                    </div>
-
-                                    <div>
-                                        <div class="text-sm text-slate-500">Description</div>
-                                        <div class="mt-1 whitespace-pre-line text-sm leading-6 text-slate-700" x-text="message.ticket.description || '-'"></div>
-                                    </div>
+                                    <button type="button" @click.stop.prevent="clearReplyTarget()" aria-label="Cancel reply context" class="ml-3 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-200 hover:text-slate-700">✕</button>
                                 </div>
                             </template>
-                        </div>
+
+                            <div class="flex items-center gap-3 rounded-[26px] border border-slate-200 bg-slate-50 px-4 py-1.5 shadow-sm transition focus-within:border-slate-300 focus-within:bg-white">
+                                <textarea
+                                    x-model="reply.body"
+                                    rows="1"
+                                    @keydown.enter="handleReplyKeydown($event)"
+                                    class="max-h-24 min-h-[32px] flex-1 resize-none border-0 bg-transparent px-0 py-1.5 text-sm leading-5 text-slate-900 outline-none placeholder:text-slate-500 focus:ring-0"
+                                    :placeholder="replyPlaceholder()"></textarea>
+
+                                <button
+                                    type="submit"
+                                    :disabled="submitting || !reply.body.trim()"
+                                    class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#22c55e] shadow-sm transition hover:bg-[#16a34a] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70"
+                                    aria-label="Send message">
+                                    <img src="{{ asset('images/icons/send.png') }}" alt="" class="h-4 w-4 object-contain">
+                                </button>
+                            </div>
+                        </form>
                     </div>
-                </div>
+                </section>
 
-                {{-- Right sidebar --}}
-                <div class="space-y-6">
-                    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                        <div class="border-b border-slate-200 px-6 py-4">
-                            <h2 class="text-lg font-bold text-slate-900">Message Info</h2>
+                {{-- RIGHT SIDEBAR: Conversation contacts on top and compact ticket snapshot below --}}
+                <aside class="space-y-5 lg:self-start">
+                    {{-- CONVERSATION CONTACTS: Private rooms grouped by conversation participant --}}
+                    <section class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <div class="border-b border-slate-200 px-4 py-4">
+                            <h2 class="text-lg font-bold text-slate-950">Conversation Contacts</h2>
+                            <p class="mt-1 text-sm text-slate-500">Choose a private room for this ticket.</p>
                         </div>
 
-                        <div class="space-y-4 px-6 py-5 text-sm">
+                        <div class="max-h-[290px] space-y-2 overflow-y-auto px-3 py-3">
+                            <template x-if="conversationRooms().length === 0">
+                                <div class="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
+                                    No conversation rooms yet.
+                                </div>
+                            </template>
+
+                            <template x-for="room in conversationRooms()" :key="room.key">
+                                <button
+                                    type="button"
+                                    @click="selectConversation(room)"
+                                    class="flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition"
+                                    :class="activeConversationKey === room.key
+                                        ? 'border-sky-200 bg-[#f6f5f4] shadow-sm'
+                                        : 'border-slate-200 bg-white hover:border-sky-100 hover:bg-sky-50/50'">
+                                    <div
+                                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold"
+                                        :class="activeConversationKey === room.key ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-700'"
+                                        x-text="room.avatar">
+                                    </div>
+
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <div class="truncate text-sm font-bold text-slate-950" x-text="room.title"></div>
+                                            <template x-if="room.unreadCount > 0">
+                                                <span class="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white" x-text="room.unreadCount"></span>
+                                            </template>
+                                        </div>
+                                        <p class="mt-1 truncate text-xs font-medium text-slate-600" x-text="room.subtitle"></p>
+                                        <p class="mt-1 text-xs text-slate-500" x-text="room.time"></p>
+                                    </div>
+                                </button>
+                            </template>
+                        </div>
+                    </section>
+
+                    {{-- TICKET SNAPSHOT: Compact ticket context for the active conversation --}}
+                    <section class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <div class="border-b border-slate-200 px-4 py-4">
+                            <h2 class="text-lg font-bold text-slate-950">Ticket Snapshot</h2>
+                        </div>
+
+                        <div class="space-y-4 px-4 py-4 text-sm">
                             <div>
-                                <div class="text-slate-500">Status</div>
-                                <div class="mt-1">
-                                    <span
-                                        class="inline-flex rounded-full px-3 py-1 text-xs font-bold"
-                                        :class="message.is_read ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-800'"
-                                        x-text="message.is_read ? 'Read' : 'Unread'">
-                                    </span>
+                                <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ticket</div>
+                                <div class="mt-1 font-mono text-sm font-bold text-slate-950" x-text="ticketLabel(ticket)"></div>
+                            </div>
+
+                            <div>
+                                <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Title</div>
+                                <div class="mt-1 font-bold leading-snug text-slate-950" x-text="ticket?.title || '-' "></div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Priority</div>
+                                    <div class="mt-1.5">
+                                        <span :class="priorityBadgeClass(ticket?.priority)" x-text="priorityLabel(ticket?.priority)"></span>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Status</div>
+                                    <div class="mt-1.5">
+                                        <span :class="statusBadgeClass(ticket?.status)" x-text="statusLabel(ticket?.status)"></span>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div>
-                                <div class="text-slate-500">Created At</div>
-                                <div class="mt-1 font-medium text-slate-800" x-text="formatDateTime(message.created_at)"></div>
+                            <div class="grid grid-cols-3 gap-3">
+                                <div>
+                                    <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Team</p>
+                                    <p class="mt-2 truncate font-semibold text-slate-950" x-text="ticket.team || '-' "></p>
+                                </div>
+
+                                <div>
+                                    <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Creator</p>
+                                    <p class="mt-2 truncate font-semibold text-slate-950" x-text="ticket.creator?.name || '-' "></p>
+                                </div>
+
+                                <div>
+                                    <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Holder</p>
+                                    <p class="mt-2 truncate font-semibold text-slate-950" x-text="ticket.holder?.name || '-' "></p>
+                                </div>
                             </div>
-
-                            <div>
-                                <div class="text-slate-500">Last Updated</div>
-                                <div class="mt-1 font-medium text-slate-800" x-text="formatDateTime(message.updated_at)"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                        <div class="border-b border-slate-200 px-6 py-4">
-                            <h2 class="text-lg font-bold text-slate-900">Quick Actions</h2>
-                        </div>
-
-                        <div class="space-y-3 px-6 py-5">
-                            <button
-                                type="button"
-                                @click="openReply()"
-                                class="inline-flex w-full items-center justify-center rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
-                                Reply Message
-                            </button>
 
                             <a
-                                :href="message.ticket ? ticketUrl(message.ticket.id) : '#'"
-                                class="inline-flex w-full items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                                Open Ticket Detail
+                                :href="ticket?.id ? ticketUrl(ticket.id) : '#'"
+                                class="inline-flex w-full items-center justify-center rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800">
+                                Open Ticket
                             </a>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        {{-- Reply Modal --}}
-        <div
-            x-show="showReply"
-            x-transition
-            class="fixed inset-0 z-50"
-            style="display:none;">
-            <div class="absolute inset-0 bg-black/20" @click="showReply = false"></div>
-
-            <div class="fixed bottom-0 right-6 z-50 w-full max-w-xl overflow-hidden rounded-t-2xl bg-white shadow-2xl">
-                <div class="flex items-center justify-between bg-slate-100 px-5 py-3">
-                    <h3 class="text-[18px] font-semibold text-slate-900">Reply Message</h3>
-
-                    <button type="button" @click="discardReply()" class="text-slate-500 hover:text-slate-900">
-                        ✕
-                    </button>
-                </div>
-
-                <form @submit.prevent="submitReply" class="p-5">
-                    <div class="border-b border-slate-200 py-2">
-                        <div class="flex items-center gap-4">
-                            <span class="w-16 text-sm text-slate-700">Ticket</span>
-                            <div class="w-full text-sm text-slate-800" x-text="ticketLabel(message.ticket)"></div>
-                        </div>
-                    </div>
-
-                    <div class="border-b border-slate-200 py-2">
-                        <div class="flex items-center gap-4">
-                            <span class="w-16 text-sm text-slate-700">To</span>
-                            <div class="w-full text-sm text-slate-800" x-text="reply.to_display || '-'"></div>
-                        </div>
-                    </div>
-
-                    <div class="border-b border-slate-200 py-2">
-                        <div class="flex items-center gap-4">
-                            <span class="w-16 text-sm text-slate-700">Subject</span>
-                            <input
-                                type="text"
-                                x-model="reply.subject"
-                                class="w-full border-0 bg-transparent text-sm outline-none"
-                                placeholder="Message subject">
-                        </div>
-                    </div>
-
-                    <div class="py-4">
-                        <textarea
-                            x-model="reply.body"
-                            rows="8"
-                            class="w-full resize-none border-0 text-sm outline-none"
-                            placeholder="Write your reply..."></textarea>
-                    </div>
-
-                    <div class="flex items-center justify-between border-t border-slate-200 pt-4">
-                        <button
-                            type="submit"
-                            class="rounded-full bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
-                            :disabled="submitting">
-                            <span x-text="submitting ? 'Sending...' : 'Send'"></span>
-                        </button>
-
-                        <button
-                            type="button"
-                            @click="discardReply()"
-                            class="text-slate-500 hover:text-red-600">
-                            Discard
-                        </button>
-                    </div>
-                </form>
+                    </section>
+                </aside>
             </div>
         </div>
     </div>
-
-    <script>
-        function resolverMessageDetailPage() {
-            return {
-                loading: false,
-                submitting: false,
-                showReply: false,
-
-                messageId: Number(document.getElementById('resolver-message-detail-page')?.dataset.messageId || 0),
-                currentUserId: Number(document.getElementById('resolver-message-detail-page')?.dataset.currentUserId || 0),
-                isIT: document.getElementById('resolver-message-detail-page')?.dataset.isIt === '1',
-
-                message: {},
-
-                reply: {
-                    ticket_id: '',
-                    to_user_id: '',
-                    to_display: '',
-                    subject: '',
-                    body: '',
-                },
-
-                init() {
-                    this.loadMessage();
-                },
-
-                csrf() {
-                    return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-                },
-
-                showAlert(message, type = 'success') {
-                    const el = document.getElementById('page-alert');
-                    el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
-                    el.textContent = message;
-
-                    if (type === 'success') {
-                        el.classList.add('bg-green-100', 'text-green-800');
-                    } else {
-                        el.classList.add('bg-red-100', 'text-red-800');
-                    }
-
-                    setTimeout(() => {
-                        el.classList.add('hidden');
-                    }, 3000);
-                },
-
-                async loadMessage() {
-                    this.loading = true;
-
-                    try {
-                        const res = await fetch(`/api/resolver-inbox/${this.messageId}`, {
-                            headers: {
-                                'Accept': 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
-                            credentials: 'same-origin',
-                        });
-
-                        const result = await res.json();
-
-                        if (!res.ok || !result.success) {
-                            throw new Error(result.message || 'Failed to load message detail');
-                        }
-
-                        this.message = result.data || {};
-                    } catch (error) {
-                        console.error(error);
-                        this.showAlert(error.message || 'Failed to load message detail', 'error');
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-
-                openReply() {
-                    if (!this.message?.id) return;
-
-                    const isSender = Number(this.message.from_user_id) === this.currentUserId;
-                    const targetUser = isSender ? this.message.recipient : this.message.sender;
-
-                    this.reply.ticket_id = this.message.ticket_id || '';
-                    this.reply.to_user_id = targetUser?.id || (isSender ? this.message.to_user_id : this.message.from_user_id) || '';
-                    this.reply.to_display = targetUser ?
-                        `${targetUser.name}${targetUser.email ? ' <' + targetUser.email + '>' : ''}` :
-                        '-';
-                    this.reply.subject = this.buildReplySubject();
-                    this.reply.body = '';
-                    this.showReply = true;
-                },
-
-                buildReplySubject() {
-                    const ticketLabel = this.ticketLabel(this.message.ticket);
-                    const ticketTitle = this.message?.ticket?.title || this.normalizedStoredSubject() || 'Message';
-
-                    return `Reply for ${ticketLabel} - ${ticketTitle}`;
-                },
-
-                discardReply() {
-                    this.reply.ticket_id = '';
-                    this.reply.to_user_id = '';
-                    this.reply.to_display = '';
-                    this.reply.subject = '';
-                    this.reply.body = '';
-                    this.showReply = false;
-                },
-
-                async submitReply() {
-                    if (this.submitting) return;
-                    if (!this.reply.ticket_id || !this.reply.body) return;
-
-                    this.submitting = true;
-
-                    try {
-                        const formData = new FormData();
-                        formData.append('ticket_id', this.reply.ticket_id);
-                        formData.append('subject', this.reply.subject || '');
-                        formData.append('body', this.reply.body || '');
-
-                        const res = await fetch('/api/resolver-inbox', {
-                            method: 'POST',
-                            headers: {
-                                'Accept': 'application/json',
-                                'X-CSRF-TOKEN': this.csrf(),
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
-                            credentials: 'same-origin',
-                            body: formData,
-                        });
-
-                        const result = await res.json();
-
-                        if (!res.ok || !result.success) {
-                            throw new Error(result.message || 'Failed to send reply');
-                        }
-
-                        this.showAlert(result.message || 'Reply sent successfully', 'success');
-                        this.discardReply();
-                    } catch (error) {
-                        console.error(error);
-                        this.showAlert(error.message || 'Failed to send reply', 'error');
-                    } finally {
-                        this.submitting = false;
-                    }
-                },
-
-                ticketUrl(ticketId) {
-                    return `/tickets/${ticketId}`;
-                },
-
-                ticketLabel(ticket) {
-                    return window.HenanApp?.ticketLabel(ticket) ?? '-';
-                },
-
-                displayMessageTitle() {
-                    if (this.message?.ticket?.title) {
-                        return this.message.ticket.title;
-                    }
-
-                    const cleaned = this.normalizedStoredSubject();
-                    return cleaned || 'No subject';
-                },
-
-                normalizedStoredSubject() {
-                    const raw = (this.message?.subject || '').trim();
-                    if (!raw) return '';
-
-                    return raw.replace(/^Reply for\s+#?T-[A-Za-z0-9-]+\s*-\s*/i, '').trim();
-                },
-
-                ucfirst(value) {
-                    if (!value) return '-';
-                    value = String(value);
-                    return value.charAt(0).toUpperCase() + value.slice(1);
-                },
-
-                formatDateTime(value) {
-                    if (!value) return '-';
-                    const date = new Date(value);
-
-                    return date.toLocaleDateString('id-ID', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: '2-digit',
-                    }) + ' ' + date.toLocaleTimeString('id-ID', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                    });
-                },
-
-                priorityClass(priority) {
-                    switch (priority) {
-                        case 'critical':
-                            return 'bg-red-500 text-white';
-                        case 'high':
-                            return 'bg-orange-400 text-white';
-                        case 'medium':
-                            return 'bg-yellow-400 text-slate-900';
-                        case 'low':
-                            return 'bg-slate-300 text-slate-800';
-                        default:
-                            return 'bg-slate-300 text-slate-800';
-                    }
-                }
-            }
-        }
-    </script>
 </x-app-layout>

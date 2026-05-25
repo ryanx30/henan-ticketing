@@ -41,6 +41,8 @@ class RegisteredUserController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => $request->role,
+            // New self-registered users are active by default and can be deactivated later by Admin.
+            'is_active' => true,
         ]);
 
         event(new Registered($user));

@@ -15,7 +15,7 @@ Route::get('/', function () {
     return redirect()->route('dashboard');
 });
 
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'active'])->group(function () {
 
     // Dashboard page
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -28,6 +28,9 @@ Route::middleware(['auth'])->group(function () {
     // Ticket pages
     Route::middleware('role:cs,admin,supervisor')->group(function () {
         Route::get('/tickets', [TicketPageController::class, 'index'])->name('tickets.index');
+    });
+
+    Route::middleware('role:cs,admin')->group(function () {
         Route::get('/tickets/create', [TicketPageController::class, 'create'])->name('tickets.create');
         Route::get('/tickets/{ticket}/edit', [TicketPageController::class, 'edit'])->name('tickets.edit');
     });
@@ -53,12 +56,15 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/resolver-inbox/{resolverMessage}', [ResolverInboxPageController::class, 'show'])->name('resolver-inbox.show');
     });
 
-    // IT Queue pages
+    // IT Queue monitoring pages
     Route::middleware('role:it,admin,supervisor')->group(function () {
-        Route::get('/it/my-queue', [ITQueuePageController::class, 'myQueue'])->name('it.my-queue');
         Route::get('/it/team-queue', [ITQueuePageController::class, 'teamQueue'])->name('it.team-queue');
         Route::get('/it/history', [ITQueuePageController::class, 'history'])->name('it.history');
         Route::get('/it/history/export', [ITQueuePageController::class, 'export'])->name('it.history.export');
+    });
+
+    Route::middleware('role:it,admin')->group(function () {
+        Route::get('/it/my-queue', [ITQueuePageController::class, 'myQueue'])->name('it.my-queue');
     });
 
     // System Control - Master Data is visible for Admin and Supervisor.

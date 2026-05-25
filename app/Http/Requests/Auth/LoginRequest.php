@@ -41,7 +41,14 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
+        // Only active users are allowed to authenticate in pre-production/production.
+        $credentials = [
+            'email' => $this->string('email')->toString(),
+            'password' => $this->string('password')->toString(),
+            'is_active' => true,
+        ];
+
+        if (! Auth::attempt($credentials, $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
