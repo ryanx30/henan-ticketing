@@ -13,6 +13,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
+/**
+ * Builds case analytics payloads from aggregated snapshots or live data when needed.
+ */
 class CaseAnalyticsService
 {
     public function export(string $timeRange, string $team, string $format)

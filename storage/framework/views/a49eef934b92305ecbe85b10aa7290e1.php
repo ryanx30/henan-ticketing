@@ -1,101 +1,22 @@
+
+
+
 <?php
-    use App\Models\ResolverMessage;
+    use App\Services\Notifications\NotificationPayloadService;
+    use App\Support\NavigationMenu;
 
     $user = auth()->user();
     $role = $user?->role;
-
-    $roleLabel = match ($role) {
-        'cs' => 'Customer Service',
-        'it' => 'IT',
-        'admin' => 'Administrator',
-        'supervisor' => 'Supervisor',
-        default => ucfirst((string) $role),
-    };
-
-    $notificationCount = $user
-        ? ResolverMessage::query()
-            ->where('to_user_id', $user->id)
-            ->where('is_read', false)
-            ->count()
-        : 0;
-
-    $mobileMenus = collect([
-        [
-            'label' => 'Dashboard',
-            'href' => '/dashboard',
-            'show' => true,
-            'active' => request()->is('dashboard'),
-        ],
-        [
-            'label' => 'New Ticket',
-            'href' => '/tickets/create',
-            'show' => in_array($role, ['cs', 'admin'], true),
-            'active' => request()->is('tickets/create'),
-        ],
-        [
-            'label' => 'Tickets',
-            'href' => '/tickets',
-            'show' => in_array($role, ['cs', 'admin', 'supervisor'], true),
-            'active' => request()->is('tickets') || (request()->is('tickets/*') && ! request()->is('tickets/create')),
-        ],
-        [
-            'label' => 'Resolver Inbox',
-            'href' => '/resolver-inbox',
-            'show' => true,
-            'active' => request()->is('resolver-inbox') || request()->is('resolver-inbox/*'),
-        ],
-        [
-            'label' => 'Reports',
-            'href' => '/reports',
-            'show' => true,
-            'active' => request()->is('reports') || request()->is('reports/*'),
-        ],
-        [
-            'label' => 'Case Analytics',
-            'href' => '/case-analytics',
-            'show' => in_array($role, ['it', 'admin', 'supervisor'], true),
-            'active' => request()->is('case-analytics') || request()->is('case-analytics/*'),
-        ],
-        [
-            'label' => 'My Queue',
-            'href' => '/it/my-queue',
-            'show' => in_array($role, ['it', 'admin'], true),
-            'active' => request()->is('it/my-queue') || request()->is('it/my-queue/*'),
-        ],
-        [
-            'label' => 'Team Queue',
-            'href' => '/it/team-queue',
-            'show' => in_array($role, ['it', 'admin', 'supervisor'], true),
-            'active' => request()->is('it/team-queue') || request()->is('it/team-queue/*'),
-        ],
-        [
-            'label' => 'History',
-            'href' => '/it/history',
-            'show' => in_array($role, ['it', 'admin', 'supervisor'], true),
-            'active' => request()->is('it/history') || request()->is('it/history/*'),
-        ],
-        [
-            'label' => 'Users',
-            'href' => '/admin/users',
-            'show' => $role === 'admin',
-            'active' => request()->is('admin/users') || request()->is('admin/users/*'),
-        ],
-        [
-            'label' => 'Master Data',
-            'href' => '/admin/master-data',
-            'show' => in_array($role, ['admin', 'supervisor'], true),
-            'active' => request()->is('admin/master-data') || request()->is('admin/master-data/*'),
-        ],
-        [
-            'label' => 'Audit Logs',
-            'href' => '/admin/audit-logs',
-            'show' => $role === 'admin',
-            'active' => request()->is('admin/audit-logs') || request()->is('admin/audit-logs/*'),
-        ],
-    ])->filter(fn (array $menu) => $menu['show'])->values();
+    $roleLabel = NavigationMenu::roleLabel($role);
+    $notificationPayload = $user
+        ? app(NotificationPayloadService::class)->payloadFor($user)
+        : ['count' => 0, 'latest' => []];
+    $notificationCount = (int) ($notificationPayload['count'] ?? 0);
+    $latestNotifications = $notificationPayload['latest'] ?? [];
+    $mobileMenus = NavigationMenu::flatForUser($user);
 ?>
 
-<nav x-data="{ open: false, dropdownOpen: false }" class="bg-white border-b border-gray-200">
+<nav x-data="{ open: false, dropdownOpen: false, notificationOpen: false }" class="shrink-0 bg-white border-b border-gray-200 z-40">
     <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
 
     <div class="w-full px-6">
@@ -108,21 +29,113 @@
             </div>
 
             <div class="hidden sm:flex sm:items-center gap-5">
-                <button type="button" class="relative text-slate-500 hover:text-slate-700">
-                    <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5" />
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M9 17a3 3 0 0 0 6 0" />
-                    </svg>
+                <div class="relative">
+                    <button
+                        type="button"
+                        @click="notificationOpen = !notificationOpen; dropdownOpen = false"
+                        class="relative text-slate-500 hover:text-slate-700 focus:outline-none"
+                        aria-label="Open notifications">
+                        <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5" />
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M9 17a3 3 0 0 0 6 0" />
+                        </svg>
 
-                    <?php if($notificationCount > 0): ?>
-                        <span class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 text-[11px] leading-[18px] text-center rounded-full bg-red-600 text-white">
-                            <?php echo e($notificationCount); ?>
+                        <span
+                            data-notification-count
+                            data-base-count="<?php echo e($notificationCount); ?>"
+                            class="<?php echo e($notificationCount > 0 ? '' : 'hidden'); ?> absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 text-[11px] leading-[18px] text-center rounded-full bg-red-600 text-white">
+                            <?php echo e($notificationCount > 99 ? '99+' : $notificationCount); ?>
 
                         </span>
-                    <?php endif; ?>
-                </button>
+                    </button>
+
+                    <div
+                        x-show="notificationOpen"
+                        @click.outside="notificationOpen = false"
+                        x-transition
+                        class="absolute right-0 mt-3 w-96 max-w-[calc(100vw-2rem)] rounded-2xl bg-white shadow-xl border border-slate-200 z-50 overflow-hidden"
+                        style="display: none;">
+                        <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                            <div>
+                                <div class="text-sm font-semibold text-slate-900">Notifications</div>
+                                <div class="text-xs text-slate-500">Latest actionable updates</div>
+                            </div>
+                            <span
+                                data-notification-summary
+                                class="text-[11px] font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-600">
+                                <?php echo e($notificationCount); ?> active
+                            </span>
+                        </div>
+
+                        <div data-notification-list class="max-h-[420px] overflow-y-auto">
+                            <?php $__empty_1 = true; $__currentLoopData = $latestNotifications; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $notification): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                                <?php
+                                    $notificationAccentClass = match ($notification['type'] ?? null) {
+                                        'sla_breached' => 'bg-red-600',
+                                        'sla_warning' => 'bg-amber-500',
+                                        'waiting_info' => 'bg-violet-600',
+                                        'ticket_reopened' => 'bg-teal-700',
+                                        'team_queue' => 'bg-green-600',
+                                        'ticket_status' => 'bg-sky-600',
+                                        default => 'bg-blue-600',
+                                    };
+                                ?>
+                                <a
+                                    href="<?php echo e($notification['url']); ?>"
+                                    class="group block px-4 py-3 border-b border-slate-100 hover:bg-blue-50/70 transition">
+                                    <div class="flex gap-3">
+                                        <span class="mt-1 h-2.5 w-2.5 rounded-full shrink-0 <?php echo e($notificationAccentClass); ?>"></span>
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-start justify-between gap-3">
+                                                <div class="min-w-0">
+                                                    <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                                        <?php echo e($notification['label']); ?>
+
+                                                    </div>
+                                                    <div class="text-sm font-semibold text-slate-800 truncate group-hover:text-blue-700">
+                                                        <?php echo e($notification['title']); ?>
+
+                                                    </div>
+                                                </div>
+                                                <div class="shrink-0 text-[11px] text-slate-400 whitespace-nowrap">
+                                                    <?php echo e($notification['time']); ?>
+
+                                                </div>
+                                            </div>
+                                            <p class="mt-1 text-xs text-slate-600 line-clamp-2">
+                                                <?php echo e($notification['description']); ?>
+
+                                            </p>
+                                            <div class="mt-1 text-[11px] font-medium text-slate-400 truncate">
+                                                <?php echo e($notification['meta']); ?>
+
+                                            </div>
+                                        </div>
+                                    </div>
+                                </a>
+                            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
+                                <div data-notification-empty class="px-4 py-8 text-center">
+                                    <div class="text-sm font-medium text-slate-700">No active notifications</div>
+                                    <div class="mt-1 text-xs text-slate-500">You're all caught up for now.</div>
+                                </div>
+                            <?php endif; ?>
+
+                            <div data-export-notifications></div>
+                        </div>
+
+                        <div class="grid grid-cols-2 divide-x divide-slate-100 border-t border-slate-100 bg-slate-50">
+                            <a href="<?php echo e(route('resolver-inbox.index', ['unread' => 'unread'])); ?>" class="px-4 py-3 text-center text-xs font-semibold text-slate-600 hover:bg-white hover:text-blue-700">
+                                Resolver Inbox
+                            </a>
+                            <a href="<?php echo e($user?->isIT() ? route('it.my-queue') : route('tickets.index')); ?>" class="px-4 py-3 text-center text-xs font-semibold text-slate-600 hover:bg-white hover:text-blue-700">
+                                <?php echo e($user?->isIT() ? 'My Queue' : 'View Tickets'); ?>
+
+                            </a>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="relative">
                     <button

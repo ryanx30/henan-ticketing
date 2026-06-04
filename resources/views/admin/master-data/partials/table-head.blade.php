@@ -1,3 +1,6 @@
+{{-- ========= MASTER DATA TABLE HEAD ========= --}}
+{{-- Column headers that change based on selected master data type. --}}
+
                         <thead class="bg-[#d5e0e7] text-[#051823]">
                             <tr class="text-left">
                                 {{-- Categories --}}

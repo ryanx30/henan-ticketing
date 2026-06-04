@@ -1,6 +1,9 @@
+{{-- ========= TICKET DETAIL SIDEBAR ========= --}}
+{{-- Quick actions and side metadata for the ticket detail layout. --}}
+
                 {{-- Right --}}
                 <div class="space-y-6">
-                    {{-- Quick action --}}
+                    {{-- ========= QUICK ACTION ========= --}}
                     <div class="rounded-sm border border-slate-200 bg-white shadow-lg">
                         <div class="border-b border-slate-200 px-5 py-4">
                             <h2 class="text-[18px] font-bold text-slate-900">Quick Actions</h2>

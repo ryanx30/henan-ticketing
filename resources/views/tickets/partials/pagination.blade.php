@@ -1,3 +1,6 @@
+{{-- ========= TICKET PAGINATION ========= --}}
+{{-- Alpine-driven pagination without inline onclick handlers. --}}
+
 {{-- Pagination is Alpine-driven to avoid string-built HTML and global onclick handlers. --}}
 <div class="mt-5 flex flex-col gap-3 text-sm text-slate-700 md:flex-row md:items-center md:justify-end">
     <div class="flex items-center gap-2">

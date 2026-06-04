@@ -5,8 +5,12 @@ namespace App\Http\Controllers\Api;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Storage;
+use App\Support\ExportBatchAccess;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
+/**
+ * Tracks queued export batches and exposes polling endpoints for frontend export progress.
+ */
 class ExportBatchController extends BaseApiController
 {
     /**
@@ -27,8 +31,10 @@ class ExportBatchController extends BaseApiController
         $batch = Bus::findBatch($batchId);
 
         if (! $batch) {
-            return $this->error('Export batch was not found.', 404);
+            return $this->notFound('Export batch was not found.');
         }
+
+        ExportBatchAccess::assertAuthorized($request, $batch, $path, $validated['filename']);
 
         $exists = Storage::disk('local')->exists($path);
         $finished = $batch->finished() || ($batch->pendingJobs === 0 && $exists);
@@ -66,6 +72,7 @@ class ExportBatchController extends BaseApiController
         $batch = Bus::findBatch($batchId);
 
         abort_if(! $batch, 404, 'Export batch was not found.');
+        ExportBatchAccess::assertAuthorized($request, $batch, $path, $validated['filename']);
         abort_if($batch->cancelled(), 410, 'Export batch was cancelled.');
         abort_if($batch->hasFailures(), 500, 'Export batch failed.');
         abort_if(! Storage::disk('local')->exists($path), 404, 'Export file was not found.');

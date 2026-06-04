@@ -1,3 +1,19 @@
+/**
+ * IT dashboard page controller.
+ * Loads resolver KPI data, top cases, trend chart data, and queue previews for IT users.
+ */
+
+import { apiGet, apiPost } from '../../utils/apiClient';
+import {
+    formatCountdownClock,
+    formatDateTimeCompact,
+    formatDateTimeShort as formatDateTimeShortValue,
+    formatNumber as formatNumberValue,
+    truncateText,
+} from '../../utils/formatter';
+import { priorityBadgeClass as buildPriorityBadgeClass, statusBadgeClass as buildStatusBadgeClass } from '../../utils/badges';
+import { showPageAlert } from '../../utils/toast';
+
 function dashboardItPage() {
     return {
         loading: false,
@@ -15,6 +31,7 @@ function dashboardItPage() {
         itMyQueue: [],
         itTeamNew: [],
         resolverInbox: [],
+        expandedResolverThreads: {},
         currentUserId: Number(document.getElementById('dashboard-it-page')?.dataset.currentUserId || 0),
         topCases: [],
         trend: {
@@ -44,48 +61,19 @@ function dashboardItPage() {
             if (this.chart) this.chart.destroy();
         },
 
-        csrf() {
-            return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        },
-
         ticketUrl(ticketId) {
             return window.HenanApp.routes.ticketDetail(ticketId);
         },
 
         showAlert(message, type = 'success') {
-            const el = document.getElementById('page-alert');
-            el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
-            el.textContent = message;
-
-            if (type === 'success') {
-                el.classList.add('bg-green-100', 'text-green-800');
-            } else {
-                el.classList.add('bg-red-100', 'text-red-800');
-            }
-
-            setTimeout(() => {
-                el.classList.add('hidden');
-            }, 3000);
+            showPageAlert(message, type);
         },
 
         async loadDashboard() {
             this.loading = true;
 
             try {
-                const response = await fetch(window.HenanApp.routes.api.dashboard, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin'
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to load dashboard');
-                }
-
+                const result = await apiGet(window.HenanApp.routes.api.dashboard);
                 const data = result.data || {};
 
                 this.kpi = data.kpi || this.kpi;
@@ -217,22 +205,7 @@ function dashboardItPage() {
 
         async claimTicket(ticketId) {
             try {
-                const response = await fetch(`/api/it/tickets/${ticketId}/claim`, {
-                    method: 'POST',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': this.csrf(),
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin'
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to claim ticket');
-                }
-
+                const result = await apiPost(`/api/it/tickets/${ticketId}/claim`);
                 this.showAlert(result.message || 'Ticket claimed successfully', 'success');
                 await this.loadDashboard();
             } catch (error) {
@@ -240,9 +213,8 @@ function dashboardItPage() {
                 this.showAlert(error.message || 'Failed to claim ticket', 'error');
             }
         },
-
         formatNumber(value) {
-            return new Intl.NumberFormat('id-ID').format(Number(value || 0));
+            return formatNumberValue(value);
         },
 
         trendText(item) {
@@ -262,20 +234,11 @@ function dashboardItPage() {
         },
 
         truncate(value, limit = 80) {
-            value = String(value || '');
-            if (value.length <= limit) return value;
-            return value.substring(0, limit) + '...';
+            return truncateText(value, limit);
         },
 
         formatTime(value) {
-            if (!value) return '-';
-
-            return new Date(value).toLocaleString('id-ID', {
-                day: '2-digit',
-                month: 'short',
-                hour: '2-digit',
-                minute: '2-digit',
-            });
+            return formatDateTimeCompact(value);
         },
 
         messageRecipientLabel(message) {
@@ -288,6 +251,75 @@ function dashboardItPage() {
 
         messageSnippet(message) {
             return this.truncate(message?.subject || message?.body || '-', 100);
+        },
+
+
+        resolverInboxThreads(limit = 5) {
+            const threads = new Map();
+
+            for (const message of this.resolverInbox || []) {
+                const key = message?.ticket?.id
+                    ? `ticket-${message.ticket.id}`
+                    : `message-${message?.id || Math.random()}`;
+
+                if (!threads.has(key)) {
+                    threads.set(key, {
+                        key,
+                        ticket: message?.ticket || null,
+                        latestMessage: message,
+                        messages: [],
+                    });
+                }
+
+                const thread = threads.get(key);
+                thread.messages.push(message);
+
+                if (this.messageTimestamp(message) > this.messageTimestamp(thread.latestMessage)) {
+                    thread.latestMessage = message;
+                    thread.ticket = message?.ticket || thread.ticket;
+                }
+            }
+
+            return Array.from(threads.values())
+                .map((thread) => ({
+                    ...thread,
+                    messages: thread.messages.sort((a, b) => this.messageTimestamp(b) - this.messageTimestamp(a)),
+                }))
+                .sort((a, b) => this.messageTimestamp(b.latestMessage) - this.messageTimestamp(a.latestMessage))
+                .slice(0, limit);
+        },
+
+        messageTimestamp(message) {
+            const value = message?.created_at || message?.updated_at || null;
+            const timestamp = value ? Date.parse(value) : 0;
+            return Number.isFinite(timestamp) ? timestamp : 0;
+        },
+
+        resolverThreadReplies(thread) {
+            const latestId = Number(thread?.latestMessage?.id || 0);
+
+            return (thread?.messages || [])
+                .filter((message) => Number(message?.id || 0) !== latestId)
+                .sort((a, b) => this.messageTimestamp(b) - this.messageTimestamp(a));
+        },
+
+        threadReplyCount(thread) {
+            return this.resolverThreadReplies(thread).length;
+        },
+
+        threadUnreadCount(thread) {
+            return (thread?.messages || []).filter((message) => this.isUnreadMessage(message)).length;
+        },
+
+        toggleResolverThread(key) {
+            this.expandedResolverThreads = {
+                ...this.expandedResolverThreads,
+                [key]: !this.expandedResolverThreads[key],
+            };
+        },
+
+        isResolverThreadExpanded(key) {
+            return Boolean(this.expandedResolverThreads[key]);
         },
 
         messageUrl(message) {
@@ -328,9 +360,7 @@ function dashboardItPage() {
         },
 
         formatDateTimeShort(value) {
-            return window.HenanApp?.formatDateTimeShort
-                ? window.HenanApp.formatDateTimeShort(value)
-                : this.formatTime(value);
+            return formatDateTimeShortValue(value);
         },
 
         statusLabel(status) {
@@ -346,32 +376,15 @@ function dashboardItPage() {
         },
 
         statusBadgeClass(status) {
-            return window.HenanApp?.statusBadgeClass
-                ? window.HenanApp.statusBadgeClass(status)
-                : 'badge-status-default';
+            return buildStatusBadgeClass(status);
         },
 
         priorityBadgeClass(priority) {
-            return window.HenanApp?.priorityBadgeClass
-                ? window.HenanApp.priorityBadgeClass(priority)
-                : 'badge-priority-default';
+            return buildPriorityBadgeClass(priority);
         },
 
         slaCountdown(deadline) {
-            if (!deadline) return '-';
-
-            const end = new Date(deadline).getTime();
-            const now = Date.now();
-            const diff = end - now;
-
-            if (diff <= 0) return 'OVERDUE';
-
-            const totalSeconds = Math.floor(diff / 1000);
-            const hours = Math.floor(totalSeconds / 3600);
-            const minutes = Math.floor((totalSeconds % 3600) / 60);
-            const seconds = totalSeconds % 60;
-
-            return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            return formatCountdownClock(deadline);
         }
     }
 }

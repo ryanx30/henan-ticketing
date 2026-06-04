@@ -1,3 +1,6 @@
+{{-- ========= TICKET INDEX STYLES ========= --}}
+{{-- Page-specific visual polish for Litepicker and horizontal table scrolling. --}}
+
 {{-- Page-specific visual polish for Litepicker and horizontal table scrolling. --}}
 <style>
     [x-cloak] { display: none !important; }
@@ -113,6 +116,22 @@
     .ticket-table-scroll::-webkit-scrollbar-thumb {
         background: #94a3b8;
         border-radius: 9999px;
+    }
+
+
+    .ticket-index-table {
+        min-width: 0;
+    }
+
+    .ticket-index-table th,
+    .ticket-index-table td {
+        min-width: 0;
+        vertical-align: middle;
+    }
+
+    .ticket-index-table th button {
+        min-width: 0;
+        white-space: nowrap;
     }
 
     thead button {

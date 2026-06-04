@@ -1,3 +1,18 @@
+/**
+ * Resolver inbox detail page controller.
+ * Handles single conversation/detail loading and message actions.
+ */
+
+import { apiDelete, apiGet, apiPost } from '../../utils/apiClient';
+import {
+    priorityBadgeClass as sharedPriorityBadgeClass,
+    priorityLabel as sharedPriorityLabel,
+    statusBadgeClass as sharedStatusBadgeClass,
+    statusLabel as sharedStatusLabel,
+} from '../../utils/badges';
+import { formatDateTime as formatSharedDateTime, formatDateTimeShort as formatSharedDateTimeShort } from '../../utils/formatter';
+import { showPageAlert } from '../../utils/toast';
+
 function resolverMessageDetailPage() {
     return {
         loading: false,
@@ -26,29 +41,9 @@ function resolverMessageDetailPage() {
             this.loadMessage();
         },
 
-        csrf() {
-            return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-        },
 
         showAlert(message, type = 'success') {
-            if (window.HenanApp?.showPageAlert) {
-                window.HenanApp.showPageAlert(message, type);
-                return;
-            }
-
-            const el = document.getElementById('page-alert');
-            if (!el) return;
-
-            el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
-            el.textContent = message;
-
-            if (type === 'success') {
-                el.classList.add('bg-green-100', 'text-green-800');
-            } else {
-                el.classList.add('bg-red-100', 'text-red-800');
-            }
-
-            setTimeout(() => el.classList.add('hidden'), 3000);
+            showPageAlert(message, type);
         },
 
         async loadMessage() {
@@ -56,19 +51,7 @@ function resolverMessageDetailPage() {
             const previousConversationKey = this.activeConversationKey;
 
             try {
-                const res = await fetch(`/api/resolver-inbox/${this.messageId}`, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin',
-                });
-
-                const result = await res.json();
-
-                if (!res.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to load message detail');
-                }
+                const result = await apiGet(`/api/resolver-inbox/${this.messageId}`);
 
                 const data = result.data || {};
 
@@ -286,22 +269,7 @@ function resolverMessageDetailPage() {
                 formData.append('subject', this.reply.subject || this.buildReplySubject());
                 formData.append('body', this.reply.body || '');
 
-                const res = await fetch('/api/resolver-inbox', {
-                    method: 'POST',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': this.csrf(),
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin',
-                    body: formData,
-                });
-
-                const result = await res.json();
-
-                if (!res.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to send reply');
-                }
+                const result = await apiPost('/api/resolver-inbox', formData);
 
                 this.reply.body = '';
                 this.replyContextDismissed = true;
@@ -320,21 +288,7 @@ function resolverMessageDetailPage() {
             if (!confirm('Delete this message?')) return;
 
             try {
-                const res = await fetch(`/api/resolver-inbox/${threadMessage.id}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': this.csrf(),
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin',
-                });
-
-                const result = await res.json();
-
-                if (!res.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to delete message');
-                }
+                const result = await apiDelete(`/api/resolver-inbox/${threadMessage.id}`);
 
                 this.activeMenuId = null;
 
@@ -407,6 +361,15 @@ function resolverMessageDetailPage() {
                 : 'Write a reply...';
         },
 
+
+        attachmentUrl(threadMessage) {
+            if (!threadMessage?.id || !threadMessage?.attachment_name) {
+                return '#';
+            }
+
+            return `/api/resolver-inbox/${threadMessage.id}/attachment/download`;
+        },
+
         ticketUrl(ticketId) {
             return window.HenanApp?.routes?.ticketDetail
                 ? window.HenanApp.routes.ticketDetail(ticketId)
@@ -418,49 +381,27 @@ function resolverMessageDetailPage() {
         },
 
         statusBadgeClass(status) {
-            return window.HenanApp?.statusBadgeClass
-                ? window.HenanApp.statusBadgeClass(status)
-                : 'badge-status-default';
+            return sharedStatusBadgeClass(status);
         },
 
         priorityBadgeClass(priority) {
-            return window.HenanApp?.priorityBadgeClass
-                ? window.HenanApp.priorityBadgeClass(priority)
-                : 'badge-priority-default';
+            return sharedPriorityBadgeClass(priority);
         },
 
         statusLabel(status) {
-            return window.HenanApp?.statusLabel
-                ? window.HenanApp.statusLabel(status)
-                : (status || '-');
+            return sharedStatusLabel(status);
         },
 
         priorityLabel(priority) {
-            return window.HenanApp?.priorityLabel
-                ? window.HenanApp.priorityLabel(priority)
-                : (priority || '-');
+            return sharedPriorityLabel(priority);
         },
 
         formatDateTime(value) {
-            return window.HenanApp?.formatDateTime
-                ? window.HenanApp.formatDateTime(value)
-                : (value || '-');
+            return formatSharedDateTime(value);
         },
 
         formatDateTimeShort(value) {
-            if (!value) return '-';
-
-            const date = new Date(value);
-            const datePart = date.toLocaleDateString('id-ID', {
-                day: '2-digit',
-                month: 'short',
-            });
-            const timePart = date.toLocaleTimeString('id-ID', {
-                hour: '2-digit',
-                minute: '2-digit',
-            });
-
-            return `${datePart}, ${timePart}`;
+            return formatSharedDateTimeShort(value);
         },
 
         truncate(value, max = 120) {

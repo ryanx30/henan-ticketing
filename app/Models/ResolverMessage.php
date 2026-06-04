@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
+/**
+ * Represents follow-up messages exchanged through the resolver inbox.
+ */
 class ResolverMessage extends Model
 {
     use HasFactory, SoftDeletes;

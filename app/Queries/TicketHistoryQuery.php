@@ -7,19 +7,38 @@ use App\Support\TicketStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
+/**
+ * Builds the resolved and closed ticket history query shared by the page and export jobs.
+ */
 final class TicketHistoryQuery
 {
     public function build(Request $request): Builder
+    {
+        return $this->buildFromFilters($this->filtersFromRequest($request));
+    }
+
+    public function buildFromFilters(array $filters): Builder
     {
         $query = Ticket::query()
             ->with(['creator', 'holder', 'teamMaster', 'categoryMaster', 'issueTypeMaster', 'priorityMaster'])
             ->whereIn('status', TicketStatus::completedValues());
 
-        $this->applySearch($query, trim((string) $request->query('q', '')));
-        $this->applyEffectiveDateRange($query, (string) $request->query('date_from', ''), (string) $request->query('date_to', ''));
-        $this->applySorting($query, (string) $request->query('sort_by', 'resolved_at'), (string) $request->query('sort_dir', 'desc'));
+        $this->applySearch($query, trim((string) ($filters['q'] ?? '')));
+        $this->applyEffectiveDateRange($query, (string) ($filters['date_from'] ?? ''), (string) ($filters['date_to'] ?? ''));
+        $this->applySorting($query, (string) ($filters['sort_by'] ?? 'resolved_at'), (string) ($filters['sort_dir'] ?? 'desc'));
 
         return $query;
+    }
+
+    public function filtersFromRequest(Request $request): array
+    {
+        return [
+            'q' => (string) $request->query('q', ''),
+            'date_from' => (string) $request->query('date_from', ''),
+            'date_to' => (string) $request->query('date_to', ''),
+            'sort_by' => (string) $request->query('sort_by', 'resolved_at'),
+            'sort_dir' => (string) $request->query('sort_dir', 'desc'),
+        ];
     }
 
     private function applySearch(Builder $query, string $keyword): void
@@ -62,18 +81,24 @@ final class TicketHistoryQuery
     private function applySorting(Builder $query, string $sortBy, string $sortDir): void
     {
         $sortDir = strtolower($sortDir) === 'asc' ? 'asc' : 'desc';
-        $allowed = ['ticket_code', 'resolved_at', 'closed_at', 'updated_at', 'category', 'team', 'created_at'];
+        $allowed = ['ticket_code', 'resolved_at', 'closed_at', 'updated_at', 'category', 'team', 'created_at', 'duration'];
 
         if (!in_array($sortBy, $allowed, true)) {
             $sortBy = 'resolved_at';
         }
 
-        // Database-agnostic fallback ordering for effective completed date.
         if ($sortBy === 'resolved_at') {
             $query->orderBy('resolved_at', $sortDir)
                 ->orderBy('closed_at', $sortDir)
                 ->orderBy('updated_at', $sortDir)
                 ->orderBy('created_at', $sortDir);
+            return;
+        }
+
+        if ($sortBy === 'duration') {
+            $query->orderBy('created_at', $sortDir)
+                ->orderBy('resolved_at', $sortDir)
+                ->orderBy('closed_at', $sortDir);
             return;
         }
 

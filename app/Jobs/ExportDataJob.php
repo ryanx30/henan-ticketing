@@ -5,7 +5,9 @@ namespace App\Jobs;
 use App\Models\AuditLog;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Queries\TicketHistoryQuery;
 use App\Services\CaseAnalyticsService;
+use App\Services\Tickets\TicketHistoryPresenter;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
@@ -15,9 +17,11 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * Processes queued exports and writes generated files for download polling.
+ */
 class ExportDataJob implements ShouldQueue
 {
     use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
@@ -34,7 +38,11 @@ class ExportDataJob implements ShouldQueue
         $this->onQueue('exports');
     }
 
-    public function handle(CaseAnalyticsService $caseAnalyticsService): void
+    public function handle(
+        CaseAnalyticsService $caseAnalyticsService,
+        TicketHistoryQuery $ticketHistoryQuery,
+        TicketHistoryPresenter $ticketHistoryPresenter
+    ): void
     {
         if ($this->batch()?->cancelled()) {
             return;
@@ -42,9 +50,9 @@ class ExportDataJob implements ShouldQueue
 
         match ($this->type) {
             'reports_csv' => $this->exportReportsCsv(),
-            'ticket_history_csv' => $this->exportTicketHistoryCsv(),
-            'ticket_history_excel' => $this->exportTicketHistoryExcel(),
-            'ticket_history_pdf' => $this->exportTicketHistoryPdf(),
+            'ticket_history_csv' => $this->exportTicketHistoryCsv($ticketHistoryQuery, $ticketHistoryPresenter),
+            'ticket_history_excel' => $this->exportTicketHistoryExcel($ticketHistoryQuery, $ticketHistoryPresenter),
+            'ticket_history_pdf' => $this->exportTicketHistoryPdf($ticketHistoryQuery, $ticketHistoryPresenter),
             'case_analytics_excel' => $this->exportCaseAnalyticsExcel($caseAnalyticsService),
             'case_analytics_pdf' => $this->exportCaseAnalyticsPdf($caseAnalyticsService),
             'audit_logs_csv' => $this->exportAuditLogsCsv(),
@@ -77,37 +85,37 @@ class ExportDataJob implements ShouldQueue
         $this->storeHandle($path, $handle);
     }
 
-    private function exportTicketHistoryCsv(): void
+    private function exportTicketHistoryCsv(TicketHistoryQuery $ticketHistoryQuery, TicketHistoryPresenter $presenter): void
     {
         $path = 'exports/ticket-history/' . $this->filename;
         $handle = fopen('php://temp', 'w+');
         fwrite($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
-        fputcsv($handle, $this->historyHeaders());
+        fputcsv($handle, $presenter->headers());
 
-        $this->historyQuery()->chunkById(500, function (Collection $tickets) use ($handle) {
+        $ticketHistoryQuery->buildFromFilters($this->filters)->chunkById(500, function (Collection $tickets) use ($handle, $presenter) {
             foreach ($tickets as $ticket) {
-                fputcsv($handle, $this->historyRow($ticket));
+                fputcsv($handle, $presenter->row($ticket));
             }
         });
 
         $this->storeHandle($path, $handle);
     }
 
-    private function exportTicketHistoryExcel(): void
+    private function exportTicketHistoryExcel(TicketHistoryQuery $ticketHistoryQuery, TicketHistoryPresenter $presenter): void
     {
         $path = 'exports/ticket-history/' . $this->filename;
         $handle = fopen('php://temp', 'w+');
 
         fwrite($handle, '<html><head><meta charset="UTF-8"></head><body><table border="1"><thead><tr>');
-        foreach ($this->historyHeaders() as $header) {
+        foreach ($presenter->headers() as $header) {
             fwrite($handle, '<th>' . e($header) . '</th>');
         }
         fwrite($handle, '</tr></thead><tbody>');
 
-        $this->historyQuery()->chunkById(500, function (Collection $tickets) use ($handle) {
+        $ticketHistoryQuery->buildFromFilters($this->filters)->chunkById(500, function (Collection $tickets) use ($handle, $presenter) {
             foreach ($tickets as $ticket) {
                 fwrite($handle, '<tr>');
-                foreach ($this->historyRow($ticket) as $cell) {
+                foreach ($presenter->row($ticket) as $cell) {
                     fwrite($handle, '<td>' . e((string) $cell) . '</td>');
                 }
                 fwrite($handle, '</tr>');
@@ -119,15 +127,15 @@ class ExportDataJob implements ShouldQueue
     }
 
 
-    private function exportTicketHistoryPdf(): void
+    private function exportTicketHistoryPdf(TicketHistoryQuery $ticketHistoryQuery, TicketHistoryPresenter $presenter): void
     {
-        $rows = $this->historyQuery()
+        $rows = $ticketHistoryQuery->buildFromFilters($this->filters)
             ->limit(10000)
             ->get()
-            ->map(fn (Ticket $ticket) => $this->historyRow($ticket));
+            ->map(fn (Ticket $ticket) => $presenter->row($ticket));
 
         $pdf = Pdf::loadView('exports.history-pdf', [
-            'headers' => $this->historyHeaders(),
+            'headers' => $presenter->headers(),
             'rows' => $rows,
             'filters' => $this->filters,
             'isLimited' => $rows->count() >= 10000,
@@ -238,43 +246,6 @@ class ExportDataJob implements ShouldQueue
             ->orderBy('id');
     }
 
-    private function historyQuery(): Builder
-    {
-        $query = Ticket::query()
-            ->with(['creator', 'holder'])
-            ->whereIn('status', ['resolved', 'closed']);
-
-        $q = trim((string) ($this->filters['q'] ?? ''));
-        if ($q !== '') {
-            $query->where(function ($qq) use ($q) {
-                $qq->where('ticket_code', 'like', $q . '%')
-                    ->when($this->supportsFullTextSearch(),
-                        fn ($query) => $query->orWhereRaw('MATCH(title, description) AGAINST (? IN BOOLEAN MODE)', [$this->booleanFullTextTerm($q)]),
-                        fn ($query) => $query->orWhere('title', 'like', '%' . $q . '%')->orWhere('description', 'like', '%' . $q . '%')
-                    );
-            });
-        }
-
-        $from = (string) ($this->filters['date_from'] ?? '');
-        $to = (string) ($this->filters['date_to'] ?? '');
-
-        if ($from !== '') {
-            $query->where(function ($date) use ($from) {
-                $date->where('resolved_at', '>=', $from . ' 00:00:00')
-                    ->orWhere(fn ($q) => $q->whereNull('resolved_at')->where('closed_at', '>=', $from . ' 00:00:00'));
-            });
-        }
-
-        if ($to !== '') {
-            $query->where(function ($date) use ($to) {
-                $date->where('resolved_at', '<=', $to . ' 23:59:59')
-                    ->orWhere(fn ($q) => $q->whereNull('resolved_at')->where('closed_at', '<=', $to . ' 23:59:59'));
-            });
-        }
-
-        return $query->orderBy('id');
-    }
-
     private function auditQuery(): Builder
     {
         $query = AuditLog::query()->with('actor');
@@ -315,25 +286,6 @@ class ExportDataJob implements ShouldQueue
         return $query->orderBy('id');
     }
 
-    private function historyHeaders(): array
-    {
-        return ['Ticket', 'Resolved Date', 'Category', 'Team', 'Resolution Note', 'Duration (SLA)'];
-    }
-
-    private function historyRow(Ticket $ticket): array
-    {
-        $effective = $ticket->resolved_at ?: $ticket->closed_at ?: $ticket->updated_at ?: $ticket->created_at;
-
-        return [
-            'T-' . ($ticket->ticket_code ?: $ticket->id),
-            optional($effective)?->format('Y-m-d H:i:s') ?? '',
-            $ticket->category ?: $ticket->categoryMaster?->name ?: '-',
-            strtoupper($ticket->displayTeamCode() ?: (string) $ticket->team),
-            $ticket->status === 'closed' ? 'Closed' : 'Resolved',
-            $ticket->created_at && $effective ? $ticket->created_at->diffForHumans($effective, true) : '-',
-        ];
-    }
-
     private function auditHeaders(): array
     {
         return ['Timestamp', 'Actor', 'Role', 'Action', 'Entity', 'Entity ID', 'Description', 'IP Address', 'User Agent', 'Before Values', 'After Values'];
@@ -363,22 +315,6 @@ class ExportDataJob implements ShouldQueue
         }
 
         return is_string($value) ? $value : (json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '');
-    }
-
-    private function supportsFullTextSearch(): bool
-    {
-        return in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true);
-    }
-
-    private function booleanFullTextTerm(string $term): string
-    {
-        $tokens = preg_split('/\s+/', mb_strtolower($term), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-
-        return collect($tokens)
-            ->map(fn (string $token) => preg_replace('/[^\pL\pN_]+/u', '', $token) ?: '')
-            ->filter(fn (string $token) => mb_strlen($token) >= 3)
-            ->map(fn (string $token) => '+' . $token . '*')
-            ->implode(' ') ?: $term;
     }
 
     private function storeHandle(string $path, mixed $handle): void

@@ -8,6 +8,9 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Finds related tickets using classification and title signals to support duplicate checking.
+ */
 final class SimilarTicketQuery
 {
     public function __construct(private TicketIndexQuery $ticketIndexQuery)

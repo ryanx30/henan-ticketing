@@ -7,6 +7,9 @@ use App\Services\TicketWorkflowService;
 use Illuminate\Console\Command;
 use Throwable;
 
+/**
+ * Auto-closes eligible resolved tickets through the same workflow service used by manual status changes.
+ */
 class CloseResolvedTickets extends Command
 {
     protected $signature = 'tickets:auto-close-resolved';

@@ -1,3 +1,6 @@
+{{-- ========= CASE ANALYTICS SHELL ========= --}}
+{{-- Analytics layout where summary and chart data are loaded from the internal API. --}}
+
 <x-app-layout>
     <div class="px-6 py-6 space-y-6">
         <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">

@@ -1,4 +1,7 @@
-        {{-- FOOTER / PAGINATION --}}
+{{-- ========= HISTORY PAGINATION ========= --}}
+{{-- API-driven pagination controls for the history table. --}}
+
+        {{-- ========= FOOTER / PAGINATION ========= --}}
         <div class="mt-5 flex items-center justify-end gap-3 text-sm text-slate-700">
             <div class="flex items-center gap-2">
                 <span>Items per page:</span>

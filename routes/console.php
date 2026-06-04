@@ -5,7 +5,8 @@ use Illuminate\Console\Scheduling\Schedule;
 // Schedule
 app()->booted(function () {
     /** @var Schedule $schedule */
-    $schedule = app(Schedule::class);
+    $schedule = app(// ========= SCHEDULED BACKGROUND TASKS =========
+Schedule::class);
 
     // Auto-close IT tickets resolved before today. Runs once after midnight to keep the daily workflow deterministic.
     $schedule->command('tickets:auto-close-resolved')

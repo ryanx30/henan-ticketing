@@ -11,6 +11,9 @@ use App\Support\TicketStatus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Centralizes ticket status transitions so queue actions, manual updates, and auto-close logic share the same workflow rules.
+ */
 class TicketWorkflowService
 {
     public const STATUS_NEW          = TicketStatus::NEW;
@@ -23,6 +26,8 @@ class TicketWorkflowService
      * Canonical status transition map.
      * Backend stores "in_progress". UI labels render it as "Ongoing".
      */
+    // ========= STATUS RULES =========
+
     private const TRANSITION_MAP = [
         self::STATUS_NEW => [
             self::STATUS_IN_PROGRESS,
@@ -57,6 +62,8 @@ class TicketWorkflowService
     {
         return array_keys(self::TRANSITION_MAP);
     }
+
+    // ========= TRANSITION HANDLERS =========
 
     public function transitionMap(): array
     {

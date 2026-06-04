@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Represents SLA duration rules for a team, category, issue type, and priority combination.
+ */
 class SlaRule extends Model
 {
     protected $fillable = [

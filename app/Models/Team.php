@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Represents resolver teams and provides cached lookup helpers for ticket routing and scopes.
+ */
 class Team extends Model
 {
     protected $fillable = [

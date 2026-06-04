@@ -1,3 +1,6 @@
+{{-- ========= ADMIN USER CREATE ========= --}}
+{{-- Create user form layout; submission is handled by the page script. --}}
+
 <x-app-layout>
     <meta name="csrf-token" content="{{ csrf_token() }}">
 

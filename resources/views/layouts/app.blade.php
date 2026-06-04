@@ -1,3 +1,6 @@
+{{-- ========= APP LAYOUT ========= --}}
+{{-- Shared authenticated application shell for dashboard, ticketing, reports, queue, and admin pages. --}}
+
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 
@@ -20,18 +23,18 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 
-<body class="font-sans antialiased">
-    <div class="min-h-screen flex">
+<body class="font-sans antialiased overflow-hidden">
+    <div class="h-screen min-h-screen flex overflow-hidden">
 
         {{-- Sidebar --}}
         @include('partials.sidebar')
 
         {{-- Main area --}}
-        <div class="min-w-0 flex-1 flex flex-col">
+        <div class="min-w-0 flex-1 flex flex-col h-screen overflow-hidden">
             @include('layouts.navigation')
 
             {{-- Page Content --}}
-            <main class="min-w-0 flex-1 bg-gray-100">
+            <main class="min-w-0 flex-1 overflow-y-auto bg-gray-100">
                 {{ $slot }}
             </main>
         </div>

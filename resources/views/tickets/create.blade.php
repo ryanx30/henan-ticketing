@@ -1,14 +1,18 @@
+{{-- ========= CREATE TICKET SHELL ========= --}}
+{{-- Structured ticket creation form; dynamic lookup, checklist, similar tickets, and submission live in JavaScript. --}}
+
 <x-app-layout>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <style>
-        [x-cloak] { display: none !important; }
+        [x-cloak] {
+            display: none !important;
+        }
     </style>
 
     <div
         x-data="createTicketPage()"
         x-init="init()"
-        class="min-h-screen bg-[#eef1f5] px-8 py-7"
-    >
+        class="min-h-screen bg-[#eef1f5] px-8 py-7">
         <div class="mx-auto grid w-full max-w-[1600px] grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
             {{-- MAIN FORM --}}
             <div class="rounded bg-white p-6 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
@@ -16,25 +20,6 @@
 
                 <div class="mb-5 flex items-center justify-between">
                     <h1 class="text-[30px] font-bold text-slate-900">CREATE TICKET</h1>
-
-                    <div class="flex items-center gap-2">
-                        <button
-                            type="button"
-                            class="rounded border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
-                            @click="saveDraft()"
-                        >
-                            Save Draft
-                        </button>
-
-                        <button
-                            type="button"
-                            class="rounded bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                            :disabled="submitDisabled() || submitting"
-                            @click="submitTicket()"
-                        >
-                            <span x-text="submitting ? 'Submitting...' : 'Submit & Route'"></span>
-                        </button>
-                    </div>
                 </div>
 
                 {{-- CLIENT CONTACT --}}
@@ -42,13 +27,14 @@
                     <button
                         type="button"
                         class="flex w-full items-center justify-between bg-slate-900 px-4 py-3 text-left text-sm font-semibold text-white"
-                        @click="sections.client = !sections.client"
-                    >
+                        :class="sections.client ? 'rounded-t-md' : 'rounded-md'"
+                        @click="sections.client = !sections.client">
                         <span>Client Contact</span>
                         <span x-text="sections.client ? '▾' : '▸'"></span>
                     </button>
 
-<div x-show="sections.client" x-collapse class="relative overflow-visible grid grid-cols-1 gap-4 p-4 md:grid-cols-3">                        <div id="field-client_name" class="relative">
+                    <div x-show="sections.client" x-collapse class="relative overflow-visible grid grid-cols-1 gap-4 p-4 md:grid-cols-3">
+                        <div id="field-client_name" class="relative">
                             <label class="mb-2 block text-xs font-semibold text-slate-700">Client Name*</label>
                             <input
                                 type="text"
@@ -58,15 +44,13 @@
                                 @keydown.escape="clientSuggestOpen = false"
                                 placeholder="Client Name"
                                 autocomplete="off"
-                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-                            />
+                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none" />
 
-<div
-    x-show="clientSuggestOpen"
-    x-cloak
-    @click.outside="clientSuggestOpen = false"
-    class="absolute left-0 right-0 z-[9999] mt-2 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl"
->
+                            <div
+                                x-show="clientSuggestOpen"
+                                x-cloak
+                                @click.outside="clientSuggestOpen = false"
+                                class="absolute left-0 right-0 z-[9999] mt-2 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
                                 <template x-if="clientSuggestLoading">
                                     <div class="px-3 py-3 text-xs text-slate-500">Searching clients...</div>
                                 </template>
@@ -79,8 +63,7 @@
                                     <button
                                         type="button"
                                         @click="selectClientSuggestion(client)"
-                                        class="block w-full border-b border-slate-100 px-3 py-3 text-left text-xs hover:bg-slate-50"
-                                    >
+                                        class="block w-full border-b border-slate-100 px-3 py-3 text-left text-xs hover:bg-slate-50">
                                         <div class="font-semibold text-slate-900" x-text="client.name || '-' "></div>
                                         <div class="mt-1 text-slate-500">
                                             <span x-text="client.email || '-'"></span>
@@ -98,12 +81,17 @@
                             <input
                                 type="text"
                                 x-model="form.client_contact"
+                                @keydown="guardClientContactKey($event)"
+                                @input="sanitizeClientContact($event)"
                                 @input.debounce.350ms="loadClientSuggestions()"
                                 @focus="loadClientSuggestions()"
+                                inputmode="numeric"
+                                pattern="[0-9]*"
+                                maxlength="13"
                                 placeholder="Client Contact"
                                 autocomplete="off"
-                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-                            />
+                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none" />
+                            <p class="mt-1 text-[11px] text-slate-500">Maximum 13 digits.</p>
                         </div>
 
                         <div id="field-client_email">
@@ -115,8 +103,10 @@
                                 @focus="loadClientSuggestions()"
                                 placeholder="lorem@gmail.com"
                                 autocomplete="off"
-                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-                            />
+                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none" />
+                            <p class="mt-1 text-[11px]" :class="isEmailFormatValid() || !form.client_email ? 'text-slate-500' : 'text-red-600'">
+                                Email is valid when it contains @.
+                            </p>
                         </div>
 
                         <template x-if="selectedClient">
@@ -141,8 +131,7 @@
                     <button
                         type="button"
                         class="flex w-full items-center justify-between bg-slate-900 px-4 py-3 text-left text-sm font-semibold text-white"
-                        @click="sections.summary = !sections.summary"
-                    >
+                        @click="sections.summary = !sections.summary">
                         <span>Issue Summary</span>
                         <span x-text="sections.summary ? '▾' : '▸'"></span>
                     </button>
@@ -155,8 +144,7 @@
                                 x-model="form.title"
                                 placeholder="Title"
                                 @input.debounce.500ms="loadSimilarTickets()"
-                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-                            />
+                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none" />
                         </div>
 
                         <div id="field-description">
@@ -166,8 +154,7 @@
                                 placeholder="Description"
                                 rows="1"
                                 @input.debounce.500ms="loadSimilarTickets()"
-                                class="min-h-[40px] w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-                            ></textarea>
+                                class="min-h-[40px] w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"></textarea>
                         </div>
                     </div>
                 </div>
@@ -177,8 +164,7 @@
                     <button
                         type="button"
                         class="flex w-full items-center justify-between bg-slate-900 px-4 py-3 text-left text-sm font-semibold text-white"
-                        @click="sections.routing = !sections.routing"
-                    >
+                        @click="sections.routing = !sections.routing">
                         <span>Classification & Routing</span>
                         <span x-text="sections.routing ? '▾' : '▸'"></span>
                     </button>
@@ -197,8 +183,7 @@
                                             type="radio"
                                             :value="String(priority.id)"
                                             x-model="form.priority_id"
-                                            @change="loadSimilarTickets()"
-                                        >
+                                            @change="loadSimilarTickets()">
                                         <span x-text="priority.name"></span>
                                     </label>
                                 </template>
@@ -211,8 +196,7 @@
                                 x-model="form.team_id"
                                 @change="loadSimilarTickets()"
                                 :disabled="optionsLoading"
-                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 focus:border-slate-400 focus:outline-none"
-                            >
+                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 focus:border-slate-400 focus:outline-none">
                                 <option value="" x-text="optionsLoading ? 'Loading teams...' : 'Select team'"></option>
                                 <template x-for="team in master.teams" :key="team.id">
                                     <option :value="String(team.id)" x-text="masterLabel(team)"></option>
@@ -226,8 +210,7 @@
                                 x-model="form.category_id"
                                 @change="onCategoryChange()"
                                 :disabled="optionsLoading"
-                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 focus:border-slate-400 focus:outline-none"
-                            >
+                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 focus:border-slate-400 focus:outline-none">
                                 <option value="" x-text="optionsLoading ? 'Loading categories...' : 'Select category'"></option>
                                 <template x-for="cat in master.categories" :key="cat.id">
                                     <option :value="String(cat.id)" x-text="masterLabel(cat)"></option>
@@ -241,8 +224,7 @@
                                 x-model="form.issue_type_id"
                                 :disabled="!form.category_id || issueTypesLoading"
                                 @change="loadSimilarTickets()"
-                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 focus:border-slate-400 focus:outline-none"
-                            >
+                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 focus:border-slate-400 focus:outline-none">
                                 <option value="" x-text="issueTypePlaceholder()"></option>
                                 <template x-for="item in issueTypes" :key="item.id">
                                     <option :value="String(item.id)" x-text="masterLabel(item)"></option>
@@ -254,8 +236,7 @@
                             <label class="mb-2 block text-xs font-semibold text-slate-700">Platform Type*</label>
                             <select
                                 x-model="form.platform_type"
-                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-                            >
+                                class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none">
                                 <option value="">Select platform</option>
                                 <option value="web">Web</option>
                                 <option value="desktop">Desktop</option>
@@ -272,8 +253,7 @@
                     <button
                         type="button"
                         class="flex w-full items-center justify-between bg-slate-900 px-4 py-3 text-left text-sm font-semibold text-white"
-                        @click="sections.details = !sections.details"
-                    >
+                        @click="sections.details = !sections.details">
                         <span>Details (Dynamic by Category)</span>
                         <span x-text="sections.details ? '▾' : '▸'"></span>
                     </button>
@@ -286,8 +266,7 @@
                                     type="text"
                                     x-model="form.amount"
                                     placeholder="10,000,000"
-                                    class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-                                />
+                                    class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none" />
                             </div>
                         </template>
 
@@ -296,8 +275,7 @@
                                 <label class="mb-2 block text-xs font-semibold text-slate-700">Flow Type <span class="text-slate-400">(optional)</span></label>
                                 <select
                                     x-model="form.flow_type"
-                                    class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-                                >
+                                    class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none">
                                     <option value="">None</option>
                                     <option value="approval">Approval</option>
                                     <option value="request">Request</option>
@@ -312,8 +290,7 @@
                                 <input
                                     type="datetime-local"
                                     x-model="form.request_time"
-                                    class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-                                />
+                                    class="h-10 w-full rounded border border-slate-300 px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none" />
                             </div>
                         </template>
                     </div>
@@ -324,8 +301,7 @@
                     <button
                         type="button"
                         class="flex w-full items-center justify-between bg-slate-900 px-4 py-3 text-left text-sm font-semibold text-white"
-                        @click="sections.notes = !sections.notes"
-                    >
+                        @click="sections.notes = !sections.notes">
                         <span>Internal Notes & Attachments</span>
                         <span x-text="sections.notes ? '▾' : '▸'"></span>
                     </button>
@@ -336,8 +312,7 @@
                             <textarea
                                 x-model="form.internal_notes"
                                 rows="6"
-                                class="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-                            ></textarea>
+                                class="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"></textarea>
                             <p class="mt-1 text-[11px] text-slate-500">Visible for internal handling only. Do not place client-facing summary here.</p>
                         </div>
 
@@ -359,6 +334,17 @@
                             </div>
                         </div>
                     </div>
+                </div>
+
+                {{-- SUBMIT ACTION --}}
+                <div class="mt-5 flex items-center justify-end gap-2 border-t border-slate-100 pt-5">
+                    <button
+                        type="button"
+                        class="rounded bg-slate-900 px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        :disabled="submitDisabled() || submitting"
+                        @click="submitTicket()">
+                        <span x-text="submitting ? 'Submitting...' : 'Submit & Route'"></span>
+                    </button>
                 </div>
             </div>
 
@@ -403,14 +389,10 @@
                 <div class="rounded border border-slate-200 bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
                     <div class="mb-3 text-xs font-bold text-slate-900">SLA PREVIEW</div>
 
-                    <div class="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-                        <div class="mb-2 flex items-center justify-between">
-                            <span>Response:</span>
-                            <span class="font-bold text-slate-900" x-text="slaPreview().response"></span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span>Resolve:</span>
-                            <span class="font-bold text-slate-900" x-text="slaPreview().resolve"></span>
+                    <div class="rounded border border-slate-200 bg-slate-50 p-4">
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="text-sm font-semibold text-slate-600">Resolve Within:</span>
+                            <span class="text-right text-xl font-extrabold text-slate-950" x-text="slaPreview().resolve"></span>
                         </div>
                     </div>
                 </div>
@@ -427,8 +409,7 @@
                             <span
                                 class="rounded px-2 py-1 text-[10px] font-bold"
                                 :class="isFormReady() ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
-                                x-text="isFormReady() ? 'Ready' : 'Incomplete'"
-                            ></span>
+                                x-text="isFormReady() ? 'Ready' : 'Incomplete'"></span>
                         </div>
 
                         <template x-if="missingFields().length > 0">
@@ -440,8 +421,7 @@
                                             type="button"
                                             class="rounded bg-white px-2 py-1 text-[11px] text-slate-700 underline hover:bg-slate-100"
                                             @click="scrollToField(item.key)"
-                                            x-text="item.label"
-                                        ></button>
+                                            x-text="item.label"></button>
                                     </template>
                                 </div>
                             </div>
@@ -478,15 +458,13 @@
                                     <div class="mt-2 flex items-center gap-2">
                                         <a
                                             :href="`/tickets/${item.id}`"
-                                            class="rounded border border-slate-300 bg-white px-2 py-1 text-[10px] font-medium text-slate-700 hover:bg-slate-50"
-                                        >
+                                            class="rounded border border-slate-300 bg-white px-2 py-1 text-[10px] font-medium text-slate-700 hover:bg-slate-50">
                                             View
                                         </a>
                                         <button
                                             type="button"
                                             class="rounded border border-slate-300 bg-white px-2 py-1 text-[10px] font-medium text-slate-700 hover:bg-slate-50"
-                                            @click="continueAnyway()"
-                                        >
+                                            @click="continueAnyway()">
                                             Continue Anyway
                                         </button>
                                     </div>
@@ -539,8 +517,7 @@
                                             <div class="mt-1 text-[10px] text-slate-400" x-text="formatDate(ticket.created_at)"></div>
                                             <a
                                                 :href="`/tickets/${ticket.id}`"
-                                                class="mt-2 inline-flex rounded border border-slate-300 bg-white px-2 py-1 text-[10px] font-medium text-slate-700 hover:bg-slate-50"
-                                            >
+                                                class="mt-2 inline-flex rounded border border-slate-300 bg-white px-2 py-1 text-[10px] font-medium text-slate-700 hover:bg-slate-50">
                                                 View Ticket
                                             </a>
                                         </div>

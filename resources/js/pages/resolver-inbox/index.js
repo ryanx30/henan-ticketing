@@ -1,6 +1,20 @@
+/**
+ * Resolver inbox list page controller.
+ * Loads messages, filters, pagination, compose metadata, read status, and delete actions.
+ */
+
+import { apiGet, apiPost, apiDelete, apiRequest } from '../../utils/apiClient';
+import {
+    formatDateTimeShort as formatDateTimeShortValue,
+    formatTimeShort,
+    truncateText,
+} from '../../utils/formatter';
+import { priorityBadgeClass as buildPriorityBadgeClass, priorityLabel as buildPriorityLabel, statusBadgeClass as buildStatusBadgeClass, statusLabel as buildStatusLabel } from '../../utils/badges';
+import { showPageAlert } from '../../utils/toast';
+
 const RESOLVER_INBOX_ROOT = document.getElementById('resolver-inbox-page');
-        const RESOLVER_IS_IT = RESOLVER_INBOX_ROOT?.dataset.isIt === '1';
-        const RESOLVER_CURRENT_USER_ID = Number(RESOLVER_INBOX_ROOT?.dataset.userId || 0);
+const RESOLVER_IS_IT = RESOLVER_INBOX_ROOT?.dataset.isIt === '1';
+const RESOLVER_CURRENT_USER_ID = Number(RESOLVER_INBOX_ROOT?.dataset.userId || 0);
 
         function resolverInboxPage() {
             return {
@@ -11,6 +25,7 @@ const RESOLVER_INBOX_ROOT = document.getElementById('resolver-inbox-page');
                 showCompose: false,
 
                 messages: [],
+                expandedResolverThreads: {},
                 composeTickets: [],
                 composeRecipients: [],
                 meta: {
@@ -47,24 +62,8 @@ const RESOLVER_INBOX_ROOT = document.getElementById('resolver-inbox-page');
                     this.loadMessages();
                 },
 
-                csrf() {
-                    return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-                },
-
                 showAlert(message, type = 'success') {
-                    const el = document.getElementById('page-alert');
-                    el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
-                    el.textContent = message;
-
-                    if (type === 'success') {
-                        el.classList.add('bg-green-100', 'text-green-800');
-                    } else {
-                        el.classList.add('bg-red-100', 'text-red-800');
-                    }
-
-                    setTimeout(() => {
-                        el.classList.add('hidden');
-                    }, 3000);
+                    showPageAlert(message, type);
                 },
 
                 ucfirst(value) {
@@ -74,17 +73,11 @@ const RESOLVER_INBOX_ROOT = document.getElementById('resolver-inbox-page');
                 },
 
                 truncate(value, limit = 70) {
-                    value = value || '';
-                    if (value.length <= limit) return value;
-                    return value.substring(0, limit) + '...';
+                    return truncateText(value, limit);
                 },
 
                 formatTime(value) {
-                    if (!value) return '-';
-                    return new Date(value).toLocaleTimeString('id-ID', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                    });
+                    return formatTimeShort(value);
                 },
                 ticketLabel(ticket) {
                     return window.HenanApp?.ticketLabel(ticket) ?? '-';
@@ -118,9 +111,7 @@ const RESOLVER_INBOX_ROOT = document.getElementById('resolver-inbox-page');
                 },
 
                 formatDateTimeShort(value) {
-                    return window.HenanApp?.formatDateTimeShort
-                        ? window.HenanApp.formatDateTimeShort(value)
-                        : (value ? new Date(value).toLocaleString('id-ID') : '-');
+                    return formatDateTimeShortValue(value);
                 },
 
                 messageUrl(message) {
@@ -154,28 +145,94 @@ const RESOLVER_INBOX_ROOT = document.getElementById('resolver-inbox-page');
                         : this.previewText(message);
                 },
 
+
+                resolverInboxThreads(limit = null) {
+                    const threads = new Map();
+
+                    for (const message of this.messages || []) {
+                        const key = message?.ticket?.id
+                            ? `ticket-${message.ticket.id}`
+                            : `message-${message?.id || Math.random()}`;
+
+                        if (!threads.has(key)) {
+                            threads.set(key, {
+                                key,
+                                ticket: message?.ticket || null,
+                                latestMessage: message,
+                                messages: [],
+                            });
+                        }
+
+                        const thread = threads.get(key);
+                        thread.messages.push(message);
+
+                        if (this.messageTimestamp(message) > this.messageTimestamp(thread.latestMessage)) {
+                            thread.latestMessage = message;
+                            thread.ticket = message?.ticket || thread.ticket;
+                        }
+                    }
+
+                    const groupedThreads = Array.from(threads.values())
+                        .map((thread) => ({
+                            ...thread,
+                            messages: thread.messages.sort((a, b) => this.messageTimestamp(b) - this.messageTimestamp(a)),
+                        }))
+                        .sort((a, b) => this.messageTimestamp(b.latestMessage) - this.messageTimestamp(a.latestMessage));
+
+                    return limit ? groupedThreads.slice(0, limit) : groupedThreads;
+                },
+
+                resolverConversationCount() {
+                    return Number(this.meta?.total || 0) || this.resolverInboxThreads().length;
+                },
+
+                messageTimestamp(message) {
+                    const value = message?.created_at || message?.updated_at || null;
+                    const timestamp = value ? Date.parse(value) : 0;
+                    return Number.isFinite(timestamp) ? timestamp : 0;
+                },
+
+                resolverThreadReplies(thread) {
+                    const latestId = Number(thread?.latestMessage?.id || 0);
+
+                    return (thread?.messages || [])
+                        .filter((message) => Number(message?.id || 0) !== latestId)
+                        .sort((a, b) => this.messageTimestamp(b) - this.messageTimestamp(a));
+                },
+
+                threadReplyCount(thread) {
+                    return this.resolverThreadReplies(thread).length;
+                },
+
+                threadUnreadCount(thread) {
+                    return (thread?.messages || []).filter((message) => this.isUnreadMessage(message)).length;
+                },
+
+                toggleResolverThread(key) {
+                    this.expandedResolverThreads = {
+                        ...this.expandedResolverThreads,
+                        [key]: !this.expandedResolverThreads[key],
+                    };
+                },
+
+                isResolverThreadExpanded(key) {
+                    return Boolean(this.expandedResolverThreads[key]);
+                },
+
                 priorityLabel(priority) {
-                    return window.HenanApp?.priorityLabel
-                        ? window.HenanApp.priorityLabel(priority)
-                        : this.ucfirst(priority);
+                    return buildPriorityLabel(priority);
                 },
 
                 statusLabel(status) {
-                    return window.HenanApp?.statusLabel
-                        ? window.HenanApp.statusLabel(status)
-                        : (status || '-');
+                    return buildStatusLabel(status);
                 },
 
                 priorityBadgeClass(priority) {
-                    return window.HenanApp?.priorityBadgeClass
-                        ? window.HenanApp.priorityBadgeClass(priority)
-                        : 'badge-priority-default';
+                    return buildPriorityBadgeClass(priority);
                 },
 
                 statusBadgeClass(status) {
-                    return window.HenanApp?.statusBadgeClass
-                        ? window.HenanApp.statusBadgeClass(status)
-                        : 'badge-status-default';
+                    return buildStatusBadgeClass(status);
                 },
 
                 buildQuery() {
@@ -207,20 +264,7 @@ const RESOLVER_INBOX_ROOT = document.getElementById('resolver-inbox-page');
 
                     try {
                         const params = this.buildQuery();
-                        const res = await fetch(`/api/resolver-inbox?${params.toString()}`, {
-                            headers: {
-                                'Accept': 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
-                            credentials: 'same-origin'
-                        });
-
-                        const result = await res.json();
-
-                        if (!res.ok) {
-                            throw new Error(result.message || 'Failed to load resolver inbox');
-                        }
-
+                        const result = await apiGet(`/api/resolver-inbox?${params.toString()}`);
                         this.messages = result.data || [];
                         this.meta = result.meta || {
                             current_page: 1,
@@ -310,23 +354,7 @@ const RESOLVER_INBOX_ROOT = document.getElementById('resolver-inbox-page');
                             formData.append('attachment', this.form.attachment);
                         }
 
-                        const res = await fetch('/api/resolver-inbox', {
-                            method: 'POST',
-                            headers: {
-                                'Accept': 'application/json',
-                                'X-CSRF-TOKEN': this.csrf(),
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
-                            credentials: 'same-origin',
-                            body: formData
-                        });
-
-                        const result = await res.json();
-
-                        if (!res.ok) {
-                            throw new Error(result.message || 'Failed to send message');
-                        }
-
+                        const result = await apiPost('/api/resolver-inbox', formData);
                         this.showAlert(result.message || 'Message sent successfully', 'success');
                         this.discardDraft();
                         await this.loadMessages();
@@ -335,52 +363,20 @@ const RESOLVER_INBOX_ROOT = document.getElementById('resolver-inbox-page');
                         this.showAlert(error.message || 'Failed to send message', 'error');
                     }
                 },
-
                 async markAsRead(messageId) {
                     try {
-                        const res = await fetch(`/api/resolver-inbox/${messageId}/read`, {
-                            method: 'PATCH',
-                            headers: {
-                                'Accept': 'application/json',
-                                'X-CSRF-TOKEN': this.csrf(),
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
-                            credentials: 'same-origin'
-                        });
-
-                        const result = await res.json();
-
-                        if (!res.ok) {
-                            throw new Error(result.message || 'Failed to mark message as read');
-                        }
-
+                        await apiRequest(`/api/resolver-inbox/${messageId}/read`, { method: 'PATCH' });
                         await this.loadMessages();
                     } catch (error) {
                         console.error(error);
                         this.showAlert(error.message || 'Failed to mark message as read', 'error');
                     }
                 },
-
                 async deleteMessage(messageId) {
                     if (!confirm('Delete this message?')) return;
 
                     try {
-                        const res = await fetch(`/api/resolver-inbox/${messageId}`, {
-                            method: 'DELETE',
-                            headers: {
-                                'Accept': 'application/json',
-                                'X-CSRF-TOKEN': this.csrf(),
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
-                            credentials: 'same-origin'
-                        });
-
-                        const result = await res.json();
-
-                        if (!res.ok) {
-                            throw new Error(result.message || 'Failed to delete message');
-                        }
-
+                        const result = await apiDelete(`/api/resolver-inbox/${messageId}`);
                         this.showAlert(result.message || 'Message deleted', 'success');
                         await this.loadMessages();
                     } catch (error) {
@@ -388,6 +384,7 @@ const RESOLVER_INBOX_ROOT = document.getElementById('resolver-inbox-page');
                         this.showAlert(error.message || 'Failed to delete message', 'error');
                     }
                 }
+
             }
         }
 

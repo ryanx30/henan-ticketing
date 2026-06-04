@@ -1,3 +1,6 @@
+{{-- ========= FOCUS FILTER BANNER ========= --}}
+{{-- Shows active dashboard focus filters applied to the ticket list. --}}
+
 {{-- Focus filter banner is separated from the page shell to keep dashboard-to-ticket behavior readable. --}}
 <div
     x-cloak

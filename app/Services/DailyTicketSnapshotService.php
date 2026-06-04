@@ -10,6 +10,9 @@ use App\Models\TicketStatusHistory;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
+/**
+ * Builds daily ticket statistics used by analytics and reporting automation.
+ */
 class DailyTicketSnapshotService
 {
     /**

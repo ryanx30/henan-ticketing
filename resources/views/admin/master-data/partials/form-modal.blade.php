@@ -1,3 +1,6 @@
+{{-- ========= MASTER DATA FORM MODAL ========= --}}
+{{-- Reusable modal for creating and editing master data records. --}}
+
         <div
             x-show="modal.open"
             x-transition.opacity
@@ -8,6 +11,24 @@
                 class="w-full max-w-[760px] rounded-2xl bg-white shadow-2xl">
                 <div class="border-b border-slate-200 px-6 py-4">
                     <h3 class="text-xl font-semibold text-slate-800" x-text="modal.mode === 'create' ? `Add ${currentLabelSingle()}` : `Edit ${currentLabelSingle()}`"></h3>
+                </div>
+
+                <div
+                    x-show="hasSensitiveChanges()"
+                    x-transition
+                    class="mx-6 mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <div class="font-semibold">Sensitive Master Data changes detected</div>
+                    <p class="mt-1 text-xs leading-5" x-text="sensitiveWarningText()"></p>
+                    <ul class="mt-2 list-disc space-y-1 pl-5 text-xs">
+                        <template x-for="change in sensitiveChanges()" :key="change.key">
+                            <li>
+                                <span class="font-medium" x-text="change.label"></span>:
+                                <span x-text="change.before"></span>
+                                <span>→</span>
+                                <span x-text="change.after"></span>
+                            </li>
+                        </template>
+                    </ul>
                 </div>
 
                 <div class="space-y-5 px-6 py-5">

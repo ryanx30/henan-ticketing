@@ -1,3 +1,6 @@
+{{-- ========= MY QUEUE SHELL ========= --}}
+{{-- Status bucket containers for tickets assigned to the current resolver. --}}
+
 <x-app-layout>
     <meta name="csrf-token" content="{{ csrf_token() }}">
 

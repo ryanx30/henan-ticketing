@@ -5,6 +5,9 @@ namespace App\Policies;
 use App\Models\TicketAttachment;
 use App\Models\User;
 
+/**
+ * Controls access to ticket attachment downloads and attachment-related actions.
+ */
 class TicketAttachmentPolicy
 {
     public function before(User $user, string $ability): ?bool

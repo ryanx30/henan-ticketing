@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Represents uploaded ticket files and exposes relationships to the ticket and uploader.
+ */
 class TicketAttachment extends Model
 {
     use HasFactory;

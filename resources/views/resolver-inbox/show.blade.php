@@ -1,3 +1,6 @@
+{{-- ========= RESOLVER CONVERSATION SHELL ========= --}}
+{{-- Single resolver message/conversation layout with API-backed actions. --}}
+
 <x-app-layout>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     {{-- PAGE ROOT: Resolver inbox detail state and authenticated user context --}}
@@ -147,9 +150,14 @@
                                         <div class="whitespace-pre-line text-[15px] leading-7" x-text="threadMessage.body || '-'"></div>
 
                                         <template x-if="threadMessage.attachment_name">
-                                            <div class="mt-3 rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-700">
-                                                Attachment: <span x-text="threadMessage.attachment_name"></span>
-                                            </div>
+                                            <a
+                                                :href="attachmentUrl(threadMessage)"
+                                                target="_blank"
+                                                rel="noopener"
+                                                class="mt-3 inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700">
+                                                <span>Attachment:</span>
+                                                <span class="truncate" x-text="threadMessage.attachment_name"></span>
+                                            </a>
                                         </template>
                                     </div>
                                 </div>

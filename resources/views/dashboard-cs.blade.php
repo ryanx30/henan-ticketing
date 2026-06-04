@@ -1,3 +1,6 @@
+{{-- ========= CS DASHBOARD SHELL ========= --}}
+{{-- Page shell for CS operational cards, active tickets, and resolver updates loaded by JavaScript. --}}
+
 <x-app-layout>
     <style>
         .dashboard-ticket-row {

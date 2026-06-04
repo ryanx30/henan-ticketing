@@ -1,3 +1,6 @@
+{{-- ========= REPORT KPI CARDS ========= --}}
+{{-- Role-based report metrics rendered from the Reports API. --}}
+
             {{-- KPI CARDS: Role-based report metrics rendered from the Reports API. --}}
             <div class="mb-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <template x-for="card in cardItems" :key="card.key">

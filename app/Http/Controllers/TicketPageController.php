@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Ticket;
 use Illuminate\Http\Request;
 
+/**
+ * Renders ticket pages only; ticket data and mutations are handled by internal API controllers.
+ */
 class TicketPageController extends Controller
 {
     // Render tickets index page

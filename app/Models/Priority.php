@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Represents ticket priorities and provides cached lookup helpers for filters and ticket code generation.
+ */
 class Priority extends Model
 {
     protected $fillable = [

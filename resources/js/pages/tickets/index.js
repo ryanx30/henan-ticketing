@@ -1,3 +1,14 @@
+/**
+ * Ticket listing page controller.
+ * Manages filters, summary cards, API loading, pagination, row rendering, and delete actions.
+ */
+
+import { apiGet, buildQueryString } from '../../utils/apiClient';
+import { paginationItems as buildPaginationItems } from '../../utils/pagination';
+import { formatDate, formatHumanDate, titleCase, toYmd } from '../../utils/formatter';
+import { priorityBadgeClass, priorityLabel as buildPriorityLabel, statusBadgeClass, statusLabel as buildStatusLabel, ticketLabel as buildTicketLabel } from '../../utils/badges';
+import { showAlert as showPageAlert } from '../../utils/toast';
+
 // Ticket index Alpine component. Keeps interactive behavior out of Blade.
 function ticketsIndexPage(config = {}) {
     return {
@@ -53,21 +64,7 @@ function ticketsIndexPage(config = {}) {
 
         async loadPriorityOptions() {
             try {
-                const response = await fetch('/api/ticket-form/options', {
-                    method: 'GET',
-                    credentials: 'same-origin',
-                    headers: {
-                        Accept: 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to load priorities');
-                }
-
+                const result = await apiGet('/api/ticket-form/options');
                 this.priorityOptions = result.data?.priorities || [];
             } catch (error) {
                 console.error(error);
@@ -81,30 +78,22 @@ function ticketsIndexPage(config = {}) {
         },
 
         showAlert(message, type = 'success') {
-            const el = document.getElementById('page-alert');
-            if (!el) return;
-
-            el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
-            el.textContent = message;
-            el.classList.add(type === 'success' ? 'bg-green-100' : 'bg-red-100');
-            el.classList.add(type === 'success' ? 'text-green-800' : 'text-red-800');
-
-            setTimeout(() => el.classList.add('hidden'), 3000);
+            showPageAlert(message, type);
         },
 
         buildQuery() {
-            const params = new URLSearchParams();
-
-            if (this.filters.q) params.set('q', this.filters.q);
-            if (this.filters.status && this.filters.status !== 'all') params.set('status', this.filters.status);
-            if (this.filters.priority && this.filters.priority !== 'all') params.set('priority', this.filters.priority);
-            if (this.filters.date_from) params.set('date_from', this.filters.date_from);
-            if (this.filters.date_to) params.set('date_to', this.filters.date_to);
-            if (this.filters.focus) params.set('focus', this.filters.focus);
-            if (this.filters.mine) params.set('mine', this.filters.mine);
-            if (this.filters.sort_by) params.set('sort_by', this.filters.sort_by);
-            if (this.filters.sort_dir) params.set('sort_dir', this.filters.sort_dir);
-            if (this.filters.per_page) params.set('per_page', this.filters.per_page);
+            const params = new URLSearchParams(buildQueryString({
+                q: this.filters.q,
+                status: this.filters.status,
+                priority: this.filters.priority,
+                date_from: this.filters.date_from,
+                date_to: this.filters.date_to,
+                focus: this.filters.focus,
+                mine: this.filters.mine,
+                sort_by: this.filters.sort_by,
+                sort_dir: this.filters.sort_dir,
+                per_page: this.filters.per_page,
+            }));
 
             params.set('page', Number(this.filters.page || 1));
 
@@ -116,19 +105,7 @@ function ticketsIndexPage(config = {}) {
 
             try {
                 const params = this.buildQuery();
-                const response = await fetch(`/api/tickets?${params.toString()}`, {
-                    credentials: 'same-origin',
-                    headers: {
-                        Accept: 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to load tickets');
-                }
+                const result = await apiGet(`/api/tickets?${params.toString()}`);
 
                 this.tickets = result.data || [];
                 this.meta = result.meta || this.meta;
@@ -195,29 +172,7 @@ function ticketsIndexPage(config = {}) {
         },
 
         paginationItems() {
-            const current = Number(this.meta.current_page || 1);
-            const last = Number(this.meta.last_page || 1);
-
-            if (last <= 7) {
-                return Array.from({ length: last }, (_, i) => i + 1);
-            }
-
-            const items = [1];
-
-            if (current > 4) items.push('...');
-
-            const start = Math.max(2, current - 1);
-            const end = Math.min(last - 1, current + 1);
-
-            for (let i = start; i <= end; i += 1) {
-                items.push(i);
-            }
-
-            if (current < last - 3) items.push('...');
-
-            items.push(last);
-
-            return items;
+            return buildPaginationItems(this.meta);
         },
 
         openTicket(ticketId) {
@@ -340,36 +295,19 @@ function ticketsIndexPage(config = {}) {
         },
 
         formatHumanDate(value) {
-            if (!value) return '-';
-
-            const date = new Date(value);
-            if (Number.isNaN(date.getTime())) return '-';
-
-            return date.toLocaleDateString('en-GB', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-            });
+            return formatHumanDate(value);
         },
 
         toYmd(date) {
-            const y = date.getFullYear();
-            const m = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            return `${y}-${m}-${day}`;
+            return toYmd(date);
         },
 
         ticketLabel(ticket) {
-            return ticket.ticket_label
-                || ticket.ticket_code
-                || (window.HenanApp?.ticketLabel ? window.HenanApp.ticketLabel(ticket) : null)
-                || '-';
+            return ticket.ticket_label || ticket.ticket_code || buildTicketLabel(ticket);
         },
 
         categoryLabel(ticket) {
-            return ticket.category_label
-                || this.titleCase(ticket.category)
-                || '-';
+            return ticket.category_label || titleCase(ticket.category) || '-';
         },
 
         teamLabel(ticket) {
@@ -377,53 +315,27 @@ function ticketsIndexPage(config = {}) {
         },
 
         priorityLabel(ticket) {
-            return ticket.priority_label || this.titleCase(ticket.priority) || '-';
+            return ticket.priority_label || buildPriorityLabel(ticket.priority);
         },
 
         statusLabel(status) {
-            const map = {
-                new: 'New',
-                in_progress: 'Ongoing',
-                waiting_info: 'Waiting',
-                resolved: 'Resolved',
-                closed: 'Closed',
-            };
-
-            return map[status] || status || '-';
+            return buildStatusLabel(status);
         },
 
         createdLabel(ticket) {
-            if (ticket.created_at_label) return ticket.created_at_label;
-            if (!ticket.created_at) return '-';
-
-            const date = new Date(ticket.created_at);
-            if (Number.isNaN(date.getTime())) return '-';
-
-            return date.toLocaleDateString('en-GB', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric',
-            });
+            return ticket.created_at_label || formatDate(ticket.created_at);
         },
 
         titleCase(value) {
-            if (!value) return '';
-
-            return String(value)
-                .replaceAll('_', ' ')
-                .replace(/\b\w/g, (c) => c.toUpperCase());
+            return titleCase(value);
         },
 
         priorityBadgeClass(priority) {
-            return window.HenanApp?.priorityBadgeClass
-                ? window.HenanApp.priorityBadgeClass(priority)
-                : 'badge-priority-default';
+            return priorityBadgeClass(priority);
         },
 
         statusBadgeClass(status) {
-            return window.HenanApp?.statusBadgeClass
-                ? window.HenanApp.statusBadgeClass(status)
-                : 'badge-status-default';
+            return statusBadgeClass(status);
         },
     };
 }

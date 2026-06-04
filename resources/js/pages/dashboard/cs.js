@@ -1,3 +1,20 @@
+/**
+ * CS dashboard page controller.
+ * Loads operational KPI data, today-focus items, active tickets, and resolver inbox updates.
+ */
+
+import { apiGet } from '../../utils/apiClient';
+import {
+    formatCountdownClock,
+    formatDateTime as formatDateTimeValue,
+    formatDateTimeShort as formatDateTimeShortValue,
+    formatNumber as formatNumberValue,
+    formatTimeShort,
+    truncateText,
+} from '../../utils/formatter';
+import { priorityBadgeClass as buildPriorityBadgeClass, statusBadgeClass as buildStatusBadgeClass } from '../../utils/badges';
+import { showPageAlert } from '../../utils/toast';
+
 window.dashboardCsPage = function dashboardCsPage() {
     return {
         loading: false,
@@ -51,6 +68,7 @@ window.dashboardCsPage = function dashboardCsPage() {
         myTickets: [],
         activeTickets: [],
         resolverInbox: [],
+        expandedResolverThreads: {},
         currentRole: null,
         currentUserId: Number(document.getElementById('dashboard-cs-page')?.dataset.currentUserId || 0),
 
@@ -83,19 +101,7 @@ window.dashboardCsPage = function dashboardCsPage() {
         },
 
         showAlert(message, type = 'success') {
-            const el = document.getElementById('page-alert');
-            el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
-            el.textContent = message;
-
-            if (type === 'success') {
-                el.classList.add('bg-green-100', 'text-green-800');
-            } else {
-                el.classList.add('bg-red-100', 'text-red-800');
-            }
-
-            setTimeout(() => {
-                el.classList.add('hidden');
-            }, 3000);
+            showPageAlert(message, type);
         },
 
         buildQuery() {
@@ -142,20 +148,7 @@ window.dashboardCsPage = function dashboardCsPage() {
 
             try {
                 const params = this.buildQuery();
-                const response = await fetch(`${window.HenanApp.routes.api.dashboard}?${params.toString()}`, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin'
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to load dashboard');
-                }
-
+                const result = await apiGet(`${window.HenanApp.routes.api.dashboard}?${params.toString()}`);
                 const data = result.data || {};
 
                 this.currentRole = data.role || this.currentRole;
@@ -177,7 +170,7 @@ window.dashboardCsPage = function dashboardCsPage() {
         },
 
         formatNumber(value) {
-            return new Intl.NumberFormat('id-ID').format(Number(value || 0));
+            return formatNumberValue(value);
         },
 
         trendText(item) {
@@ -201,9 +194,7 @@ window.dashboardCsPage = function dashboardCsPage() {
         },
 
         formatDateTime(value) {
-            return window.HenanApp?.formatDateTime
-                ? window.HenanApp.formatDateTime(value)
-                : (value ? new Date(value).toLocaleString('id-ID') : '-');
+            return formatDateTimeValue(value);
         },
 
         ucfirst(value) {
@@ -213,17 +204,11 @@ window.dashboardCsPage = function dashboardCsPage() {
         },
 
         truncate(value, limit = 70) {
-            value = value || '';
-            if (value.length <= limit) return value;
-            return value.substring(0, limit) + '...';
+            return truncateText(value, limit);
         },
 
         formatTime(value) {
-            if (!value) return '-';
-            return new Date(value).toLocaleTimeString('id-ID', {
-                hour: '2-digit',
-                minute: '2-digit',
-            });
+            return formatTimeShort(value);
         },
 
         normalizeStatus(status) {
@@ -251,15 +236,80 @@ window.dashboardCsPage = function dashboardCsPage() {
         },
 
         statusBadgeClass(status) {
-            return window.HenanApp?.statusBadgeClass
-                ? window.HenanApp.statusBadgeClass(status)
-                : 'badge-status-default';
+            return buildStatusBadgeClass(status);
         },
 
         priorityBadgeClass(priority) {
-            return window.HenanApp?.priorityBadgeClass
-                ? window.HenanApp.priorityBadgeClass(priority)
-                : 'badge-priority-default';
+            return buildPriorityBadgeClass(priority);
+        },
+
+
+        resolverInboxThreads(limit = 5) {
+            const threads = new Map();
+
+            for (const message of this.resolverInbox || []) {
+                const key = message?.ticket?.id
+                    ? `ticket-${message.ticket.id}`
+                    : `message-${message?.id || Math.random()}`;
+
+                if (!threads.has(key)) {
+                    threads.set(key, {
+                        key,
+                        ticket: message?.ticket || null,
+                        latestMessage: message,
+                        messages: [],
+                    });
+                }
+
+                const thread = threads.get(key);
+                thread.messages.push(message);
+
+                if (this.messageTimestamp(message) > this.messageTimestamp(thread.latestMessage)) {
+                    thread.latestMessage = message;
+                    thread.ticket = message?.ticket || thread.ticket;
+                }
+            }
+
+            return Array.from(threads.values())
+                .map((thread) => ({
+                    ...thread,
+                    messages: thread.messages.sort((a, b) => this.messageTimestamp(b) - this.messageTimestamp(a)),
+                }))
+                .sort((a, b) => this.messageTimestamp(b.latestMessage) - this.messageTimestamp(a.latestMessage))
+                .slice(0, limit);
+        },
+
+        messageTimestamp(message) {
+            const value = message?.created_at || message?.updated_at || null;
+            const timestamp = value ? Date.parse(value) : 0;
+            return Number.isFinite(timestamp) ? timestamp : 0;
+        },
+
+        resolverThreadReplies(thread) {
+            const latestId = Number(thread?.latestMessage?.id || 0);
+
+            return (thread?.messages || [])
+                .filter((message) => Number(message?.id || 0) !== latestId)
+                .sort((a, b) => this.messageTimestamp(b) - this.messageTimestamp(a));
+        },
+
+        threadReplyCount(thread) {
+            return this.resolverThreadReplies(thread).length;
+        },
+
+        threadUnreadCount(thread) {
+            return (thread?.messages || []).filter((message) => this.isUnreadMessage(message)).length;
+        },
+
+        toggleResolverThread(key) {
+            this.expandedResolverThreads = {
+                ...this.expandedResolverThreads,
+                [key]: !this.expandedResolverThreads[key],
+            };
+        },
+
+        isResolverThreadExpanded(key) {
+            return Boolean(this.expandedResolverThreads[key]);
         },
 
         messageUrl(message) {
@@ -300,36 +350,11 @@ window.dashboardCsPage = function dashboardCsPage() {
         },
 
         formatDateTimeShort(value) {
-            return window.HenanApp?.formatDateTimeShort
-                ? window.HenanApp.formatDateTimeShort(value)
-                : this.formatDateTime(value);
+            return formatDateTimeShortValue(value);
         },
 
         slaCountdown(deadline) {
-            if (!deadline) return '-';
-
-            const end = new Date(deadline).getTime();
-            const now = Date.now();
-            const diff = end - now;
-
-            if (diff <= 0) return 'OVERDUE';
-
-            const totalSeconds = Math.floor(diff / 1000);
-            const hours = Math.floor(totalSeconds / 3600);
-            const minutes = Math.floor((totalSeconds % 3600) / 60);
-            const seconds = totalSeconds % 60;
-
-            return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            return formatCountdownClock(deadline);
         },
-
-        async copyText(text) {
-            try {
-                await navigator.clipboard.writeText(text || '');
-                this.showAlert('Copied to clipboard', 'success');
-            } catch (error) {
-                console.error(error);
-                this.showAlert('Failed to copy text', 'error');
-            }
-        }
     }
 }

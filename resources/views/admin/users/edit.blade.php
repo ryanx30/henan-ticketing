@@ -1,3 +1,6 @@
+{{-- ========= ADMIN USER EDIT ========= --}}
+{{-- Edit user form layout; loading and submission are handled by the page script. --}}
+
 <x-app-layout>
     <meta name="csrf-token" content="{{ csrf_token() }}">
 

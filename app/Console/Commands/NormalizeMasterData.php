@@ -6,6 +6,9 @@ use App\Services\MasterDataIntegrityService;
 use Illuminate\Console\Command;
 use Throwable;
 
+/**
+ * Normalizes master data values used by routing, ticket codes, and reports.
+ */
 class NormalizeMasterData extends Command
 {
     protected $signature = 'master-data:normalize {--dry-run : Show planned normalization summary without writing changes}';

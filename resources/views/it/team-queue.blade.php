@@ -1,3 +1,6 @@
+{{-- ========= TEAM QUEUE SHELL ========= --}}
+{{-- Team queue buckets and action placeholders for claim/status workflows. --}}
+
 <x-app-layout>
     <meta name="csrf-token" content="{{ csrf_token() }}">
 

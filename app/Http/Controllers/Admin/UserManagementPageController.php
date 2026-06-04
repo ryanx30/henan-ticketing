@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 
+/**
+ * Renders admin user management screens without embedding user query logic in Blade.
+ */
 class UserManagementPageController extends Controller
 {
     public function index(Request $request)

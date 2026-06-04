@@ -9,6 +9,9 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
+/**
+ * Handles admin user management endpoints, including safe create, update, activation, and deactivation rules.
+ */
 class AdminUserApiController extends BaseApiController
 {
     public function index(Request $request)
@@ -100,7 +103,7 @@ class AdminUserApiController extends BaseApiController
             $this->mapUser($user)
         );
 
-        return $this->success($this->mapUser($user), 'User created successfully.');
+        return $this->createdResponse($this->mapUser($user), 'User created successfully.');
     }
 
     public function update(Request $request, User $user)
@@ -125,7 +128,7 @@ class AdminUserApiController extends BaseApiController
         $newIsActive = (bool) ($validated['is_active'] ?? $user->is_active);
 
         if ($actor->id === $user->id && $newIsActive === false) {
-            return $this->error('You cannot deactivate your own account.', 422);
+            return $this->validationError([], 'You cannot deactivate your own account.');
         }
 
         if ($user->role === 'admin' && $newIsActive === false) {
@@ -135,7 +138,7 @@ class AdminUserApiController extends BaseApiController
                 ->count();
 
             if ($activeAdminCount <= 1) {
-                return $this->error('Cannot deactivate the last active admin.', 422);
+                return $this->validationError([], 'Cannot deactivate the last active admin.');
             }
         }
 
@@ -171,7 +174,7 @@ class AdminUserApiController extends BaseApiController
         $actor = $request->user();
 
         if ($actor->id === $user->id) {
-            return $this->error('You cannot deactivate your own account.', 422);
+            return $this->validationError([], 'You cannot deactivate your own account.');
         }
 
         $before = $this->mapUser($user);
@@ -184,7 +187,7 @@ class AdminUserApiController extends BaseApiController
                 ->count();
 
             if ($activeAdminCount <= 1) {
-                return $this->error('Cannot deactivate the last active admin.', 422);
+                return $this->validationError([], 'Cannot deactivate the last active admin.');
             }
         }
 

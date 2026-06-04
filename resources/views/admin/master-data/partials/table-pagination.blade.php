@@ -1,3 +1,6 @@
+{{-- ========= MASTER DATA PAGINATION ========= --}}
+{{-- API-driven pagination controls for master data tables. --}}
+
                 <div
                     x-show="!loading && meta.last_page > 1"
                     class="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 md:flex-row md:items-center md:justify-between">

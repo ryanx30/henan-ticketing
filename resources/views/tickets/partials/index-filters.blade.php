@@ -1,3 +1,6 @@
+{{-- ========= TICKET FILTERS ========= --}}
+{{-- Declarative ticket filters; behavior lives in the ticket index page script. --}}
+
 {{-- Ticket index filters are declarative; all behavior lives in resources/js/pages/tickets/index.js. --}}
 <form @submit.prevent="applyFilters()" class="mb-6">
     <div class="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_150px_150px_150px_280px_auto]">

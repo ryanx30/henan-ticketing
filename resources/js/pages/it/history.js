@@ -1,3 +1,12 @@
+/**
+ * IT History page controller.
+ * Loads resolved/closed ticket history, handles filters, sorting, pagination, and export actions.
+ */
+
+import { apiGet } from '../../utils/apiClient';
+import { formatDateTimeShort as formatDateTimeShortValue, formatHumanDate as formatHumanDateValue, titleCase, toYmd as toYmdValue } from '../../utils/formatter';
+import { showPageAlert } from '../../utils/toast';
+
 const historyExportUrl = "/api/it/history/export";
 
         function historyPage() {
@@ -38,17 +47,7 @@ const historyExportUrl = "/api/it/history/export";
                 },
 
                 showAlert(message, type = 'success') {
-                    const el = document.getElementById('page-alert');
-                    el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
-                    el.textContent = message;
-
-                    if (type === 'success') {
-                        el.classList.add('bg-green-100', 'text-green-800');
-                    } else {
-                        el.classList.add('bg-red-100', 'text-red-800');
-                    }
-
-                    setTimeout(() => el.classList.add('hidden'), 3000);
+                    showPageAlert(message, type);
                 },
 
                 buildQuery() {
@@ -117,20 +116,7 @@ const historyExportUrl = "/api/it/history/export";
 
                     try {
                         const params = this.buildQuery();
-                        const response = await fetch(`/api/it/history?${params.toString()}`, {
-                            headers: {
-                                'Accept': 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
-                            credentials: 'same-origin'
-                        });
-
-                        const result = await response.json();
-
-                        if (!response.ok || !result.success) {
-                            throw new Error(result.message || 'Failed to load history');
-                        }
-
+                        const result = await apiGet(`/api/it/history?${params.toString()}`);
                         this.tickets = result.data || [];
                         this.meta = result.meta || this.meta;
                         this.renderPagination();
@@ -239,14 +225,7 @@ const historyExportUrl = "/api/it/history/export";
                 },
 
                 formatHumanDate(value) {
-                    if (!value) return '-';
-
-                    const date = new Date(value);
-                    return date.toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                    });
+                    return formatHumanDateValue(value, 'en-US');
                 },
 
                 initDatePicker() {
@@ -329,10 +308,7 @@ const historyExportUrl = "/api/it/history/export";
                 },
 
                 toYmd(d) {
-                    const y = d.getFullYear();
-                    const m = String(d.getMonth() + 1).padStart(2, '0');
-                    const day = String(d.getDate()).padStart(2, '0');
-                    return `${y}-${m}-${day}`;
+                    return toYmdValue(d);
                 },
 
                 sortIcon(column) {
@@ -374,17 +350,7 @@ const historyExportUrl = "/api/it/history/export";
 
                 resolvedLabel(t) {
                     const value = t.resolved_at || t.closed_at || t.updated_at || t.created_at;
-                    if (!value) return '-';
-
-                    const date = new Date(value);
-
-                    return date.toLocaleDateString('en-GB', {
-                        day: '2-digit',
-                        month: 'short'
-                    }) + ', ' + date.toLocaleTimeString('en-GB', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    });
+                    return formatDateTimeShortValue(value, 'en-GB');
                 },
 
                 categoryLabel(t) {

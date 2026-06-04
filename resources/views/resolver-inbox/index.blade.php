@@ -1,3 +1,6 @@
+{{-- ========= RESOLVER INBOX SHELL ========= --}}
+{{-- Inbox filters, message table, and compose modal containers powered by the internal API. --}}
+
 @php
 $isIT = auth()->user()->role === 'it';
 @endphp

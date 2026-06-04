@@ -1,3 +1,13 @@
+/**
+ * Ticket detail page controller.
+ * Coordinates detail payload loading, status actions, similar tickets, attachments, and resolver message interactions.
+ */
+
+import { apiGet, apiPost, apiPatch, apiRequest } from '../../utils/apiClient';
+import { formatDateTime as formatDateTimeValue, formatFileSize as formatFileSizeValue, formatLiveDuration as formatLiveDurationValue } from '../../utils/formatter';
+import { priorityBadgeClass as buildPriorityBadgeClass, priorityLabel as buildPriorityLabel, statusBadgeClass as buildStatusBadgeClass, statusLabel as buildStatusLabel } from '../../utils/badges';
+import { showPageAlert } from '../../utils/toast';
+
 function ticketDetailPage({
                 ticketId,
                 currentUserId
@@ -78,45 +88,12 @@ function ticketDetailPage({
                         }
                     },
 
-                    csrf() {
-                        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-                    },
-
                     showAlert(message, type = 'success') {
-                        const el = document.getElementById('page-alert');
-                        if (!el) return;
-
-                        el.className = 'mb-6 rounded-lg border px-4 py-3 text-sm shadow-sm';
-                        el.classList.remove('hidden');
-
-                        if (type === 'success') {
-                            el.classList.add('border-green-200', 'bg-green-50', 'text-green-700');
-                        } else {
-                            el.classList.add('border-red-200', 'bg-red-50', 'text-red-700');
-                        }
-
-                        el.textContent = message;
-
-                        setTimeout(() => {
-                            el.classList.add('hidden');
-                        }, 3000);
+                        showPageAlert(message, type, 'page-alert', 3000);
                     },
 
                     async loadDetail() {
-                        const response = await fetch(`/api/tickets/${this.ticketId}`, {
-                            method: 'GET',
-                            credentials: 'same-origin',
-                            headers: {
-                                'Accept': 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
-                        });
-
-                        const result = await response.json();
-
-                        if (!response.ok || !result.success) {
-                            throw new Error(result.message || 'Failed to load ticket detail.');
-                        }
+                        const result = await apiGet(`/api/tickets/${this.ticketId}`);
 
                         this.ticket = result.data || {};
 
@@ -144,20 +121,7 @@ function ticketDetailPage({
                     },
 
                     async loadSimilarTickets() {
-                        const response = await fetch(`/api/tickets/${this.ticketId}/similar`, {
-                            method: 'GET',
-                            credentials: 'same-origin',
-                            headers: {
-                                'Accept': 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
-                        });
-
-                        const result = await response.json();
-
-                        if (!response.ok || !result.success) {
-                            throw new Error(result.message || 'Failed to load similar tickets.');
-                        }
+                        const result = await apiGet(`/api/tickets/${this.ticketId}/similar`);
 
                         this.similarTickets = result.data || [];
                     },
@@ -168,22 +132,7 @@ function ticketDetailPage({
                         this.claimSubmitting = true;
 
                         try {
-                            const response = await fetch(`/api/it/tickets/${this.ticketId}/claim`, {
-                                method: 'POST',
-                                credentials: 'same-origin',
-                                headers: {
-                                    'Accept': 'application/json',
-                                    'Content-Type': 'application/json',
-                                    'X-Requested-With': 'XMLHttpRequest',
-                                    'X-CSRF-TOKEN': this.csrf(),
-                                },
-                            });
-
-                            const result = await response.json();
-
-                            if (!response.ok || !result.success) {
-                                throw new Error(result.message || 'Failed to claim ticket.');
-                            }
+                            const result = await apiPost(`/api/it/tickets/${this.ticketId}/claim`, {});
 
                             this.showAlert(result.message || 'Ticket claimed successfully.', 'success');
                             await this.loadAll();
@@ -201,26 +150,10 @@ function ticketDetailPage({
                         this.statusSubmitting = true;
 
                         try {
-                            const response = await fetch(`/api/it/tickets/${this.ticketId}/status`, {
-                                method: 'PATCH',
-                                credentials: 'same-origin',
-                                headers: {
-                                    'Accept': 'application/json',
-                                    'Content-Type': 'application/json',
-                                    'X-Requested-With': 'XMLHttpRequest',
-                                    'X-CSRF-TOKEN': this.csrf(),
-                                },
-                                body: JSON.stringify({
-                                    status: this.statusForm.status,
-                                    note: this.statusForm.note,
-                                }),
+                            const result = await apiPatch(`/api/it/tickets/${this.ticketId}/status`, {
+                                status: this.statusForm.status,
+                                note: this.statusForm.note,
                             });
-
-                            const result = await response.json();
-
-                            if (!response.ok || !result.success) {
-                                throw new Error(result.message || 'Failed to update status.');
-                            }
 
                             this.statusForm.note = '';
                             this.showAlert(result.message || 'Status updated successfully.', 'success');
@@ -277,22 +210,10 @@ function ticketDetailPage({
                                 formData.append('attachment', this.composeForm.attachment);
                             }
 
-                            const response = await fetch('/api/resolver-inbox', {
+                            const result = await apiRequest('/api/resolver-inbox', {
                                 method: 'POST',
-                                credentials: 'same-origin',
-                                headers: {
-                                    'Accept': 'application/json',
-                                    'X-Requested-With': 'XMLHttpRequest',
-                                    'X-CSRF-TOKEN': this.csrf(),
-                                },
                                 body: formData,
                             });
-
-                            const result = await response.json();
-
-                            if (!response.ok || !result.success) {
-                                throw new Error(result.message || 'Failed to send message.');
-                            }
 
                             this.showAlert(result.message || 'Message sent successfully.', 'success');
                             this.discardDraft();
@@ -309,21 +230,7 @@ function ticketDetailPage({
                         if (!item?.id || !this.isUnreadUpdate(item)) return;
 
                         try {
-                            const response = await fetch(`/api/resolver-inbox/${item.id}/read`, {
-                                method: 'PATCH',
-                                credentials: 'same-origin',
-                                headers: {
-                                    'Accept': 'application/json',
-                                    'X-Requested-With': 'XMLHttpRequest',
-                                    'X-CSRF-TOKEN': this.csrf(),
-                                },
-                            });
-
-                            const result = await response.json();
-
-                            if (!response.ok || !result.success) {
-                                throw new Error(result.message || 'Failed to mark message as read.');
-                            }
+                            const result = await apiPatch(`/api/resolver-inbox/${item.id}/read`, {});
 
                             item.is_read = true;
                             item.read_at = result.data?.read_at || item.read_at;
@@ -501,53 +408,27 @@ function ticketDetailPage({
                     },
 
                     formatFileSize(size) {
-                        const bytes = Number(size || 0);
-                        if (!bytes) return 'Unknown size';
-
-                        if (bytes < 1024) return `${bytes} B`;
-                        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-
-                        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+                        return formatFileSizeValue(size);
                     },
 
                     formatStatus(value) {
-                        return window.HenanApp?.statusLabel
-                            ? window.HenanApp.statusLabel(value)
-                            : this.humanLabel(value);
+                        return buildStatusLabel(value);
                     },
 
                     formatPriority(value) {
-                        return window.HenanApp?.priorityLabel
-                            ? window.HenanApp.priorityLabel(value)
-                            : this.humanLabel(value);
+                        return buildPriorityLabel(value);
                     },
 
                     formatDateTime(value) {
-                        if (!value) return '-';
-
-                        try {
-                            return new Intl.DateTimeFormat('en-GB', {
-                                day: '2-digit',
-                                month: 'short',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                            }).format(new Date(value));
-                        } catch {
-                            return value;
-                        }
+                        return formatDateTimeValue(value, 'en-GB');
                     },
 
                     statusBadgeClass(status) {
-                        return window.HenanApp?.statusBadgeClass
-                            ? window.HenanApp.statusBadgeClass(status)
-                            : 'badge-status-default';
+                        return buildStatusBadgeClass(status);
                     },
 
                     priorityBadgeClass(priority) {
-                        return window.HenanApp?.priorityBadgeClass
-                            ? window.HenanApp.priorityBadgeClass(priority)
-                            : 'badge-priority-default';
+                        return buildPriorityBadgeClass(priority);
                     },
 
                     slaLabel() {
@@ -572,19 +453,7 @@ function ticketDetailPage({
                     },
 
                     formatLiveDuration(diffMs) {
-                        const safeDiff = Math.max(0, Math.abs(Number(diffMs) || 0));
-                        const totalSeconds = Math.floor(safeDiff / 1000);
-                        const days = Math.floor(totalSeconds / 86400);
-                        const hours = Math.floor((totalSeconds % 86400) / 3600);
-                        const minutes = Math.floor((totalSeconds % 3600) / 60);
-                        const seconds = totalSeconds % 60;
-                        const pad = (value) => String(value).padStart(2, '0');
-
-                        if (days > 0) {
-                            return `${days}d ${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
-                        }
-
-                        return `${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
+                        return formatLiveDurationValue(diffMs);
                     },
 
                     remainingSlaText() {

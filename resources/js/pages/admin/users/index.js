@@ -1,3 +1,12 @@
+/**
+ * Admin users list page controller.
+ * Loads users, applies filters, handles pagination, and triggers user activation/deactivation actions.
+ */
+
+import { apiGet, apiPatch } from '../../../utils/apiClient';
+import { formatDate as formatSharedDate } from '../../../utils/formatter';
+import { showAlert as showSharedAlert } from '../../../utils/toast';
+
 function adminUsersPage() {
     return {
         loading: false,
@@ -67,19 +76,7 @@ function adminUsersPage() {
 
             try {
                 const params = this.buildQuery();
-                const response = await fetch(`/api/admin/users?${params.toString()}`, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin',
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to load users');
-                }
+                const result = await apiGet(`/api/admin/users?${params.toString()}`);
 
                 this.rows = result.data?.rows || [];
                 this.meta = result.data?.meta || this.meta;
@@ -93,21 +90,7 @@ function adminUsersPage() {
 
         async toggleStatus(row) {
             try {
-                const response = await fetch(`/api/admin/users/${row.id}/status`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin',
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to update status');
-                }
+                const result = await apiPatch(`/api/admin/users/${row.id}/status`);
 
                 row.is_active = result.data?.is_active ?? row.is_active;
                 this.showAlert(result.message || 'Status updated successfully', 'success');
@@ -174,33 +157,11 @@ function adminUsersPage() {
         },
 
         formatDate(value) {
-            if (!value) return '-';
-
-            const date = new Date(value);
-
-            return date.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-            });
+            return formatSharedDate(value, 'en-US');
         },
 
         showAlert(message, type = 'success') {
-            const el = document.getElementById('page-alert');
-            if (!el) return;
-
-            el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
-            el.textContent = message;
-
-            if (type === 'success') {
-                el.classList.add('bg-green-100', 'text-green-800');
-            } else {
-                el.classList.add('bg-red-100', 'text-red-800');
-            }
-
-            setTimeout(() => {
-                el.classList.add('hidden');
-            }, 3000);
+            showSharedAlert(message, type);
         },
     }
 }

@@ -1,3 +1,6 @@
+{{-- ========= MASTER DATA TABLE BODY ========= --}}
+{{-- Alpine-rendered rows and empty/loading states for master data. --}}
+
                         <tbody>
                             <template x-if="loading">
                                 <tr>

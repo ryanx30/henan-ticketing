@@ -9,6 +9,9 @@ use App\Models\Team;
 use App\Models\TicketSequence;
 use InvalidArgumentException;
 
+/**
+ * Generates structured numeric ticket codes from master data and sequence records.
+ */
 class TicketCodeService
 {
     public const SEQUENCE_LENGTH = 5;

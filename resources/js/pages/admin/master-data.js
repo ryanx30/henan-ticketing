@@ -1,3 +1,12 @@
+/**
+ * Admin master data page controller.
+ * Manages master data tables, filters, modal state, CRUD actions, and validation feedback.
+ */
+
+import { apiDelete, apiGet, apiPatch, apiPost } from '../../utils/apiClient';
+import { formatDate as formatSharedDate } from '../../utils/formatter';
+import { showAlert as showSharedAlert } from '../../utils/toast';
+
 function masterDataPage() {
             return {
                 tabs: [{
@@ -51,6 +60,7 @@ function masterDataPage() {
                 },
                 errors: {},
                 form: {},
+                originalForm: {},
 
                 init() {
                     const params = new URLSearchParams(window.location.search);
@@ -63,9 +73,6 @@ function masterDataPage() {
                     this.loadRows();
                 },
 
-                csrf() {
-                    return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-                },
 
                 currentLabelSingle() {
                     return {
@@ -157,19 +164,7 @@ function masterDataPage() {
                         const params = this.buildQuery();
                         window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
 
-                        const response = await fetch(`/api/admin/master-data?${params.toString()}`, {
-                            headers: {
-                                'Accept': 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
-                            credentials: 'same-origin',
-                        });
-
-                        const result = await response.json();
-
-                        if (!response.ok || !result.success) {
-                            throw new Error(result.message || 'Failed to load master data');
-                        }
+                        const result = await apiGet(`/api/admin/master-data?${params.toString()}`);
 
                         this.rows = result.data?.rows || [];
                         this.meta = result.data?.meta || this.meta;
@@ -225,6 +220,7 @@ function masterDataPage() {
                     this.modal.mode = 'create';
                     this.modal.id = null;
                     this.form = this.blankForm();
+                    this.originalForm = {};
                 },
 
                 openEdit(row) {
@@ -236,6 +232,7 @@ function masterDataPage() {
                         ...this.blankForm(),
                         ...row,
                     };
+                    this.originalForm = { ...this.form };
                 },
 
                 closeModal() {
@@ -244,47 +241,125 @@ function masterDataPage() {
                     this.modal.id = null;
                     this.errors = {};
                     this.form = {};
+                    this.originalForm = {};
+                },
+
+
+                sensitiveFieldMap() {
+                    return {
+                        'categories': {
+                            code_num: 'Category Code',
+                        },
+                        'issue-types': {
+                            category_id: 'Linked Category',
+                            code_num: 'Issue Type Code',
+                        },
+                        'teams': {
+                            code_num: 'Team Digit',
+                            name: 'Team Name',
+                            code: 'Team System Key',
+                        },
+                        'priorities': {
+                            code_num: 'Priority Digit',
+                            name: 'Priority Name',
+                            code: 'Priority System Key',
+                            sort_order: 'Priority Sort Order',
+                        },
+                        'sla-rules': {
+                            team_id: 'SLA Team',
+                            priority_id: 'SLA Priority',
+                            hours: 'SLA Hours',
+                            is_active: 'SLA Active Status',
+                        },
+                    } [this.activeTab] || {};
+                },
+
+                normalizeForCompare(value) {
+                    if (value === null || value === undefined) {
+                        return '';
+                    }
+
+                    if (typeof value === 'boolean') {
+                        return value ? '1' : '0';
+                    }
+
+                    return String(value).trim();
+                },
+
+                sensitiveChanges() {
+                    if (this.modal.mode !== 'edit') {
+                        return [];
+                    }
+
+                    const fields = this.sensitiveFieldMap();
+
+                    return Object.entries(fields)
+                        .filter(([key]) => this.normalizeForCompare(this.form[key]) !== this.normalizeForCompare(this.originalForm[key]))
+                        .map(([key, label]) => ({
+                            key,
+                            label,
+                            before: this.normalizeForCompare(this.originalForm[key]) || '-',
+                            after: this.normalizeForCompare(this.form[key]) || '-',
+                        }));
+                },
+
+                hasSensitiveChanges() {
+                    return this.sensitiveChanges().length > 0;
+                },
+
+                sensitiveWarningText() {
+                    return 'This change can affect ticket routing, SLA calculation, ticket code generation, reports, and case analytics. Please review it carefully before saving.';
+                },
+
+                confirmSensitiveUpdate() {
+                    const changes = this.sensitiveChanges();
+
+                    if (!changes.length) {
+                        return true;
+                    }
+
+                    const summary = changes
+                        .map(change => `- ${change.label}: ${change.before} → ${change.after}`)
+                        .join('\n');
+
+                    return confirm([
+                        'You are editing sensitive Master Data.',
+                        '',
+                        summary,
+                        '',
+                        'This can affect ticket routing, SLA calculation, ticket code generation, reports, and case analytics.',
+                        'Continue saving these changes?',
+                    ].join('\n'));
                 },
 
                 async submit() {
-                    this.saving = true;
                     this.errors = {};
 
+                    const isEdit = this.modal.mode === 'edit';
+
+                    if (isEdit && !this.confirmSensitiveUpdate()) {
+                        return;
+                    }
+
+                    this.saving = true;
+
                     try {
-                        const isEdit = this.modal.mode === 'edit';
                         const url = isEdit ?
                             `/api/admin/master-data/${this.activeTab}/${this.modal.id}` :
                             `/api/admin/master-data/${this.activeTab}`;
 
-                        const method = isEdit ? 'PATCH' : 'POST';
-
-                        const response = await fetch(url, {
-                            method,
-                            headers: {
-                                'Accept': 'application/json',
-                                'Content-Type': 'application/json',
-                                'X-CSRF-TOKEN': this.csrf(),
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
-                            credentials: 'same-origin',
-                            body: JSON.stringify(this.form),
-                        });
-
-                        const result = await response.json();
-
-                        if (response.status === 422) {
-                            this.errors = this.mapErrors(result.errors || {});
-                            throw new Error(result.message || 'Validation failed');
-                        }
-
-                        if (!response.ok || !result.success) {
-                            throw new Error(result.message || 'Failed to save data');
-                        }
+                        const result = isEdit
+                            ? await apiPatch(url, this.form)
+                            : await apiPost(url, this.form);
 
                         this.showAlert(result.message || 'Saved successfully.', 'success');
                         this.closeModal();
                         this.loadRows();
                     } catch (error) {
+                        if (error.status === 422) {
+                            this.errors = this.mapErrors(error.payload?.errors || {});
+                        }
+
                         if (!Object.keys(this.errors).length) {
                             this.showAlert(error.message || 'Failed to save data', 'error');
                         }
@@ -301,21 +376,7 @@ function masterDataPage() {
                     }
 
                     try {
-                        const response = await fetch(`/api/admin/master-data/${this.activeTab}/${row.id}`, {
-                            method: 'DELETE',
-                            headers: {
-                                'Accept': 'application/json',
-                                'X-CSRF-TOKEN': this.csrf(),
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
-                            credentials: 'same-origin',
-                        });
-
-                        const result = await response.json();
-
-                        if (!response.ok || !result.success) {
-                            throw new Error(result.message || 'Failed to delete data');
-                        }
+                        const result = await apiDelete(`/api/admin/master-data/${this.activeTab}/${row.id}`);
 
                         this.showAlert(result.message || 'Deleted successfully.', 'success');
 
@@ -376,30 +437,11 @@ function masterDataPage() {
                 },
 
                 formatDate(value) {
-                    if (!value) return '-';
-
-                    const date = new Date(value);
-                    return date.toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                    });
+                    return formatSharedDate(value, 'en-US');
                 },
 
                 showAlert(message, type = 'success') {
-                    const el = document.getElementById('page-alert');
-                    if (!el) return;
-
-                    el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
-                    el.textContent = message;
-
-                    if (type === 'success') {
-                        el.classList.add('bg-green-100', 'text-green-800');
-                    } else {
-                        el.classList.add('bg-red-100', 'text-red-800');
-                    }
-
-                    setTimeout(() => el.classList.add('hidden'), 3000);
+                    showSharedAlert(message, type);
                 },
             }
         }

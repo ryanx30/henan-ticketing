@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\ResolverMessage;
 use Illuminate\Http\Request;
 
+/**
+ * Renders resolver inbox pages; inbox data and message actions are loaded through the internal API.
+ */
 class ResolverInboxPageController extends Controller
 {
     // Render resolver inbox index page

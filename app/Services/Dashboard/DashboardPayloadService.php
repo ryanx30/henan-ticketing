@@ -11,6 +11,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Builds role-aware dashboard payloads and keeps dashboard controller logic thin.
+ */
 class DashboardPayloadService
 {
     public function make(Request $request): array
@@ -197,7 +200,7 @@ class DashboardPayloadService
             $resolverInboxQ->where('created_at', '>=', $inboxStart);
         }
 
-        $resolverInbox = $resolverInboxQ->take(10)->get();
+        $resolverInbox = $resolverInboxQ->take(30)->get();
 
         // ===== IT Dashboard data =====
         $itMyQueue = $request->user()->isSupervisor()

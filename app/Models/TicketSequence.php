@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
+/**
+ * Stores per-prefix ticket sequence counters used by the ticket code generator.
+ */
 class TicketSequence extends Model
 {
     protected $fillable = [

@@ -1,3 +1,12 @@
+/**
+ * IT My Queue page controller.
+ * Renders the authenticated resolver queue by status bucket and handles status updates.
+ */
+
+import { apiGet, apiPost, apiPatch } from '../../utils/apiClient';
+import { priorityBadgeClass as buildPriorityBadgeClass, statusBadgeClass as buildStatusBadgeClass, statusLabel as buildStatusLabel } from '../../utils/badges';
+import { showPageAlert } from '../../utils/toast';
+
 function myQueuePage() {
     return {
         loading: false,
@@ -21,48 +30,19 @@ function myQueuePage() {
             if (this.timer) clearInterval(this.timer);
         },
 
-        csrf() {
-            return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        },
-
         ticketUrl(ticketId) {
             return `/tickets/${ticketId}`;
         },
 
         showAlert(message, type = 'success') {
-            const el = document.getElementById('page-alert');
-            el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
-            el.textContent = message;
-
-            if (type === 'success') {
-                el.classList.add('bg-green-100', 'text-green-800');
-            } else {
-                el.classList.add('bg-red-100', 'text-red-800');
-            }
-
-            setTimeout(() => {
-                el.classList.add('hidden');
-            }, 3000);
+            showPageAlert(message, type);
         },
 
         async loadQueue() {
             this.loading = true;
 
             try {
-                const response = await fetch('/api/it/my-queue', {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin'
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to load my queue');
-                }
-
+                const result = await apiGet('/api/it/my-queue');
                 const data = result.data || {};
                 this.newTickets = data.new_tickets || [];
                 this.ongoingTickets = data.ongoing_tickets || [];
@@ -78,22 +58,7 @@ function myQueuePage() {
 
         async claimTicket(ticketId) {
             try {
-                const response = await fetch(`/api/it/tickets/${ticketId}/claim`, {
-                    method: 'POST',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': this.csrf(),
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin',
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to claim ticket');
-                }
-
+                const result = await apiPost(`/api/it/tickets/${ticketId}/claim`);
                 this.showAlert(result.message || 'Ticket claimed successfully', 'success');
                 await this.loadQueue();
             } catch (error) {
@@ -105,24 +70,7 @@ function myQueuePage() {
 
         async updateStatus(ticketId, status) {
             try {
-                const response = await fetch(`/api/it/tickets/${ticketId}/status`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': this.csrf(),
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({ status })
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to update status');
-                }
-
+                const result = await apiPatch(`/api/it/tickets/${ticketId}/status`, { status });
                 this.showAlert(result.message || 'Status updated successfully', 'success');
                 await this.loadQueue();
             } catch (error) {
@@ -143,26 +91,15 @@ function myQueuePage() {
         },
 
         statusLabel(status) {
-            const map = {
-                new: 'New',
-                in_progress: 'Ongoing',
-                waiting_info: 'Waiting Info',
-                resolved: 'Resolved',
-                closed: 'Closed',
-            };
-            return map[status] || status || '-';
+            return buildStatusLabel(status);
         },
 
         priorityBadgeClass(priority) {
-            return window.HenanApp?.priorityBadgeClass
-                ? window.HenanApp.priorityBadgeClass(priority)
-                : 'badge-priority-default';
+            return buildPriorityBadgeClass(priority);
         },
 
         statusBadgeClass(status) {
-            return window.HenanApp?.statusBadgeClass
-                ? window.HenanApp.statusBadgeClass(status)
-                : 'badge-status-default';
+            return buildStatusBadgeClass(status);
         },
 
         slaCountdown(deadline) {

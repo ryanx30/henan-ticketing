@@ -1,4 +1,7 @@
-        {{-- TABLE CARD --}}
+{{-- ========= HISTORY TABLE ========= --}}
+{{-- History table markup; row data is rendered from API state. --}}
+
+        {{-- ========= TABLE CARD ========= --}}
         <div class="overflow-hidden rounded-lg border border-slate-300 shadow-[0_4px_12px_rgba(15,23,42,0.08)]">
             <div class="bg-[#051823] px-7 py-2">
                 <h2 class="text-2xl px-4 font-semibold leading-none text-white">

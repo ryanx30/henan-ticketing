@@ -1,4 +1,7 @@
-                    {{-- Recent updates --}}
+{{-- ========= RECENT UPDATES ========= --}}
+{{-- Latest ticket-related updates displayed on the detail page. --}}
+
+                    {{-- ========= RECENT UPDATES ========= --}}
                     <div class="rounded-sm border border-slate-200 bg-white shadow-lg">
                         <div class="border-b border-slate-200 px-6 py-4">
                             <h2 class="text-[20px] font-bold text-slate-900">Recent Updates</h2>

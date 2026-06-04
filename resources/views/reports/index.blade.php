@@ -1,3 +1,6 @@
+{{-- ========= REPORTS SHELL ========= --}}
+{{-- Composes report filters, KPI cards, trend chart, SLA table, and export controls. --}}
+
 <x-app-layout>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css" />

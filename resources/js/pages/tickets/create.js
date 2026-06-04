@@ -1,3 +1,12 @@
+/**
+ * Create ticket page controller.
+ * Handles form state, routing preview, required-field checklist, similar ticket lookup, FormData submission, and attachment upload.
+ */
+
+import { apiGet, apiRequest } from '../../utils/apiClient';
+import { formatDateTime } from '../../utils/formatter';
+import { showAlert as showPageAlert } from '../../utils/toast';
+
 function createTicketPage() {
     return {
         submitting: false,
@@ -17,6 +26,7 @@ function createTicketPage() {
             teams: [],
             categories: [],
             priorities: [],
+            slaRules: [],
         },
         sections: {
             client: true,
@@ -54,23 +64,8 @@ function createTicketPage() {
         },
 
         showAlert(message, type = 'success') {
-            const el = document.getElementById('page-alert');
-            if (!el) return;
-
-            el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
-            el.textContent = message;
-
-            if (type === 'success') {
-                el.classList.add('bg-green-100', 'text-green-800');
-            } else {
-                el.classList.add('bg-red-100', 'text-red-800');
-            }
-
+            showPageAlert(message, type);
             window.scrollTo({ top: 0, behavior: 'smooth' });
-
-            setTimeout(() => {
-                el.classList.add('hidden');
-            }, 3000);
         },
 
         clientSearchQuery() {
@@ -95,20 +90,7 @@ function createTicketPage() {
 
             try {
                 const params = new URLSearchParams({ q: query });
-                const response = await fetch(`/api/clients/suggest?${params.toString()}`, {
-                    method: 'GET',
-                    credentials: 'same-origin',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to load client suggestions.');
-                }
+                const result = await apiGet(`/api/clients/suggest?${params.toString()}`);
 
                 this.clientSuggestions = result.data || [];
             } catch (error) {
@@ -123,7 +105,7 @@ function createTicketPage() {
             this.selectedClient = client;
             this.form.client_id = client.id ? String(client.id) : '';
             this.form.client_name = client.name || '';
-            this.form.client_contact = client.contact || '';
+            this.form.client_contact = this.onlyDigits(client.contact || '').slice(0, 13);
             this.form.client_email = client.email || '';
             this.clientSuggestOpen = false;
             this.loadClientHistory(client.id);
@@ -135,6 +117,40 @@ function createTicketPage() {
             this.clientHistory = [];
         },
 
+        onlyDigits(value) {
+            return String(value || '').replace(/\D/g, '');
+        },
+
+        guardClientContactKey(event) {
+            const allowedNavigationKeys = [
+                'Backspace',
+                'Delete',
+                'Tab',
+                'ArrowLeft',
+                'ArrowRight',
+                'Home',
+                'End',
+            ];
+
+            if (event.ctrlKey || event.metaKey || allowedNavigationKeys.includes(event.key)) {
+                return;
+            }
+
+            if (!/^[0-9]$/.test(event.key)) {
+                event.preventDefault();
+            }
+        },
+
+        sanitizeClientContact(event) {
+            const cleanValue = this.onlyDigits(event.target.value).slice(0, 13);
+            this.form.client_contact = cleanValue;
+            event.target.value = cleanValue;
+        },
+
+        isEmailFormatValid() {
+            return String(this.form.client_email || '').includes('@');
+        },
+
         async loadClientHistory(clientId) {
             if (!clientId) {
                 this.clientHistory = [];
@@ -144,20 +160,7 @@ function createTicketPage() {
             this.clientHistoryLoading = true;
 
             try {
-                const response = await fetch(`/api/clients/${clientId}/history`, {
-                    method: 'GET',
-                    credentials: 'same-origin',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to load client history.');
-                }
+                const result = await apiGet(`/api/clients/${clientId}/history`);
 
                 this.selectedClient = result.data?.client || this.selectedClient;
                 this.clientHistory = result.data?.tickets || [];
@@ -174,39 +177,19 @@ function createTicketPage() {
         },
 
         formatDate(value) {
-            if (!value) return '-';
-
-            return new Date(value).toLocaleString('en-GB', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-            });
+            return formatDateTime(value, 'en-GB');
         },
 
         async loadFormOptions() {
             this.optionsLoading = true;
 
             try {
-                const response = await fetch('/api/ticket-form/options', {
-                    method: 'GET',
-                    credentials: 'same-origin',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to load ticket form options.');
-                }
+                const result = await apiGet('/api/ticket-form/options');
 
                 this.master.teams = result.data?.teams || [];
                 this.master.categories = result.data?.categories || [];
                 this.master.priorities = result.data?.priorities || [];
+                this.master.slaRules = result.data?.sla_rules || [];
 
                 const defaultTeam = this.master.teams.find(item => (item.code || '').toLowerCase() === 'it') || this.master.teams[0];
                 const defaultPriority = this.master.priorities.find(item => (item.code || '').toLowerCase() === 'medium') || this.master.priorities[0];
@@ -231,20 +214,7 @@ function createTicketPage() {
 
             try {
                 const params = new URLSearchParams({ category_id: this.form.category_id });
-                const response = await fetch(`/api/ticket-form/issue-types?${params.toString()}`, {
-                    method: 'GET',
-                    credentials: 'same-origin',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to load issue types.');
-                }
+                const result = await apiGet(`/api/ticket-form/issue-types?${params.toString()}`);
 
                 this.issueTypes = result.data || [];
             } catch (error) {
@@ -357,24 +327,77 @@ function createTicketPage() {
             ].join('');
         },
 
-        slaPreview() {
-            const priority = (this.selectedPriority()?.code || '').toLowerCase();
+        normalizeCode(value) {
+            return String(value || '').trim().toLowerCase();
+        },
 
+        isSelectedTeamIt() {
+            const team = this.selectedTeam();
+
+            return this.normalizeCode(team?.code || team?.name) === 'it';
+        },
+
+        formatHours(hours) {
+            const numericHours = Number(hours);
+
+            if (!Number.isFinite(numericHours) || numericHours <= 0) {
+                return '-';
+            }
+
+            if (numericHours < 1) {
+                return `${Math.round(numericHours * 60)}m`;
+            }
+
+            return `${numericHours}h`;
+        },
+
+        fallbackSlaHoursByPriority(priorityCode) {
             const map = {
-                critical: { response: '30m', resolve: '2hr' },
-                high: { response: '1hr', resolve: '6hr' },
-                medium: { response: '4hr', resolve: '12hr' },
-                low: { response: '8hr', resolve: '24hr' },
+                critical: 2,
+                high: 6,
+                medium: 12,
+                low: 24,
             };
 
-            return map[priority] || { response: '-', resolve: '-' };
+            return map[this.normalizeCode(priorityCode)] || null;
+        },
+
+        selectedSlaRule() {
+            return this.master.slaRules.find(rule => (
+                String(rule.team_id) === String(this.form.team_id)
+                && String(rule.priority_id) === String(this.form.priority_id)
+            )) || null;
+        },
+
+        slaPreview() {
+            const team = this.selectedTeam();
+            const priority = this.selectedPriority();
+
+            if (!team || !priority) {
+                return { rule: 'Select team and priority', resolve: '-' };
+            }
+
+            if (!this.isSelectedTeamIt()) {
+                return {
+                    rule: `${this.masterLabel(team)} / ${this.masterLabel(priority)}`,
+                    resolve: 'No SLA - direct closed',
+                };
+            }
+
+            const rule = this.selectedSlaRule();
+            const hours = rule?.hours ?? this.fallbackSlaHoursByPriority(priority.code);
+
+            return {
+                rule: rule ? 'Master Data SLA Rule' : 'Default fallback rule',
+                resolve: this.formatHours(hours),
+            };
         },
 
         requiredFieldMap() {
             return [
                 { key: 'client_name', label: 'Client Name', selector: 'field-client_name', filled: !!this.form.client_name },
-                { key: 'client_contact', label: 'Client Contact', selector: 'field-client_contact', filled: !!this.form.client_contact },
-                { key: 'client_email', label: 'Client Email', selector: 'field-client_email', filled: !!this.form.client_email },
+                { key: 'client_contact', label: 'Client Contact', selector: 'field-client_contact', filled: /^[0-9]{1,13}$/.test(this.form.client_contact || '') },
+                { key: 'client_email', label: 'Client Email', selector: 'field-client_email', filled: this.isEmailFormatValid() },
                 { key: 'title', label: 'Title', selector: 'field-title', filled: !!this.form.title },
                 { key: 'description', label: 'Description', selector: 'field-description', filled: !!this.form.description },
                 { key: 'priority_id', label: 'Priority', selector: 'field-priority', filled: !!this.form.priority_id },
@@ -440,20 +463,7 @@ function createTicketPage() {
                     category: category.name || category.slug || '',
                 });
 
-                const response = await fetch(`/api/tickets-similar?${params.toString()}`, {
-                    method: 'GET',
-                    credentials: 'same-origin',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to load similar tickets.');
-                }
+                const result = await apiGet(`/api/tickets-similar?${params.toString()}`);
 
                 this.similarTickets = result.data || [];
             } catch (error) {
@@ -493,22 +503,10 @@ function createTicketPage() {
                     formData.append('attachment', this.form.attachment);
                 }
 
-                const response = await fetch('/api/tickets', {
+                const result = await apiRequest('/api/tickets', {
                     method: 'POST',
-                    credentials: 'same-origin',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': this.csrf(),
-                    },
                     body: formData,
                 });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to create ticket.');
-                }
 
                 this.showAlert('Ticket created successfully.', 'success');
 

@@ -1,9 +1,13 @@
+{{-- ========= ADMIN USERS INDEX ========= --}}
+{{-- User management filter and table containers for API-backed rendering. --}}
+
 <x-app-layout>
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <div
-        x-data="adminUsersPage()"
-        x-init="init()"
+        data-can-manage-users="{{ auth()->user()?->role === 'admin' ? '1' : '0' }}"
+        x-data="{ ...adminUsersPage(), canManageUsers: false }"
+        x-init="canManageUsers = $el.dataset.canManageUsers === '1'; init()"
         class="min-h-screen bg-[#eef1f5] px-8 py-7">
         <div class="mx-auto w-full max-w-[1600px]">
             <div id="page-alert" class="hidden mb-4 rounded p-3 text-sm"></div>
@@ -15,7 +19,7 @@
                 </p>
             </div>
 
-            {{-- FILTER BAR --}}
+            {{-- ========= FILTER BAR ========= --}}
             <div class="mb-5 rounded bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
                 <div class="flex flex-wrap items-center gap-3">
                     <input
@@ -70,6 +74,8 @@
                         </button>
 
                         <a
+                            x-show="canManageUsers"
+                            x-cloak
                             href="{{ route('admin.users.create') }}"
                             class="rounded bg-slate-900 px-4 py-2 text-sm text-white shadow hover:bg-slate-800">
                             + Add User
@@ -78,7 +84,7 @@
                 </div>
             </div>
 
-            {{-- TABLE --}}
+            {{-- ========= TABLE ========= --}}
             <div class="overflow-hidden rounded bg-white shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
                 <div class="bg-[#051823] px-5 py-3">
                     <h2 class="text-[20px] font-semibold text-white">User Management</h2>
@@ -139,21 +145,29 @@
 
                                     <td class="px-5 py-3">
                                         <div class="flex justify-end gap-2">
-                                            <a
-                                                :href="`/admin/users/${row.id}/edit`"
-                                                class="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
-                                                Edit
-                                            </a>
+                                            <template x-if="canManageUsers">
+                                                <div class="flex justify-end gap-2">
+                                                    <a
+                                                        :href="`/admin/users/${row.id}/edit`"
+                                                        class="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
+                                                        Edit
+                                                    </a>
 
-                                            <button
-                                                type="button"
-                                                @click="toggleStatus(row)"
-                                                class="rounded px-3 py-1.5 text-xs font-medium"
-                                                :class="row.is_active
-                                                    ? 'bg-red-50 text-red-700 hover:bg-red-100'
-                                                    : 'bg-green-50 text-green-700 hover:bg-green-100'"
-                                                x-text="row.is_active ? 'Deactivate' : 'Activate'">
-                                            </button>
+                                                    <button
+                                                        type="button"
+                                                        @click="toggleStatus(row)"
+                                                        class="rounded px-3 py-1.5 text-xs font-medium"
+                                                        :class="row.is_active
+                                                            ? 'bg-red-50 text-red-700 hover:bg-red-100'
+                                                            : 'bg-green-50 text-green-700 hover:bg-green-100'"
+                                                        x-text="row.is_active ? 'Deactivate' : 'Activate'">
+                                                    </button>
+                                                </div>
+                                            </template>
+
+                                            <template x-if="!canManageUsers">
+                                                <span class="text-xs text-slate-400">View only</span>
+                                            </template>
                                         </div>
                                     </td>
                                 </tr>

@@ -1,4 +1,7 @@
-                    {{-- Status history --}}
+{{-- ========= STATUS HISTORY ========= --}}
+{{-- Ticket lifecycle events from creation through close/reopen transitions. --}}
+
+                    {{-- ========= STATUS HISTORY ========= --}}
                     <div class="rounded-sm border border-slate-200 bg-white shadow-lg">
                         <div class="border-b border-slate-200 px-6 py-4">
                             <h2 class="text-[20px] font-bold text-slate-900">Status History</h2>

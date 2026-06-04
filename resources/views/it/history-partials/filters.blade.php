@@ -1,4 +1,7 @@
-        {{-- TOP FILTER BAR --}}
+{{-- ========= HISTORY FILTERS ========= --}}
+{{-- Search, date, sort, and export filters for resolved/closed ticket history. --}}
+
+        {{-- ========= TOP FILTER BAR ========= --}}
         <form @submit.prevent="applyFilters()" id="historyFilterForm" class="mb-6">
             <div class="flex items-center gap-2">
 

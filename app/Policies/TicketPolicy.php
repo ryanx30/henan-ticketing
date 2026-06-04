@@ -5,6 +5,9 @@ namespace App\Policies;
 use App\Models\Ticket;
 use App\Models\User;
 
+/**
+ * Defines role-based authorization rules for viewing, creating, updating, and deleting tickets.
+ */
 class TicketPolicy
 {
     /**

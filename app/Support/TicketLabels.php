@@ -5,6 +5,9 @@ namespace App\Support;
 use App\Models\Ticket;
 use Carbon\Carbon;
 
+/**
+ * Provides consistent human-readable ticket labels used across API and UI payloads.
+ */
 final class TicketLabels
 {
     public static function code(Ticket $ticket): string

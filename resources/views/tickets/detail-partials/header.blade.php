@@ -1,4 +1,7 @@
-            {{-- Header --}}
+{{-- ========= TICKET DETAIL HEADER ========= --}}
+{{-- Ticket title, code, and primary context for the detail page. --}}
+
+            {{-- ========= HEADER ========= --}}
             <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                     <div class="mb-2 flex items-center gap-3">

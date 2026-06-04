@@ -6,6 +6,9 @@ use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Throwable;
 
+/**
+ * Writes audit log entries with actor context and before/after values for important business actions.
+ */
 class AuditLogger
 {
     public static function record(

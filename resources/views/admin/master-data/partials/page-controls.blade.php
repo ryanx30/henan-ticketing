@@ -1,3 +1,6 @@
+{{-- ========= MASTER DATA PAGE CONTROLS ========= --}}
+{{-- Page heading, type switcher, and search/filter controls for master data. --}}
+
             <div class="mb-6">
                 <h1 class="text-[34px] font-bold text-[#051823]">MASTER DATA</h1>
                 <p class="mt-1 text-sm text-slate-500">

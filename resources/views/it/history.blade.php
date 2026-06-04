@@ -1,3 +1,6 @@
+{{-- ========= HISTORY SHELL ========= --}}
+{{-- Filter, table, pagination, and export containers for resolved/closed ticket history. --}}
+
 <x-app-layout>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css" />

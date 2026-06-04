@@ -15,6 +15,9 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
+/**
+ * Coordinates ticket creation and update rules that are not tied to a single controller action.
+ */
 class TicketService
 {
     public function __construct(
@@ -193,7 +196,7 @@ class TicketService
 
         if (!$team) {
             abort(response()->json([
-                'success' => false,
+                'status' => false,
                 'message' => 'Selected team is inactive or not found.',
             ], 422));
         }
@@ -205,7 +208,7 @@ class TicketService
 
         if (!$category) {
             abort(response()->json([
-                'success' => false,
+                'status' => false,
                 'message' => 'Selected category is inactive or not found.',
             ], 422));
         }
@@ -218,7 +221,7 @@ class TicketService
 
         if (!$issueType) {
             abort(response()->json([
-                'success' => false,
+                'status' => false,
                 'message' => 'Selected issue type is invalid for the selected category.',
             ], 422));
         }
@@ -230,7 +233,7 @@ class TicketService
 
         if (!$priority) {
             abort(response()->json([
-                'success' => false,
+                'status' => false,
                 'message' => 'Selected priority is inactive or not found.',
             ], 422));
         }

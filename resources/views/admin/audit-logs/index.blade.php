@@ -1,3 +1,6 @@
+{{-- ========= AUDIT LOGS SHELL ========= --}}
+{{-- Audit log filter, table, and export containers for API-backed rendering. --}}
+
 <x-app-layout>
     <style>
         [x-cloak] {

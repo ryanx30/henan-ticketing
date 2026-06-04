@@ -1,3 +1,13 @@
+/**
+ * Reports page controller.
+ * Loads report cards, trend chart, SLA table rows, pagination, filters, and export actions.
+ */
+
+import { apiGet } from '../../utils/apiClient';
+import { formatHumanDate, toYmd } from '../../utils/formatter';
+import { statusBadgeClass as buildStatusBadgeClass, statusLabel as buildStatusLabel, slaResultBadgeClass, slaTimeBadgeClass as buildSlaTimeBadgeClass } from '../../utils/badges';
+import { showAlert as showPageAlert } from '../../utils/toast';
+
 function reportsPage() {
             return {
                 loading: false,
@@ -134,19 +144,7 @@ function reportsPage() {
 
                     try {
                         const params = this.buildQuery();
-                        const response = await fetch(`/api/reports?${params.toString()}`, {
-                            headers: {
-                                'Accept': 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
-                            credentials: 'same-origin',
-                        });
-
-                        const result = await response.json();
-
-                        if (!response.ok || !result.success) {
-                            throw new Error(result.message || 'Failed to load reports');
-                        }
+                        const result = await apiGet(`/api/reports?${params.toString()}`);
 
                         const data = result.data || {};
                         this.cards = data.cards || this.cards;
@@ -225,19 +223,7 @@ function reportsPage() {
                 },
 
                 showAlert(message, type = 'success') {
-                    const el = document.getElementById('page-alert');
-                    if (!el) return;
-
-                    el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
-                    el.textContent = message;
-
-                    if (type === 'success') {
-                        el.classList.add('bg-green-100', 'text-green-800');
-                    } else {
-                        el.classList.add('bg-red-100', 'text-red-800');
-                    }
-
-                    setTimeout(() => el.classList.add('hidden'), 3000);
+                    showPageAlert(message, type);
                 },
 
                 initDatePicker() {
@@ -278,11 +264,8 @@ function reportsPage() {
                     });
                 },
 
-                toYmd(d) {
-                    const y = d.getFullYear();
-                    const m = String(d.getMonth() + 1).padStart(2, '0');
-                    const day = String(d.getDate()).padStart(2, '0');
-                    return `${y}-${m}-${day}`;
+                toYmd(date) {
+                    return toYmd(date);
                 },
 
                 dateLabel() {
@@ -293,76 +276,24 @@ function reportsPage() {
                 },
 
                 formatHumanDate(value) {
-                    const date = new Date(value);
-                    return date.toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                    });
+                    return formatHumanDate(value, 'en-US');
                 },
 
                 statusLabel(status) {
-                    const map = {
-                        new: 'New',
-                        in_progress: 'Ongoing',
-                        waiting_info: 'Waiting Info',
-                        resolved: 'Resolved',
-                        closed: 'Closed',
-                    };
-                    return map[status] || status || '-';
+                    return buildStatusLabel(status);
                 },
 
                 statusBadgeClass(status) {
-                    return window.HenanApp?.statusBadgeClass
-                        ? window.HenanApp.statusBadgeClass(status)
-                        : 'badge-status-default';
+                    return buildStatusBadgeClass(status);
                 },
 
-                // REPORT SLA BADGES: Use global CSS classes so JavaScript-rendered badges keep consistent colors after build.
-                normalizedSlaValue(value) {
-                    return String(value || '')
-                        .trim()
-                        .toLowerCase()
-                        .replaceAll('-', '_')
-                        .replaceAll(' ', '_');
-                },
-
+                // REPORT SLA BADGES: Use shared utility classes so JavaScript-rendered badges stay consistent.
                 resultBadgeClass(result) {
-                    const normalized = this.normalizedSlaValue(result);
-
-                    if (normalized === 'ok') return 'badge-sla-result-ok';
-                    if (normalized === 'breach' || normalized === 'breached') return 'badge-sla-result-breach';
-                    if (normalized === 'open') return 'badge-sla-result-open';
-                    if (normalized === 'closed' || normalized === 'direct_close') return 'badge-sla-result-closed';
-
-                    return 'badge-sla-result-default';
+                    return slaResultBadgeClass(result);
                 },
 
                 slaTimeBadgeClass(slaTime, result) {
-                    const timeText = String(slaTime || '').trim().toLowerCase();
-                    const normalizedResult = this.normalizedSlaValue(result);
-
-                    if (!timeText || timeText === '-') {
-                        return 'badge-sla-time-default';
-                    }
-
-                    if (normalizedResult === 'breach' || timeText.startsWith('overdue') || timeText.startsWith('breached by')) {
-                        return 'badge-sla-time-breach';
-                    }
-
-                    if (normalizedResult === 'ok' || timeText.startsWith('met by')) {
-                        return 'badge-sla-time-met';
-                    }
-
-                    if (normalizedResult === 'closed' || timeText.startsWith('direct close')) {
-                        return 'badge-sla-time-closed';
-                    }
-
-                    if (normalizedResult === 'open' || timeText.endsWith('left') || timeText.startsWith('no sla')) {
-                        return 'badge-sla-time-open';
-                    }
-
-                    return 'badge-sla-time-default';
+                    return buildSlaTimeBadgeClass(slaTime, result);
                 },
 
                 computedYMax() {

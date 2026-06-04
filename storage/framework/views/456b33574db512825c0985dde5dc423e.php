@@ -1,132 +1,12 @@
+
+
+
 <?php
+    use App\Support\NavigationMenu;
+
     $user = auth()->user();
     $role = $user?->role;
-
-    $menuGroups = [
-        'operations' => [
-            'label' => 'Operations',
-            'items' => [
-                [
-                    'key' => 'dashboard',
-                    'label' => 'Dashboard',
-                    'href' => '/dashboard',
-                    'icon' => 'dashboard',
-                    'show' => true,
-                    'active' => request()->is('dashboard'),
-                ],
-                [
-                    'key' => 'new-ticket',
-                    'label' => 'New Ticket',
-                    'href' => '/tickets/create',
-                    'icon' => 'new-tickets',
-                    'show' => in_array($role, ['cs', 'admin'], true),
-                    'active' => request()->is('tickets/create'),
-                ],
-                [
-                    'key' => 'tickets',
-                    'label' => 'Tickets',
-                    'href' => '/tickets',
-                    'icon' => 'ticket',
-                    'show' => in_array($role, ['cs', 'admin', 'supervisor'], true),
-                    'active' => request()->is('tickets') || (request()->is('tickets/*') && ! request()->is('tickets/create')),
-                ],
-                [
-                    'key' => 'resolver-inbox',
-                    'label' => 'Resolver Inbox',
-                    'href' => '/resolver-inbox',
-                    'icon' => 'inbox',
-                    'show' => true,
-                    'active' => request()->is('resolver-inbox') || request()->is('resolver-inbox/*'),
-                ],
-                [
-                    'key' => 'reports',
-                    'label' => 'Reports',
-                    'href' => '/reports',
-                    'icon' => 'reports',
-                    'show' => true,
-                    'active' => request()->is('reports') || request()->is('reports/*'),
-                ],
-            ],
-        ],
-        'it_monitoring' => [
-            'label' => 'IT Monitoring',
-            'items' => [
-                [
-                    'key' => 'case-analytics',
-                    'label' => 'Case Analytics',
-                    'href' => '/case-analytics',
-                    'icon' => 'analytics',
-                    'show' => in_array($role, ['it', 'admin', 'supervisor'], true),
-                    'active' => request()->is('case-analytics') || request()->is('case-analytics/*'),
-                ],
-                [
-                    'key' => 'my-queue',
-                    'label' => 'My Queue',
-                    'href' => '/it/my-queue',
-                    'icon' => 'queue',
-                    'show' => in_array($role, ['it', 'admin'], true),
-                    'active' => request()->is('it/my-queue') || request()->is('it/my-queue/*'),
-                ],
-                [
-                    'key' => 'team-queue',
-                    'label' => 'Team Queue',
-                    'href' => '/it/team-queue',
-                    'icon' => 'team-queue',
-                    'show' => in_array($role, ['it', 'admin', 'supervisor'], true),
-                    'active' => request()->is('it/team-queue') || request()->is('it/team-queue/*'),
-                ],
-                [
-                    'key' => 'history',
-                    'label' => 'History',
-                    'href' => '/it/history',
-                    'icon' => 'history',
-                    'show' => in_array($role, ['it', 'admin', 'supervisor'], true),
-                    'active' => request()->is('it/history') || request()->is('it/history/*'),
-                ],
-            ],
-        ],
-        'system_control' => [
-            'label' => 'System Control',
-            'items' => [
-                [
-                    'key' => 'users',
-                    'label' => 'Users',
-                    'href' => '/admin/users',
-                    'icon' => 'users',
-                    'show' => $role === 'admin',
-                    'active' => request()->is('admin/users') || request()->is('admin/users/*'),
-                ],
-                [
-                    'key' => 'master-data',
-                    'label' => 'Master Data',
-                    'href' => '/admin/master-data',
-                    'icon' => 'database',
-                    'show' => in_array($role, ['admin', 'supervisor'], true),
-                    'active' => request()->is('admin/master-data') || request()->is('admin/master-data/*'),
-                ],
-                [
-                    'key' => 'audit-logs',
-                    'label' => 'Audit Logs',
-                    'href' => '/admin/audit-logs',
-                    'icon' => 'clipboard',
-                    'show' => $role === 'admin',
-                    'active' => request()->is('admin/audit-logs') || request()->is('admin/audit-logs/*'),
-                ],
-            ],
-        ],
-    ];
-
-    $visibleMenuGroups = collect($menuGroups)
-        ->map(function (array $group) {
-            $group['items'] = collect($group['items'])
-                ->filter(fn (array $item) => $item['show'])
-                ->values()
-                ->all();
-
-            return $group;
-        })
-        ->filter(fn (array $group) => count($group['items']) > 0)
-        ->all();
+    $visibleMenuGroups = NavigationMenu::groupsForUser($user);
 
     $menuClasses = function (bool $active): string {
         $stateClasses = $active
@@ -139,13 +19,22 @@
 
 <style>
     [x-cloak] { display: none !important; }
+
+    .sidebar-scrollbar-hidden {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+
+    .sidebar-scrollbar-hidden::-webkit-scrollbar {
+        display: none;
+    }
 </style>
 
 <aside
     x-data="staticSidebarNavigation()"
     x-init="init()"
-    :class="collapsed ? 'w-[80px]' : 'w-[240px]'"
-    class="min-h-screen shrink-0 bg-[#051823] text-white flex flex-col transition-all duration-300 ease-in-out overflow-hidden">
+    :class="collapsed ? 'w-[80px]' : 'w-[230px]'"
+    class="h-screen shrink-0 bg-[#051823] text-white flex flex-col transition-all duration-300 ease-in-out overflow-hidden">
     <div class="pl-4 pr-4 pt-3 pb-6 border-b border-slate-800">
         <div class="flex items-center gap-3">
             <button
@@ -186,12 +75,12 @@
                     alt="Henan Logo"
                     width="170"
                     height="40"
-                    class="block h-12 max-h-12 w-auto max-w-[170px] shrink-0 object-contain transition-none" />
+                    class="block h-14 max-h-14 w-auto max-w-[170px] shrink-0 object-contain transition-none" />
             </div>
         </div>
     </div>
 
-    <div class="flex-1 overflow-y-auto">
+    <div class="sidebar-scrollbar-hidden min-h-0 flex-1 overflow-y-auto">
         <?php $__currentLoopData = $visibleMenuGroups; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $groupKey => $group): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
             <div class="<?php echo e($loop->last ? 'p-3' : 'border-b border-slate-800 p-3'); ?>">
                 <button
@@ -252,7 +141,7 @@
         <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
     </div>
 
-    <div class="mt-auto border-t border-slate-800 p-4 text-xs text-slate-400">
+    <div class="shrink-0 border-t border-slate-800 p-4 text-xs text-slate-400">
         <template x-if="!collapsed">
             <div>
                 Logged in as:

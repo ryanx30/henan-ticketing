@@ -1,3 +1,6 @@
+{{-- ========= TICKET EDIT SHELL ========= --}}
+{{-- Ticket edit/open layout; ticket data and update actions are handled through the internal API. --}}
+
 <x-app-layout>
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
@@ -273,15 +276,11 @@
 
                             <div class="bg-white rounded shadow overflow-hidden">
                                 <div class="px-4 py-2 bg-slate-100 text-xs font-semibold">SLA PREVIEW</div>
-                                <div class="p-3 text-sm space-y-2">
-                                    <div class="bg-white border rounded p-3">
-                                        <div class="flex justify-between">
-                                            <span class="text-gray-600">Response:</span>
-                                            <b x-text="sla.response"></b>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span class="text-gray-600">Resolve:</span>
-                                            <b x-text="sla.resolve"></b>
+                                <div class="p-3">
+                                    <div class="bg-white border rounded p-4">
+                                        <div class="flex items-center justify-between gap-3">
+                                            <span class="text-sm font-semibold text-gray-600">Resolve Within:</span>
+                                            <b class="text-right text-xl font-extrabold text-slate-950" x-text="sla.resolve"></b>
                                         </div>
                                     </div>
                                 </div>

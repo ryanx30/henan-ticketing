@@ -1,3 +1,6 @@
+{{-- ========= TICKET DETAIL SHELL ========= --}}
+{{-- Composes reusable ticket detail partials and delegates dynamic actions to the detail page script. --}}
+
 <x-app-layout>
 
     <div

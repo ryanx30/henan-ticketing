@@ -1,3 +1,6 @@
+{{-- ========= MASTER DATA TABLE CARD ========= --}}
+{{-- Table container for the currently selected master data type. --}}
+
 <div class="overflow-hidden rounded bg-white shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
     <div class="bg-[#051823] px-5 py-3">
         <h2 class="text-[20px] font-semibold text-white" x-text="currentLabelPlural()"></h2>

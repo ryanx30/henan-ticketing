@@ -1,4 +1,11 @@
 /**
+ * Frontend export queue poller for long-running export jobs.
+ * Tracks queued export batches and updates the UI without blocking the main request.
+ */
+
+import { apiGet } from './utils/apiClient';
+
+/**
  * Shared queued export helper.
  *
  * Backend export endpoints now return a 202 JSON payload with a queue batch id.
@@ -16,20 +23,7 @@ async function queueExport(url, options = {}) {
     } = options;
 
     try {
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            credentials: 'same-origin',
-        });
-
-        const json = await response.json();
-
-        if (!response.ok || !json.success) {
-            throw new Error(json.message || 'Failed to queue export.');
-        }
+        const json = await apiGet(url);
 
         const payload = json.data || {};
 
@@ -51,6 +45,7 @@ async function queueExport(url, options = {}) {
         }
 
         onReady?.(status);
+        window.dispatchEvent(new CustomEvent('henan:export-ready', { detail: status }));
         window.location.href = status.download_url;
 
         return status;
@@ -62,20 +57,7 @@ async function queueExport(url, options = {}) {
 
 async function pollExportStatus(url, intervalMs, maxAttempts) {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            credentials: 'same-origin',
-        });
-
-        const json = await response.json();
-
-        if (!response.ok || !json.success) {
-            throw new Error(json.message || 'Failed to check export status.');
-        }
+        const json = await apiGet(url);
 
         const status = json.data || {};
 

@@ -9,8 +9,13 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Builds the ticket list query from filters, role scope, focus shortcuts, and sorting options.
+ */
 final class TicketIndexQuery
 {
+    // ========= TICKET LIST QUERY =========
+
     public function build(Request $request, User $viewer): Builder
     {
         $query = Ticket::query()
@@ -27,14 +32,14 @@ final class TicketIndexQuery
         return $query;
     }
 
-    public function scopeForViewer(Builder $query, User $viewer, ?Request $request = null): void
+    public function scopeForViewer(Builder $query, User $viewer, ?Request $request = null, bool $forceOwnerScope = false): void
     {
         if ($viewer->isAdmin() || $viewer->isSupervisor()) {
             return;
         }
 
         if ($viewer->isCS()) {
-            if ($request && $request->boolean('mine')) {
+            if ($forceOwnerScope || ($request && $request->boolean('mine'))) {
                 $query->where('created_by', $viewer->id);
             }
 

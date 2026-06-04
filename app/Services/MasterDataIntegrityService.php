@@ -11,6 +11,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
 
+/**
+ * Protects master data from unsafe deletes or changes while related ticket data still depends on it.
+ */
 class MasterDataIntegrityService
 {
     /**

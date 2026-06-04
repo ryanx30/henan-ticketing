@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 
+/**
+ * Renders reports and insight pages that consume API-driven payloads.
+ */
 class InsightsPageController extends Controller
 {
     public function reports(Request $request)

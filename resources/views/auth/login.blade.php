@@ -114,10 +114,6 @@
                 >
                     Login
                 </button>
-
-                <div class="text-center text-sm text-white/80">
-                    <a class="underline hover:text-white" href="{{ route('register') }}">Create account</a>
-                </div>
             </form>
         </div>
     </div>

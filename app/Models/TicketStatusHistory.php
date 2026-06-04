@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
+/**
+ * Stores status transition history used by audit, reports, reopen detection, and workflow validation.
+ */
 class TicketStatusHistory extends Model
 {
     use HasFactory;

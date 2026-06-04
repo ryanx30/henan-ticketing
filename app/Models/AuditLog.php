@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * Stores audit trail records for ticket, user, and master data actions.
+ */
 class AuditLog extends Model
 {
     use HasFactory;

@@ -7,6 +7,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
+/**
+ * Represents client data used for ticket creation lookup and client history views.
+ */
 class Client extends Model
 {
     use HasFactory, SoftDeletes;

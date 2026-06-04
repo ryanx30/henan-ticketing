@@ -1,4 +1,7 @@
-        {{-- Compose Modal --}}
+{{-- ========= INBOX COMPOSE MODAL ========= --}}
+{{-- Reusable compose modal for resolver messages. --}}
+
+        {{-- ========= COMPOSE MODAL ========= --}}
         <div
             x-show="showCompose"
             x-transition

@@ -4,6 +4,9 @@ namespace App\Policies;
 
 use App\Models\User;
 
+/**
+ * Protects master data operations based on system-control role access.
+ */
 class MasterDataPolicy
 {
     /**
@@ -15,34 +18,34 @@ class MasterDataPolicy
     }
 
     /**
-     * Admin and Supervisor can view master data.
+     * Admin, Supervisor, and IT can view master data.
      */
     public function viewAny(User $user): bool
     {
-        return $user->isAdmin() || $user->isSupervisor();
+        return $user->isAdmin() || $user->isSupervisor() || $user->isIT();
     }
 
     /**
-     * Master data mutations are Admin-only.
+     * Admin and IT can create master data.
      */
     public function create(User $user): bool
     {
-        return $user->isAdmin();
+        return $user->isAdmin() || $user->isIT();
     }
 
     /**
-     * Master data mutations are Admin-only.
+     * Admin and IT can update master data.
      */
     public function update(User $user, mixed $model = null): bool
     {
-        return $user->isAdmin();
+        return $user->isAdmin() || $user->isIT();
     }
 
     /**
-     * Master data mutations are Admin-only.
+     * Admin and IT can delete master data.
      */
     public function delete(User $user, mixed $model = null): bool
     {
-        return $user->isAdmin();
+        return $user->isAdmin() || $user->isIT();
     }
 }

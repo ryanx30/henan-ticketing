@@ -1,3 +1,12 @@
+/**
+ * Ticket edit/open page controller.
+ * Loads editable ticket data, renders detail context, and sends update actions through the API client.
+ */
+
+import { apiGet, apiRequest } from '../../utils/apiClient';
+import { ticketLabel as sharedTicketLabel } from '../../utils/badges';
+import { showAlert as showSharedAlert } from '../../utils/toast';
+
 function ticketEditForm(config) {
     return {
         ticketId: config.ticketId,
@@ -35,41 +44,81 @@ function ticketEditForm(config) {
             teams: [],
             categories: [],
             priorities: [],
+            slaRules: [],
         },
         issueTypes: [],
         similarTickets: [],
         similarLoading: false,
 
         get sla() {
-            const priority = (this.selectedPriority()?.code || '').toLowerCase();
+            const team = this.selectedTeam();
+            const priority = this.selectedPriority();
 
-            const map = {
-                critical: { response: '1hr', resolve: '2hr' },
-                high: { response: '2hr', resolve: '6hr' },
-                medium: { response: '4hr', resolve: '12hr' },
-                low: { response: '8hr', resolve: '24hr' },
-            };
-
-            return map[priority] || { response: '-', resolve: '-' };
-        },
-
-        csrf() {
-            return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-        },
-
-        showAlert(message, type = 'success') {
-            const el = document.getElementById('page-alert');
-            if (!el) return;
-
-            el.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
-            el.textContent = message;
-
-            if (type === 'success') {
-                el.classList.add('bg-green-100', 'text-green-800');
-            } else {
-                el.classList.add('bg-red-100', 'text-red-800');
+            if (!team || !priority) {
+                return { rule: 'Select team and priority', resolve: '-' };
             }
 
+            if (!this.isSelectedTeamIt()) {
+                return {
+                    rule: `${this.masterLabel(team)} / ${this.masterLabel(priority)}`,
+                    resolve: 'No SLA - direct closed',
+                };
+            }
+
+            const rule = this.selectedSlaRule();
+            const hours = rule?.hours ?? this.fallbackSlaHoursByPriority(priority.code);
+
+            return {
+                rule: rule ? 'Master Data SLA Rule' : 'Default fallback rule',
+                resolve: this.formatHours(hours),
+            };
+        },
+
+        normalizeCode(value) {
+            return String(value || '').trim().toLowerCase();
+        },
+
+        isSelectedTeamIt() {
+            const team = this.selectedTeam();
+
+            return this.normalizeCode(team?.code || team?.name) === 'it';
+        },
+
+        formatHours(hours) {
+            const numericHours = Number(hours);
+
+            if (!Number.isFinite(numericHours) || numericHours <= 0) {
+                return '-';
+            }
+
+            if (numericHours < 1) {
+                return `${Math.round(numericHours * 60)}m`;
+            }
+
+            return `${numericHours}h`;
+        },
+
+        fallbackSlaHoursByPriority(priorityCode) {
+            const map = {
+                critical: 2,
+                high: 6,
+                medium: 12,
+                low: 24,
+            };
+
+            return map[this.normalizeCode(priorityCode)] || null;
+        },
+
+        selectedSlaRule() {
+            return this.master.slaRules.find(rule => (
+                String(rule.team_id) === String(this.team_id)
+                && String(rule.priority_id) === String(this.priority_id)
+            )) || null;
+        },
+
+
+        showAlert(message, type = 'success') {
+            showSharedAlert(message, type);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         },
 
@@ -88,24 +137,12 @@ function ticketEditForm(config) {
             this.optionsLoading = true;
 
             try {
-                const response = await fetch('/api/ticket-form/options', {
-                    method: 'GET',
-                    credentials: 'same-origin',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to load master data options');
-                }
+                const result = await apiGet('/api/ticket-form/options');
 
                 this.master.teams = result.data?.teams || [];
                 this.master.categories = result.data?.categories || [];
                 this.master.priorities = result.data?.priorities || [];
+                this.master.slaRules = result.data?.sla_rules || [];
             } catch (error) {
                 console.error(error);
                 this.showAlert(error.message || 'Failed to load master data options', 'error');
@@ -126,20 +163,7 @@ function ticketEditForm(config) {
 
             try {
                 const params = new URLSearchParams({ category_id: categoryId });
-                const response = await fetch(`/api/ticket-form/issue-types?${params.toString()}`, {
-                    method: 'GET',
-                    credentials: 'same-origin',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to load issue types');
-                }
+                const result = await apiGet(`/api/ticket-form/issue-types?${params.toString()}`);
 
                 this.issueTypes = result.data || [];
 
@@ -218,8 +242,8 @@ function ticketEditForm(config) {
             return this.findById(this.master.priorities, this.priority_id);
         },
         ticketLabel(ticket) {
-        return window.HenanApp?.ticketLabel(ticket) ?? '-';
-    },
+            return sharedTicketLabel(ticket);
+        },
 
         ticketCodeLabel() {
             return this.ticketLabel({ ticket_code: this.ticket_code });
@@ -238,19 +262,7 @@ function ticketEditForm(config) {
             this.loading = true;
 
             try {
-                const response = await fetch(this.loadUrl, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin'
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to load ticket');
-                }
+                const result = await apiGet(this.loadUrl);
 
                 const t = result.data || {};
 
@@ -296,16 +308,9 @@ function ticketEditForm(config) {
             this.submitting = true;
 
             try {
-                const response = await fetch(this.submitUrl, {
+                const result = await apiRequest(this.submitUrl, {
                     method: this.submitMethod,
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': this.csrf(),
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({
+                    body: {
                         title: this.title,
                         description: this.description,
                         status: this.status,
@@ -313,14 +318,8 @@ function ticketEditForm(config) {
                         team_id: this.team_id,
                         category_id: this.category_id,
                         issue_type_id: this.issue_type_id,
-                    }),
+                    },
                 });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to update ticket');
-                }
 
                 this.showAlert(result.message || 'Ticket updated successfully', 'success');
 
@@ -353,11 +352,7 @@ function ticketEditForm(config) {
                     category: category.name || category.slug || '',
                 });
 
-                const res = await fetch(`/api/tickets-similar?${params.toString()}`, {
-                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                    credentials: 'same-origin'
-                });
-                const result = await res.json();
+                const result = await apiGet(`/api/tickets-similar?${params.toString()}`);
                 this.similarTickets = result.data || [];
             } catch (e) {
                 this.similarTickets = [];

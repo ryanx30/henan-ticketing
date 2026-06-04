@@ -2,6 +2,9 @@
 
 namespace App\Support;
 
+/**
+ * Defines canonical ticket status values and display helpers used by workflow and presentation code.
+ */
 final class TicketStatus
 {
     public const NEW = 'new';

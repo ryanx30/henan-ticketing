@@ -10,6 +10,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Cache;
 
+/**
+ * Represents the main ticket record, including routing, SLA, lifecycle dates, relationships, and reusable scopes.
+ */
 class Ticket extends Model
 {
     use HasFactory, SoftDeletes;
@@ -114,6 +117,8 @@ class Ticket extends Model
             Cache::forget(self::PRIORITY_ID_BY_CODE_CACHE_PREFIX . $code);
         }
     }
+
+    // ========= QUERY SCOPES =========
 
     public function scopeForTeamCode(Builder $query, string $code): Builder
     {
@@ -223,6 +228,8 @@ class Ticket extends Model
     {
         return $this->belongsTo(Priority::class, 'priority_id');
     }
+
+    // ========= RELATIONSHIPS =========
 
     public function creator(): BelongsTo
     {

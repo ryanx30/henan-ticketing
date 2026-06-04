@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Represents issue types linked to categories and used by routing, analytics, and ticket code generation.
+ */
 class IssueType extends Model
 {
     protected $fillable = [

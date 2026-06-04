@@ -7,7 +7,11 @@ use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Str;
+use App\Support\ExportBatchAccess;
 
+/**
+ * Provides filtered audit log data and export endpoints for administrative monitoring.
+ */
 class AdminAuditLogApiController extends BaseApiController
 {
     public function index(Request $request)
@@ -53,9 +57,11 @@ class AdminAuditLogApiController extends BaseApiController
 
         $extension = $format === 'csv' ? 'csv' : 'xls';
         $fileName = 'audit-logs-' . now()->format('Ymd-His') . '-' . Str::lower(Str::random(6)) . '.' . $extension;
+        $storagePath = 'exports/audit-logs/' . $fileName;
+        $user = $request->user();
 
         $batch = Bus::batch([
-            new ExportDataJob('audit_logs_' . ($format === 'csv' ? 'csv' : 'excel'), $request->user()->id, [
+            new ExportDataJob('audit_logs_' . ($format === 'csv' ? 'csv' : 'excel'), $user->id, [
                 'q' => (string) $request->query('q', ''),
                 'action' => (string) $request->query('action', 'all'),
                 'entity' => (string) $request->query('entity', 'all'),
@@ -63,15 +69,15 @@ class AdminAuditLogApiController extends BaseApiController
                 'date_from' => (string) $request->query('date_from', ''),
                 'date_to' => (string) $request->query('date_to', ''),
             ], $fileName),
-        ])->name('audit-log-export-' . $fileName)->dispatch();
+        ])->name(ExportBatchAccess::batchName('audit-logs', $user->id, $storagePath, $fileName))->dispatch();
 
-        return $this->success([
+        return $this->acceptedResponse([
             'queued' => true,
             'batch_id' => $batch->id,
             'filename' => $fileName,
             'storage_disk' => 'local',
-            'storage_path' => 'exports/audit-logs/' . $fileName,
-        ], 'Audit log export has been queued.', 202);
+            'storage_path' => $storagePath,
+        ], 'Audit log export has been queued.');
     }
 
     protected function filteredAuditLogQuery(Request $request)

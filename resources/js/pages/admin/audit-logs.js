@@ -1,3 +1,12 @@
+/**
+ * Admin audit log page controller.
+ * Loads audit log entries, filters, pagination, and export actions.
+ */
+
+import { apiGet, buildQueryString } from '../../utils/apiClient';
+import { formatDateTime } from '../../utils/formatter';
+import { showPageAlert } from '../../utils/toast';
+
 function auditLogsPage() {
     return {
         loading: false,
@@ -38,31 +47,13 @@ function auditLogsPage() {
             this.loading = true;
 
             try {
-                const params = new URLSearchParams();
+                const query = buildQueryString(this.filters);
+                const json = await apiGet(`/api/admin/audit-logs?${query}`);
 
-                Object.entries(this.filters).forEach(([key, value]) => {
-                    if (value !== null && value !== undefined && value !== '') {
-                        params.append(key, value);
-                    }
-                });
-
-                const response = await fetch(`/api/admin/audit-logs?${params.toString()}`, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                });
-
-                const json = await response.json();
-
-                if (!response.ok || !json.success) {
-                    throw new Error(json.message || 'Failed to load audit logs.');
-                }
-
-                this.rows = json.data.rows || [];
-                this.meta = json.data.meta || this.meta;
-                this.summary = json.data.summary || {};
-                this.options = json.data.options || this.options;
+                this.rows = json.data?.rows || [];
+                this.meta = json.data?.meta || this.meta;
+                this.summary = json.data?.summary || {};
+                this.options = json.data?.options || this.options;
             } catch (error) {
                 this.showAlert(error.message || 'Failed to load audit logs.', 'error');
             } finally {
@@ -79,23 +70,14 @@ function auditLogsPage() {
             this.exporting = true;
 
             try {
-                const params = new URLSearchParams();
-
-                Object.entries(this.filters).forEach(([key, value]) => {
-                    if (
-                        value !== null &&
-                        value !== undefined &&
-                        value !== '' &&
-                        key !== 'page' &&
-                        key !== 'per_page'
-                    ) {
-                        params.append(key, value);
-                    }
+                const query = buildQueryString({
+                    ...this.filters,
+                    page: null,
+                    per_page: null,
+                    format,
                 });
 
-                params.append('format', format);
-
-                await window.HenanExportQueue.queueExport(`/api/admin/audit-logs/export?${params.toString()}`, {
+                await window.HenanExportQueue.queueExport(`/api/admin/audit-logs/export?${query}`, {
                     onQueued: (_payload, message) => this.showAlert(message || 'Audit log export has been queued.', 'success'),
                     onReady: () => this.showAlert('Export is ready. Downloading file...', 'success'),
                     onError: (error) => this.showAlert(error.message || 'Failed to export audit logs.', 'error'),
@@ -195,18 +177,7 @@ function auditLogsPage() {
         },
 
         formatDate(value) {
-            if (!value) {
-                return '-';
-            }
-
-            return new Date(value).toLocaleString('en-GB', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-            });
+            return formatDateTime(value, 'en-GB');
         },
 
         actionBadgeClass(action) {
@@ -226,24 +197,7 @@ function auditLogsPage() {
         },
 
         showAlert(message, type = 'success') {
-            const alert = document.getElementById('page-alert');
-
-            if (!alert) {
-                return;
-            }
-
-            alert.textContent = message;
-            alert.className = 'mb-4 rounded p-3 text-sm ' + (
-                type === 'error'
-                    ? 'bg-red-50 text-red-700 border border-red-200'
-                    : 'bg-green-50 text-green-700 border border-green-200'
-            );
-
-            alert.classList.remove('hidden');
-
-            setTimeout(() => {
-                alert.classList.add('hidden');
-            }, 3500);
+            showPageAlert(message, type);
         },
     };
 }

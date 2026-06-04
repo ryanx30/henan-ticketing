@@ -1,3 +1,6 @@
+{{-- ========= HISTORY ASSETS ========= --}}
+{{-- Page-specific vendor assets for the history date range picker. --}}
+
     <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
 
 

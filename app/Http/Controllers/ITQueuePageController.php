@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 
+/**
+ * Renders IT queue and history pages while keeping queue data in the API layer.
+ */
 class ITQueuePageController extends Controller
 {
     // Render my queue page

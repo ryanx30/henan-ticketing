@@ -2,6 +2,9 @@
 
 namespace App\Support;
 
+/**
+ * Formats duration values into compact human-readable strings for reports and history views.
+ */
 final class HumanDuration
 {
     public static function fromSeconds(?int $seconds): string

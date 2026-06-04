@@ -1,3 +1,6 @@
+
+
+
 <!DOCTYPE html>
 <html lang="<?php echo e(str_replace('_', '-', app()->getLocale())); ?>">
 
@@ -20,18 +23,18 @@
     <?php echo app('Illuminate\Foundation\Vite')(['resources/css/app.css', 'resources/js/app.js']); ?>
 </head>
 
-<body class="font-sans antialiased">
-    <div class="min-h-screen flex">
+<body class="font-sans antialiased overflow-hidden">
+    <div class="h-screen min-h-screen flex overflow-hidden">
 
         
         <?php echo $__env->make('partials.sidebar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
         
-        <div class="min-w-0 flex-1 flex flex-col">
+        <div class="min-w-0 flex-1 flex flex-col h-screen overflow-hidden">
             <?php echo $__env->make('layouts.navigation', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
             
-            <main class="min-w-0 flex-1 bg-gray-100">
+            <main class="min-w-0 flex-1 overflow-y-auto bg-gray-100">
                 <?php echo e($slot); ?>
 
             </main>

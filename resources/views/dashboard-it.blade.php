@@ -1,3 +1,6 @@
+{{-- ========= IT DASHBOARD SHELL ========= --}}
+{{-- Page shell for resolver KPI, queue preview, and trend data loaded by JavaScript. --}}
+
 <x-app-layout>
     <meta name="csrf-token" content="{{ csrf_token() }}">
 

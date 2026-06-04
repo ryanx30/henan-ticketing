@@ -1,3 +1,8 @@
+/**
+ * SLA countdown helper for ticket cards and queue rows.
+ * Calculates remaining time and breach display on the client using API-provided deadlines.
+ */
+
 (function () {
   function pad2(n) {
     return String(n).padStart(2, "0");

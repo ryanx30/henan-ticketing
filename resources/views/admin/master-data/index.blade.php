@@ -1,3 +1,6 @@
+{{-- ========= MASTER DATA SHELL ========= --}}
+{{-- Composes reusable master data partials and delegates CRUD behavior to the master data script. --}}
+
 <x-app-layout>
     <meta name="csrf-token" content="{{ csrf_token() }}">
 

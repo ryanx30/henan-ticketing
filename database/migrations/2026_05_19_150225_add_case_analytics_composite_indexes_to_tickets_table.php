@@ -8,9 +8,25 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     private array $indexes = [
-        'tickets_case_analytics_created_team_category_issue_idx' => ['deleted_at', 'created_at', 'team_id', 'category_id', 'issue_type_id'],
-        'tickets_case_analytics_team_created_status_idx' => ['deleted_at', 'team_id', 'created_at', 'status'],
-        'tickets_case_analytics_created_resolved_closed_idx' => ['deleted_at', 'created_at', 'resolved_at', 'closed_at'],
+        'tickets_case_analytics_created_team_category_issue_idx' => [
+            'deleted_at',
+            'created_at',
+            'team_id',
+            'category_id',
+            'issue_type_id',
+        ],
+        'tickets_case_analytics_team_created_status_idx' => [
+            'deleted_at',
+            'team_id',
+            'created_at',
+            'status',
+        ],
+        'tickets_case_analytics_created_resolved_closed_idx' => [
+            'deleted_at',
+            'created_at',
+            'resolved_at',
+            'closed_at',
+        ],
     ];
 
     public function up(): void
@@ -49,12 +65,29 @@ return new class extends Migration
             return false;
         }
 
-        $database = DB::getDatabaseName();
+        $driver = DB::connection()->getDriverName();
 
-        return DB::table('information_schema.statistics')
-            ->where('table_schema', $database)
-            ->where('table_name', $table)
-            ->where('index_name', $index)
-            ->exists();
+        if ($driver === 'sqlite') {
+            $indexes = DB::select("PRAGMA index_list('{$table}')");
+
+            foreach ($indexes as $existingIndex) {
+                if (($existingIndex->name ?? null) === $index) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        if ($driver === 'mysql') {
+            return DB::table('information_schema.statistics')
+                ->where('table_schema', DB::getDatabaseName())
+                ->where('table_name', $table)
+                ->where('index_name', $index)
+                ->exists();
+        }
+
+        return collect(Schema::getIndexes($table))
+            ->contains(fn ($existingIndex) => ($existingIndex['name'] ?? null) === $index);
     }
 };

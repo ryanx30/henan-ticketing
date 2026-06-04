@@ -4,6 +4,9 @@ namespace App\Policies;
 
 use App\Models\User;
 
+/**
+ * Protects user management actions and prevents unsafe account changes.
+ */
 class UserPolicy
 {
     /**
@@ -15,19 +18,19 @@ class UserPolicy
     }
 
     /**
-     * User Management is Admin-only.
+     * User Management list can be viewed by Admin and IT.
      */
     public function viewAny(User $user): bool
     {
-        return $user->isAdmin();
+        return $user->isAdmin() || $user->isIT();
     }
 
     /**
-     * User Management detail is Admin-only.
+     * User Management detail can be viewed by Admin and IT.
      */
     public function view(User $user, User $model): bool
     {
-        return $user->isAdmin();
+        return $user->isAdmin() || $user->isIT();
     }
 
     /**

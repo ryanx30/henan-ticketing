@@ -1,3 +1,8 @@
+/**
+ * Sidebar layout controller.
+ * Handles navigation state, active item rendering, collapse behavior, and localStorage persistence.
+ */
+
 function staticSidebarNavigation() {
     return {
         collapsed: localStorage.getItem('sidebar-collapsed') === '1',

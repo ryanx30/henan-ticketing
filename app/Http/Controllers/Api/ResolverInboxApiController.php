@@ -9,7 +9,11 @@ use App\Support\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Gate;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
+/**
+ * Manages resolver messages, follow-up inbox data, message mutations, and resolver-specific API payloads.
+ */
 class ResolverInboxApiController extends BaseApiController
 {
     public function index(Request $request)
@@ -56,11 +60,45 @@ class ResolverInboxApiController extends BaseApiController
             $query->where('created_at', '>=', now()->subDays(30));
         }
 
-        $messages = $query->latest()->paginate(10);
+        $perPage = (int) $request->query('per_page', 10);
+        if (! in_array($perPage, [10, 25, 50], true)) {
+            $perPage = 10;
+        }
+
+        // Paginate by ticket conversation, not by individual message. This keeps one
+        // ticket as one inbox card even when the conversation already has many replies.
+        $conversationPage = (clone $query)
+            ->select('ticket_id')
+            ->selectRaw('MAX(created_at) as latest_message_at')
+            ->groupBy('ticket_id')
+            ->orderByDesc('latest_message_at')
+            ->paginate($perPage);
+
+        $ticketIds = $conversationPage->getCollection()
+            ->pluck('ticket_id')
+            ->map(fn ($id) => (int) $id)
+            ->values();
+
+        $messages = collect();
+
+        if ($ticketIds->isNotEmpty()) {
+            $threadQuery = ResolverMessage::query()
+                ->with(['ticket', 'sender', 'recipient'])
+                ->whereIn('ticket_id', $ticketIds)
+                ->whereHas('ticket', function ($q) {
+                    $q->where('status', '<>', 'closed');
+                });
+
+            $this->scopeThreadMessages($threadQuery, $user);
+
+            $messages = $threadQuery
+                ->latest()
+                ->get();
+        }
 
         $composeTickets = Ticket::query()
             ->with(['holder', 'creator'])
-            ->where('status', '<>', 'closed');
+            ->whereIn('status', ['in_progress', 'waiting_info']);
         $this->scopeComposeTickets($composeTickets, $user);
         $composeTickets = $composeTickets
             ->latest()
@@ -69,21 +107,23 @@ class ResolverInboxApiController extends BaseApiController
 
         $composeRecipients = $this->getComposeRecipients($user);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Resolver inbox loaded',
-            'data' => $messages->items(),
-            'meta' => [
-                'current_page' => $messages->currentPage(),
-                'last_page' => $messages->lastPage(),
-                'per_page' => $messages->perPage(),
-                'total' => $messages->total(),
-            ],
-            'extra' => [
-                'compose_tickets' => $composeTickets,
-                'compose_recipients' => $composeRecipients,
+        return $this->success(
+            $messages->values(),
+            'Resolver inbox loaded',
+            200,
+            [
+                'meta' => [
+                    'current_page' => $conversationPage->currentPage(),
+                    'last_page' => $conversationPage->lastPage(),
+                    'per_page' => $conversationPage->perPage(),
+                    'total' => $conversationPage->total(),
+                ],
+                'extra' => [
+                    'compose_tickets' => $composeTickets,
+                    'compose_recipients' => $composeRecipients,
+                ],
             ]
-        ]);
+        );
     }
 
     public function show(Request $request, ResolverMessage $resolverMessage)
@@ -151,15 +191,15 @@ class ResolverInboxApiController extends BaseApiController
         $toUserId = $this->resolveRecipientId($validated, $ticket, $user);
 
         if (!$toUserId) {
-            return $this->error('Recipient is required for this message.', 422);
+            return $this->validationError([], 'Recipient is required for this message.');
         }
 
         if ((int) $toUserId === (int) $user->id) {
-            return $this->error('You cannot send a resolver message to yourself.', 422);
+            return $this->validationError([], 'You cannot send a resolver message to yourself.');
         }
 
         if (! $this->isAllowedRecipient($ticket, (int) $toUserId)) {
-            return $this->error('The selected recipient is not allowed for this ticket.', 422);
+            return $this->validationError([], 'The selected recipient is not allowed for this ticket.');
         }
 
         $attachmentPath = null;
@@ -167,7 +207,7 @@ class ResolverInboxApiController extends BaseApiController
 
         if ($request->hasFile('attachment')) {
             $file = $request->file('attachment');
-            $attachmentPath = $file->store('resolver-messages', 'public');
+            $attachmentPath = $file->store('resolver-messages', 'local');
             $attachmentName = $file->getClientOriginalName();
         }
 
@@ -195,11 +235,31 @@ class ResolverInboxApiController extends BaseApiController
             $this->snapshotMessage($message)
         );
 
-        return $this->success(
+        return $this->createdResponse(
             $message,
-            'Message sent successfully',
-            201
+            'Message sent successfully'
         );
+    }
+
+    public function downloadAttachment(Request $request, ResolverMessage $resolverMessage): BinaryFileResponse
+    {
+        Gate::authorize('view', $resolverMessage);
+
+        abort_if(! $resolverMessage->attachment_path || ! $resolverMessage->attachment_name, 404, 'Attachment was not found.');
+
+        $path = ltrim(str_replace('\\', '/', $resolverMessage->attachment_path), '/');
+        abort_if(str_contains($path, '..'), 422, 'Invalid attachment path.');
+        abort_if(! str_starts_with($path, 'resolver-messages/'), 422, 'Invalid attachment path.');
+
+        if (Storage::disk('local')->exists($path)) {
+            return Storage::disk('local')->download($path, basename($resolverMessage->attachment_name));
+        }
+
+        // Backward-compatible fallback for older resolver attachments that were
+        // previously stored on the public disk before this privacy hardening.
+        abort_if(! Storage::disk('public')->exists($path), 404, 'Attachment file was not found.');
+
+        return Storage::disk('public')->download($path, basename($resolverMessage->attachment_name));
     }
 
     public function markAsRead(Request $request, ResolverMessage $resolverMessage)
@@ -235,6 +295,7 @@ class ResolverInboxApiController extends BaseApiController
         $subject = $resolverMessage->subject;
 
         if ($resolverMessage->attachment_path) {
+            Storage::disk('local')->delete($resolverMessage->attachment_path);
             Storage::disk('public')->delete($resolverMessage->attachment_path);
         }
 
@@ -251,7 +312,7 @@ class ResolverInboxApiController extends BaseApiController
             null
         );
 
-        return $this->success(null, 'Message deleted');
+        return $this->deletedResponse('Message deleted');
     }
 
 

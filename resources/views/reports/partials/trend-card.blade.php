@@ -1,4 +1,7 @@
-            {{-- TREND --}}
+{{-- ========= REPORT TREND CHART ========= --}}
+{{-- Chart container for resolved/closed ticket trend data. --}}
+
+            {{-- ========= TREND CHART ========= --}}
             <div class="mb-5 rounded bg-white p-6 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
                 <div class="mb-6 text-[28px] font-semibold text-slate-800">Trend (Resolved / Closed)</div>
 

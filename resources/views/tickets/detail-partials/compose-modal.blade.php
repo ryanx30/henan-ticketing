@@ -1,4 +1,7 @@
-        {{-- Compose / Reply modal --}}
+{{-- ========= TICKET REPLY MODAL ========= --}}
+{{-- Modal used to compose ticket-related resolver messages. --}}
+
+        {{-- ========= COMPOSE / REPLY MODAL ========= --}}
         <div
             x-show="showCompose"
             x-transition

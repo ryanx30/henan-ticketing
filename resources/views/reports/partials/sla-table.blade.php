@@ -1,4 +1,7 @@
-            {{-- TABLE --}}
+{{-- ========= REPORT SLA TABLE ========= --}}
+{{-- SLA tracking rows rendered from the same report activity basis as the cards. --}}
+
+            {{-- ========= TABLE ========= --}}
             <div class="overflow-hidden rounded bg-white shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
                 <div class="bg-[#051823] px-5 py-3">
                     <h2 class="text-[20px] font-semibold text-white">SLA Tracking</h2>

@@ -1,3 +1,6 @@
+{{-- ========= TICKETS INDEX SHELL ========= --}}
+{{-- Filter, table, and pagination containers for API-backed ticket listing. --}}
+
 @php
 $initialFilters = [
     'q' => request('q', ''),

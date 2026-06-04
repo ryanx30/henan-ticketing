@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Stores pre-aggregated daily ticket metrics used by reporting automation and analytics.
+ */
 class DailyTicketStat extends Model
 {
     protected $fillable = [

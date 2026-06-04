@@ -5,6 +5,9 @@ namespace App\Policies;
 use App\Models\ResolverMessage;
 use App\Models\User;
 
+/**
+ * Defines who can read and mutate resolver inbox messages.
+ */
 class ResolverMessagePolicy
 {
     /**

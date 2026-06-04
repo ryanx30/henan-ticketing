@@ -1,3 +1,6 @@
+{{-- ========= TICKET ATTACHMENTS ========= --}}
+{{-- Files uploaded when the ticket was created or updated. --}}
+
 {{-- ATTACHMENTS: Files uploaded when the ticket was created or updated. --}}
 <div class="rounded-sm border border-slate-200 bg-white shadow-lg">
     <div class="border-b border-slate-200 px-6 py-4">

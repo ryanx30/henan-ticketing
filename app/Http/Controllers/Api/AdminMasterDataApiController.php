@@ -16,6 +16,9 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
+/**
+ * Manages master data endpoints for teams, categories, issue types, priorities, and SLA rules.
+ */
 class AdminMasterDataApiController extends BaseApiController
 {
     public function index(Request $request)
@@ -121,7 +124,7 @@ class AdminMasterDataApiController extends BaseApiController
             $after
         );
 
-        return $this->success(
+        return $this->createdResponse(
             $after,
             $this->label($type) . ' created successfully.'
         );
@@ -207,7 +210,7 @@ class AdminMasterDataApiController extends BaseApiController
         try {
             $row->delete();
         } catch (QueryException $e) {
-            return $this->error('This record is already used by another data and cannot be deleted.', 422);
+            return $this->validationError([], 'This record is already used by another data and cannot be deleted.');
         }
 
         AuditLogger::record(
@@ -221,7 +224,7 @@ class AdminMasterDataApiController extends BaseApiController
             null
         );
 
-        return $this->success([], $this->label($type) . ' deleted successfully.');
+        return $this->deletedResponse($this->label($type) . ' deleted successfully.');
     }
 
 

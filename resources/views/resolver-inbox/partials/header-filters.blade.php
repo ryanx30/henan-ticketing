@@ -1,4 +1,7 @@
-{{-- Header + Filters --}}
+{{-- ========= INBOX HEADER FILTERS ========= --}}
+{{-- Inbox title, counters, and filtering controls. --}}
+
+{{-- ========= HEADER + FILTERS ========= --}}
 <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
     <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>

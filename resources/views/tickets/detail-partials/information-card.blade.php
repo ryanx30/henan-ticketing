@@ -1,4 +1,7 @@
-                    {{-- Detail card --}}
+{{-- ========= TICKET INFORMATION CARD ========= --}}
+{{-- Detailed ticket metadata, classification, routing, and client information. --}}
+
+                    {{-- ========= DETAIL CARD ========= --}}
                     <div class="rounded-sm border border-slate-200 bg-white shadow-lg">
                         <div class="border-b border-slate-200 px-6 py-4">
                             <h2 class="text-[20px] font-bold text-slate-900">Ticket Information</h2>

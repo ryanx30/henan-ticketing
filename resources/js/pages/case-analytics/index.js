@@ -1,3 +1,10 @@
+/**
+ * Case analytics page controller.
+ * Loads analytics summary, charts, case breakdowns, filters, and export actions.
+ */
+
+import { apiGet } from '../../utils/apiClient';
+
 const analyticsApiUrl = window.HenanCaseAnalytics?.apiUrl ?? window.HenanApp?.routes?.api?.caseAnalytics ?? '/api/case-analytics';
 const analyticsExportUrl = window.HenanCaseAnalytics?.exportUrl ?? window.HenanApp?.routes?.api?.caseAnalyticsExport ?? '/api/case-analytics/export';
 
@@ -75,18 +82,7 @@ async function loadAnalytics(fromButton = false, isInitialLoad = false) {
         const url = new URL(analyticsApiUrl, window.location.origin);
         url.search = params.toString();
 
-        const response = await fetch(url.toString(), {
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to load analytics data. Status: ${response.status}`);
-        }
-
-        const responseJson = await response.json();
+        const responseJson = await apiGet(url.toString());
         const payload = responseJson.data ?? responseJson;
 
         if (!analyticsState.filterOptionsLoaded || isInitialLoad) {
@@ -245,8 +241,8 @@ function renderTopTeams(rows) {
                         <div class="text-[11px] text-slate-500">tickets</div>
                     </div>
                 </div>
-                <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
-                    <div class="h-full rounded-full bg-slate-900" style="width: ${width}%"></div>
+                <div style="margin-top: 12px; height: 6px; width: 100%; overflow: hidden; border-radius: 9999px; background: #e2e8f0;">
+                    <div style="height: 100%; width: ${width}%; border-radius: 9999px; background: #2f80d1;"></div>
                 </div>
             </div>
         `;
@@ -274,8 +270,8 @@ function renderTopIssues(rows) {
                     </div>
                     <div class="shrink-0 text-sm font-bold text-slate-900">${tickets}</div>
                 </div>
-                <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
-                    <div class="h-full rounded-full bg-[#2f80d1]" style="width: ${width}%"></div>
+                <div style="margin-top: 12px; height: 6px; width: 100%; overflow: hidden; border-radius: 9999px; background: #e2e8f0;">
+                    <div style="height: 100%; width: ${width}%; border-radius: 9999px; background: #2f80d1;"></div>
                 </div>
             </div>
         `;

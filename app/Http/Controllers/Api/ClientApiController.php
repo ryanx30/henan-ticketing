@@ -6,6 +6,9 @@ use App\Models\Client;
 use App\Models\Ticket;
 use Illuminate\Http\Request;
 
+/**
+ * Provides client lookup and history endpoints used by ticket creation and editing screens.
+ */
 class ClientApiController extends BaseApiController
 {
     public function suggest(Request $request)

@@ -7,6 +7,9 @@ use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Throwable;
 
+/**
+ * Generates daily ticket statistics used by reporting and case analytics.
+ */
 class GenerateDailyTicketSnapshot extends Command
 {
     /**

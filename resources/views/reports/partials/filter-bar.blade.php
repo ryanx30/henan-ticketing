@@ -1,4 +1,7 @@
-            {{-- FILTER BAR --}}
+{{-- ========= REPORT FILTER BAR ========= --}}
+{{-- Range, scope, custom date, and export controls for reports. --}}
+
+            {{-- ========= FILTER BAR ========= --}}
             <div class="mb-5 rounded bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
                 <div class="flex flex-wrap items-center gap-3">
                     <div class="flex items-center gap-2 text-sm text-slate-700">

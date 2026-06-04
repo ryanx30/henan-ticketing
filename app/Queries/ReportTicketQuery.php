@@ -8,6 +8,9 @@ use App\Support\TicketStatus;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 
+/**
+ * Centralizes report activity queries so totals, cards, chart, SLA, rows, and exports use the same base data.
+ */
 final class ReportTicketQuery
 {
     public function base(Carbon $start, Carbon $end, string $scope, User $viewer): Builder
@@ -29,6 +32,30 @@ final class ReportTicketQuery
             ->where(function (Builder $completed) use ($start, $end) {
                 $completed->whereBetween('resolved_at', [$start, $end])
                     ->orWhere(fn (Builder $fallback) => $fallback->whereNull('resolved_at')->whereBetween('closed_at', [$start, $end]));
+            });
+
+        $this->applyScope($query, $this->normalizeScopeForUser($scope, $viewer), $viewer);
+
+        return $query;
+    }
+
+
+    /**
+     * Report activity includes tickets created in the range and tickets completed in the range.
+     * This keeps total, completed, trend, table, and SLA calculations aligned.
+     */
+    // ========= REPORT ACTIVITY QUERY =========
+
+    public function activity(Carbon $start, Carbon $end, string $scope, User $viewer): Builder
+    {
+        $query = Ticket::query()
+            ->with(['creator', 'holder', 'teamMaster', 'priorityMaster'])
+            ->where(function (Builder $range) use ($start, $end) {
+                $range->whereBetween('created_at', [$start, $end])
+                    ->orWhereBetween('resolved_at', [$start, $end])
+                    ->orWhere(fn (Builder $fallback) => $fallback
+                        ->whereNull('resolved_at')
+                        ->whereBetween('closed_at', [$start, $end]));
             });
 
         $this->applyScope($query, $this->normalizeScopeForUser($scope, $viewer), $viewer);

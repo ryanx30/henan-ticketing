@@ -1,4 +1,7 @@
-{{-- Page-specific visual polish for Litepicker and horizontal table scrolling. --}}
+
+
+
+
 <style>
     [x-cloak] { display: none !important; }
 
@@ -115,6 +118,22 @@
         border-radius: 9999px;
     }
 
+
+    .ticket-index-table {
+        min-width: 0;
+    }
+
+    .ticket-index-table th,
+    .ticket-index-table td {
+        min-width: 0;
+        vertical-align: middle;
+    }
+
+    .ticket-index-table th button {
+        min-width: 0;
+        white-space: nowrap;
+    }
+
     thead button {
         background: transparent;
         border: none;
@@ -125,24 +144,5 @@
     }
 
     thead button:hover { color: #2f88d8; }
-
-
-    .ticket-click-row {
-        cursor: pointer;
-        position: relative;
-        transition: background-color 150ms ease, filter 150ms ease, transform 150ms ease;
-    }
-
-    .ticket-click-row:hover {
-        z-index: 2;
-        filter: drop-shadow(0 8px 14px rgba(15, 23, 42, 0.14));
-        transform: translateY(-1px);
-    }
-
-    .ticket-click-row:hover td { background-color: #ffffff; }
-
-    .ticket-click-row:focus {
-        outline: 2px solid rgba(47, 136, 216, 0.35);
-        outline-offset: -2px;
-    }
 </style>
+<?php /**PATH C:\laragon\www\henan-ticketing\resources\views/tickets/partials/index-styles.blade.php ENDPATH**/ ?>
