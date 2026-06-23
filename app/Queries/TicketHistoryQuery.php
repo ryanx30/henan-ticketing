@@ -24,6 +24,7 @@ final class TicketHistoryQuery
             ->whereIn('status', TicketStatus::completedValues());
 
         $this->applySearch($query, trim((string) ($filters['q'] ?? '')));
+        $this->applyStatus($query, (string) ($filters['status'] ?? ''));
         $this->applyEffectiveDateRange($query, (string) ($filters['date_from'] ?? ''), (string) ($filters['date_to'] ?? ''));
         $this->applySorting($query, (string) ($filters['sort_by'] ?? 'resolved_at'), (string) ($filters['sort_dir'] ?? 'desc'));
 
@@ -36,6 +37,7 @@ final class TicketHistoryQuery
             'q' => (string) $request->query('q', ''),
             'date_from' => (string) $request->query('date_from', ''),
             'date_to' => (string) $request->query('date_to', ''),
+            'status' => (string) $request->query('status', ''),
             'sort_by' => (string) $request->query('sort_by', 'resolved_at'),
             'sort_dir' => (string) $request->query('sort_dir', 'desc'),
         ];
@@ -55,6 +57,20 @@ final class TicketHistoryQuery
                 ->orWhere('category', 'like', '%' . $keyword . '%')
                 ->orWhere('team', 'like', '%' . $keyword . '%');
         });
+    }
+
+
+    private function applyStatus(Builder $query, string $status): void
+    {
+        if ($status === '') {
+            return;
+        }
+
+        if (!in_array($status, TicketStatus::completedValues(), true)) {
+            return;
+        }
+
+        $query->where('status', $status);
     }
 
     private function applyEffectiveDateRange(Builder $query, string $from, string $to): void

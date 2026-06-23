@@ -26,6 +26,7 @@ class AdminMasterDataApiController extends BaseApiController
         Gate::authorize('viewAny', Category::class);
 
         $type = (string) $request->query('type', 'categories');
+        $this->ensureTypeAllowedForUser($request, $type, 'view');
         $search = trim((string) $request->query('q', ''));
         $perPage = (int) $request->query('per_page', 10);
         $sortBy = (string) $request->query('sort_by', '');
@@ -59,12 +60,14 @@ class AdminMasterDataApiController extends BaseApiController
                 'from' => $paginator->firstItem(),
                 'to' => $paginator->lastItem(),
             ],
-            'options' => $this->options(),
+            'options' => $this->options($request),
         ], 'Master data loaded');
     }
 
     public function store(Request $request, string $type)
     {
+        $this->ensureTypeAllowedForUser($request, $type, 'create');
+
         Gate::authorize('create', $this->modelClassForType($type));
 
         $validated = $this->validatePayload($request, $type);
@@ -132,6 +135,8 @@ class AdminMasterDataApiController extends BaseApiController
 
     public function update(Request $request, string $type, int $id)
     {
+        $this->ensureTypeAllowedForUser($request, $type, 'update');
+
         $row = $this->findRow($type, $id);
         Gate::authorize('update', $row);
         $beforeRow = $this->reloadRelations($type, $row);
@@ -201,6 +206,8 @@ class AdminMasterDataApiController extends BaseApiController
 
     public function destroy(Request $request, string $type, int $id)
     {
+        $this->ensureTypeAllowedForUser($request, $type, 'delete');
+
         $row = $this->findRow($type, $id);
         Gate::authorize('delete', $row);
         $row = $this->reloadRelations($type, $row);
@@ -227,6 +234,37 @@ class AdminMasterDataApiController extends BaseApiController
         return $this->deletedResponse($this->label($type) . ' deleted successfully.');
     }
 
+
+    /**
+     * CS may only access Category and Issue Type master data.
+     * Admin/IT/Supervisor keep their existing visibility rules.
+     */
+    protected function ensureTypeAllowedForUser(Request $request, string $type, string $ability): void
+    {
+        if (! $request->user()?->isCS()) {
+            return;
+        }
+
+        if (! in_array($type, ['categories', 'issue-types'], true)) {
+            abort(403, 'CS can only access Category and Issue Type master data.');
+        }
+
+        if ($ability === 'delete') {
+            abort(403, 'CS can add and edit Category or Issue Type, but cannot delete master data.');
+        }
+    }
+
+    /**
+     * Master data tabs exposed to the current viewer.
+     */
+    protected function allowedTypesForUser(Request $request): array
+    {
+        if ($request->user()?->isCS()) {
+            return ['categories', 'issue-types'];
+        }
+
+        return ['categories', 'issue-types', 'teams', 'priorities', 'sla-rules'];
+    }
 
     /**
      * Resolve the model class for policy checks before creating rows.
@@ -567,9 +605,12 @@ class AdminMasterDataApiController extends BaseApiController
         };
     }
 
-    protected function options(): array
+    protected function options(Request $request): array
     {
+        $isCs = (bool) $request->user()?->isCS();
+
         return [
+            'allowed_types' => $this->allowedTypesForUser($request),
             'categories' => Category::query()
                 ->where('is_active', true)
                 ->orderBy('code_num')
@@ -581,28 +622,32 @@ class AdminMasterDataApiController extends BaseApiController
                 ])
                 ->values(),
 
-            'teams' => Team::query()
-                ->where('is_active', true)
-                ->orderBy('code_num')
-                ->get(['id', 'code_num', 'name'])
-                ->map(fn (Team $row) => [
-                    'id' => $row->id,
-                    'code_num' => $row->code_num,
-                    'name' => $row->name,
-                ])
-                ->values(),
+            'teams' => $isCs
+                ? collect()
+                : Team::query()
+                    ->where('is_active', true)
+                    ->orderBy('code_num')
+                    ->get(['id', 'code_num', 'name'])
+                    ->map(fn (Team $row) => [
+                        'id' => $row->id,
+                        'code_num' => $row->code_num,
+                        'name' => $row->name,
+                    ])
+                    ->values(),
 
-            'priorities' => Priority::query()
-                ->where('is_active', true)
-                ->orderBy('sort_order')
-                ->orderBy('code_num')
-                ->get(['id', 'code_num', 'name'])
-                ->map(fn (Priority $row) => [
-                    'id' => $row->id,
-                    'code_num' => $row->code_num,
-                    'name' => $row->name,
-                ])
-                ->values(),
+            'priorities' => $isCs
+                ? collect()
+                : Priority::query()
+                    ->where('is_active', true)
+                    ->orderBy('sort_order')
+                    ->orderBy('code_num')
+                    ->get(['id', 'code_num', 'name'])
+                    ->map(fn (Priority $row) => [
+                        'id' => $row->id,
+                        'code_num' => $row->code_num,
+                        'name' => $row->name,
+                    ])
+                    ->values(),
         ];
     }
 

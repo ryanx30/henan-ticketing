@@ -31,7 +31,7 @@ class ReportsApiController extends BaseApiController
 
         $scope = $this->sanitizeScope((string) $request->query('scope', 'my'));
         $perPage = $this->sanitizePerPage((int) $request->query('per_page', 10));
-        $range = (string) $request->query('range', 'this_week');
+        $range = (string) $request->query('range', '1w');
 
         $payload = $this->reportsPayloadService->build(
             $request->user(),

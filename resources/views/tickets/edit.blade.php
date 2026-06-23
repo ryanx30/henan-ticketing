@@ -26,7 +26,9 @@
                         <div class="bg-white rounded shadow p-4">
                             <div class="grid grid-cols-3 items-center mb-6">
                                 <div>
-                                    <a href="/tickets"
+                                    <a href="{{ route('tickets.index') }}"
+                                       data-smart-back
+                                       data-fallback-url="{{ route('tickets.index') }}"
                                        class="inline-flex items-center px-4 py-2 rounded border bg-white text-sm hover:bg-slate-50">
                                         ← Back
                                     </a>

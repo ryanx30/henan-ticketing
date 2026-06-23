@@ -88,6 +88,22 @@
 
                         <p class="mt-2 line-clamp-2 text-sm leading-5 text-slate-600" x-text="messagePreview(thread.latestMessage, 140)"></p>
 
+                        <template x-if="thread.latestMessage?.attachment_name">
+                            <a
+                                :href="attachmentUrl(thread.latestMessage)"
+                                @click.stop
+                                class="mt-3 inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-sky-200 hover:text-slate-900">
+                                <span
+                                    class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md ring-1"
+                                    :class="attachmentIconClass(thread.latestMessage)">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 6.5l-7.8 7.8a3 3 0 104.2 4.2l8.5-8.5a5 5 0 00-7.1-7.1l-9 9a7 7 0 009.9 9.9l7.1-7.1" />
+                                    </svg>
+                                </span>
+                                <span class="truncate" x-text="thread.latestMessage.attachment_name"></span>
+                            </a>
+                        </template>
+
                         <div class="mt-3 flex items-center justify-between gap-3">
                             <template x-if="threadReplyCount(thread) > 0">
                                 <button
@@ -130,6 +146,22 @@
                                             <span class="text-[11px] font-medium text-slate-400" x-text="formatDateTimeShort(reply.created_at)"></span>
                                         </div>
                                         <p class="mt-1 text-sm leading-5 text-slate-600" x-text="messagePreview(reply, 160)"></p>
+
+                                        <template x-if="reply.attachment_name">
+                                            <a
+                                                :href="attachmentUrl(reply)"
+                                                @click.stop
+                                                class="mt-2 inline-flex max-w-full items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-white hover:text-slate-900">
+                                                <span
+                                                    class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1"
+                                                    :class="attachmentIconClass(reply)">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 6.5l-7.8 7.8a3 3 0 104.2 4.2l8.5-8.5a5 5 0 00-7.1-7.1l-9 9a7 7 0 009.9 9.9l7.1-7.1" />
+                                                    </svg>
+                                                </span>
+                                                <span class="truncate" x-text="reply.attachment_name"></span>
+                                            </a>
+                                        </template>
                                     </div>
                                 </template>
                             </div>

@@ -4,6 +4,7 @@ import './henan-export-queue';
 import './sla-countdown';
 import './pages/layout/sidebar';
 import './pages/layout/notifications';
+import './pages/layout/back-navigation';
 
 import './pages/tickets/index';
 import './pages/tickets/detail';

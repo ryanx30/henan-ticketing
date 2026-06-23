@@ -5,7 +5,7 @@
 
 import { apiGet, buildQueryString } from '../../utils/apiClient';
 import { paginationItems as buildPaginationItems } from '../../utils/pagination';
-import { formatDate, formatHumanDate, titleCase, toYmd } from '../../utils/formatter';
+import { formatDateTime, formatHumanDate, titleCase, toYmd } from '../../utils/formatter';
 import { priorityBadgeClass, priorityLabel as buildPriorityLabel, statusBadgeClass, statusLabel as buildStatusLabel, ticketLabel as buildTicketLabel } from '../../utils/badges';
 import { showAlert as showPageAlert } from '../../utils/toast';
 
@@ -323,7 +323,7 @@ function ticketsIndexPage(config = {}) {
         },
 
         createdLabel(ticket) {
-            return ticket.created_at_label || formatDate(ticket.created_at);
+            return formatDateTime(ticket.created_at);
         },
 
         titleCase(value) {

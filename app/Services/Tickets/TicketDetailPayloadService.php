@@ -5,7 +5,9 @@ namespace App\Services\Tickets;
 use App\Http\Resources\TicketDetailResource;
 use App\Models\Ticket;
 use App\Models\TicketAttachment;
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Builds the ticket detail payload with related data, attachments, and permission-aware action flags.
@@ -39,9 +41,12 @@ final class TicketDetailPayloadService
             ->latest()
             ->paginate($this->boundedPerPage($request, 'attachments_per_page', 10, 50), ['*'], 'attachments_page');
 
+        $user = $request->user();
         $data = (new TicketDetailResource($ticket))->toArray($request);
-        $data['viewer_role'] = $request->user()->role;
-        $data['viewer_id'] = $request->user()->id;
+        $data['viewer_role'] = $user->role;
+        $data['viewer_id'] = $user->id;
+        $data['actions'] = $this->actions($ticket, $user);
+        $data['handoff'] = $this->handoffPayload($ticket, $user);
         $data['relations'] = [
             'history' => $this->relationPage($history),
             'messages' => $this->relationPage($messages),
@@ -49,6 +54,60 @@ final class TicketDetailPayloadService
         ];
 
         return $data;
+    }
+
+    private function actions(Ticket $ticket, User $user): array
+    {
+        $isCurrentCsOwner = $user->isCS() && (int) $ticket->created_by === (int) $user->id;
+        $isCurrentItHolder = $user->isIT() && (int) $ticket->holder_id === (int) $user->id;
+
+        return [
+            'can_update_ticket' => Gate::forUser($user)->allows('update', $ticket),
+            'can_update_status' => Gate::forUser($user)->allows('updateStatus', $ticket),
+            'can_claim' => Gate::forUser($user)->allows('claim', $ticket),
+            'can_escalate' => Gate::forUser($user)->allows('transferHolder', $ticket),
+            'can_send_resolver_message' => $user->isAdmin() || $isCurrentCsOwner || $isCurrentItHolder,
+        ];
+    }
+
+    private function handoffPayload(Ticket $ticket, User $user): array
+    {
+        if (! Gate::forUser($user)->allows('transferHolder', $ticket)) {
+            return [
+                'mode' => null,
+                'current_owner_id' => null,
+                'eligible_users' => [],
+            ];
+        }
+
+        $mode = $user->isCS() ? 'cs' : 'it';
+        $currentOwnerId = $mode === 'cs' ? $ticket->created_by : $ticket->holder_id;
+
+        if ($user->isAdmin()) {
+            $mode = $ticket->isTeamCode('it') && $ticket->holder_id ? 'it' : 'cs';
+            $currentOwnerId = $mode === 'cs' ? $ticket->created_by : $ticket->holder_id;
+        }
+
+        $users = User::query()
+            ->where('is_active', true)
+            ->where('role', $mode)
+            ->whereKeyNot((int) $currentOwnerId)
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'role', 'is_active'])
+            ->map(fn (User $row) => [
+                'id' => $row->id,
+                'name' => $row->name,
+                'email' => $row->email,
+                'role' => $row->role,
+                'is_active' => (bool) $row->is_active,
+            ])
+            ->values();
+
+        return [
+            'mode' => $mode,
+            'current_owner_id' => $currentOwnerId,
+            'eligible_users' => $users,
+        ];
     }
 
     private function boundedPerPage(Request $request, string $key, int $default, int $max): int

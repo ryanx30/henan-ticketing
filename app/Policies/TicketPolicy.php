@@ -45,11 +45,9 @@ class TicketPolicy
         }
 
         if ($user->isIT()) {
-            return $ticket->isTeamCode('it')
-                && (
-                    $ticket->holder_id === null
-                    || (int) $ticket->holder_id === (int) $user->id
-                );
+            // IT users may monitor all IT tickets from detail.
+            // Mutations stay limited to the current holder through updateStatus()/transferHolder().
+            return $ticket->isTeamCode('it');
         }
 
         return false;
@@ -122,5 +120,30 @@ class TicketPolicy
                 $ticket->holder_id === null
                 || (int) $ticket->holder_id === (int) $user->id
             );
+    }
+
+    /**
+     * Ticket handoff is available only for the current same-role owner, or Admin.
+     */
+    public function transferHolder(User $user, Ticket $ticket): bool
+    {
+        if ($ticket->status === 'closed') {
+            return false;
+        }
+
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        if ($user->isCS()) {
+            return (int) $ticket->created_by === (int) $user->id;
+        }
+
+        if ($user->isIT()) {
+            return $ticket->isTeamCode('it')
+                && (int) $ticket->holder_id === (int) $user->id;
+        }
+
+        return false;
     }
 }

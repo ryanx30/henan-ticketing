@@ -9,12 +9,15 @@
                         <select
                             x-model="filters.range"
                             @change="onRangeChange()"
-                            class="h-10 w-[130px] rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none">
-                            <option value="this_week">This Week</option>
-                            <option value="7d">Last 7 Days</option>
-                            <option value="30d">Last 30 Days</option>
-                            <option value="this_month">This Month</option>
-                            <option value="one_year">One Year</option>
+                            class="h-10 w-[150px] rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none">
+                            <option value="1d">1 Day</option>
+                            <option value="1w">1 Week</option>
+                            <option value="1m">1 Month</option>
+                            <option value="3m">3 Month</option>
+                            <option value="ytd">YTD</option>
+                            <option value="1y">1 Year</option>
+                            <option value="3y">3 Year</option>
+                            <option value="5y">5 Year</option>
                             <option value="custom">Custom</option>
                         </select>
                     </div>

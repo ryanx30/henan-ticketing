@@ -18,6 +18,12 @@
             <div class="rounded bg-white p-6 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
                 <div id="page-alert" class="hidden mb-4 rounded p-3 text-sm"></div>
 
+                <template x-if="draftRestored">
+                    <div class="mb-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                        Draft form restored from this browser. Attachment must be selected again if needed.
+                    </div>
+                </template>
+
                 <div class="mb-5 flex items-center justify-between">
                     <h1 class="text-[30px] font-bold text-slate-900">CREATE TICKET</h1>
                 </div>
@@ -456,11 +462,12 @@
                                     <div class="font-semibold text-slate-800" x-text="item.ticket_code || '-'"></div>
                                     <div class="mt-1 text-[11px] text-slate-600" x-text="item.title || '-'"></div>
                                     <div class="mt-2 flex items-center gap-2">
-                                        <a
-                                            :href="`/tickets/${item.id}`"
+                                        <button
+                                            type="button"
+                                            @click="openSimilarTicket(item)"
                                             class="rounded border border-slate-300 bg-white px-2 py-1 text-[10px] font-medium text-slate-700 hover:bg-slate-50">
                                             View
-                                        </a>
+                                        </button>
                                         <button
                                             type="button"
                                             class="rounded border border-slate-300 bg-white px-2 py-1 text-[10px] font-medium text-slate-700 hover:bg-slate-50"

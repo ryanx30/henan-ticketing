@@ -24,8 +24,11 @@ function ticketDetailPage({
                     similarTickets: [],
                     statusSubmitting: false,
                     claimSubmitting: false,
+                    escalationSubmitting: false,
+                    showEscalationConfirm: false,
                     showCompose: false,
                     messageSubmitting: false,
+                    quickMessageSubmitting: false,
                     composeMode: 'new',
                     composeForm: {
                         to_user_id: '',
@@ -34,6 +37,17 @@ function ticketDetailPage({
                         body: '',
                         attachment: null,
                         attachmentName: '',
+                        attachmentStatus: '',
+                        attachmentInputKey: Date.now(),
+                    },
+                    quickMessage: {
+                        to_user_id: '',
+                        to_display: '',
+                        body: '',
+                    },
+                    escalationForm: {
+                        target_user_id: '',
+                        note: '',
                     },
                     statusForm: {
                         status: '',
@@ -95,7 +109,7 @@ function ticketDetailPage({
                     async loadDetail() {
                         const result = await apiGet(`/api/tickets/${this.ticketId}`);
 
-                        this.ticket = result.data || {};
+                        this.ticket = this.normalizeTicketPayload(result.data || {});
 
                         const relations = this.ticket.relations || {};
 
@@ -118,12 +132,64 @@ function ticketDetailPage({
                         });
 
                         this.statusForm.status = this.ticket.status || '';
+                        this.syncAutoMessageRecipient();
+                        this.syncEscalationTarget();
                     },
 
                     async loadSimilarTickets() {
                         const result = await apiGet(`/api/tickets/${this.ticketId}/similar`);
 
                         this.similarTickets = result.data || [];
+                    },
+
+
+                    normalizeTicketPayload(payload) {
+                        const code = payload.code || {};
+                        const classification = payload.classification || {};
+                        const assignment = payload.assignment || {};
+                        const timestamps = payload.timestamps || {};
+                        const viewer = payload.viewer || {};
+                        const client = payload.client || null;
+                        const status = payload.status || {};
+
+                        const priority = classification.priority || {};
+                        const team = classification.team || {};
+                        const category = classification.category || {};
+                        const issueType = classification.issue_type || {};
+
+                        return {
+                            ...payload,
+                            ticket_code: code.raw || payload.ticket_code || '',
+                            ticket_label: code.label || payload.ticket_label || '',
+                            status: status.code || payload.status || '',
+                            status_label: status.label || payload.status_label || '',
+                            priority: priority.code || priority.name || payload.priority || '',
+                            priority_label: priority.name || payload.priority_label || '',
+                            team: team.code || team.name || payload.team || '',
+                            team_label: team.name || payload.team_label || '',
+                            category: category.name || category.slug || payload.category || '',
+                            category_label: category.name || payload.category_label || '',
+                            issue_type: issueType.name || issueType.slug || payload.issue_type || '',
+                            issue_type_label: issueType.name || payload.issue_type_label || '',
+                            client_id: client?.id || payload.client_id || null,
+                            client_name: client?.name || payload.client_name || '',
+                            client_contact: client?.contact || payload.client_contact || '',
+                            client_email: client?.email || payload.client_email || '',
+                            creator: assignment.creator || payload.creator || null,
+                            holder: assignment.holder || payload.holder || null,
+                            created_by: assignment.creator?.id || payload.created_by || null,
+                            holder_id: assignment.holder?.id || payload.holder_id || null,
+                            request_time: timestamps.request_time || payload.request_time || null,
+                            sla_deadline_at: timestamps.sla_deadline_at || payload.sla_deadline_at || null,
+                            claimed_at: timestamps.claimed_at || payload.claimed_at || null,
+                            resolved_at: timestamps.resolved_at || payload.resolved_at || null,
+                            closed_at: timestamps.closed_at || payload.closed_at || null,
+                            created_at: timestamps.created_at || payload.created_at || null,
+                            created_at_label: timestamps.created_at_label || payload.created_at_label || '',
+                            updated_at: timestamps.updated_at || payload.updated_at || null,
+                            viewer_id: viewer.id || payload.viewer_id || null,
+                            viewer_role: viewer.role || payload.viewer_role || '',
+                        };
                     },
 
                     async claimTicket() {
@@ -171,8 +237,7 @@ function ticketDetailPage({
                         this.setComposeRecipient(item);
                         this.composeForm.subject = this.buildReplySubject();
                         this.composeForm.body = '';
-                        this.composeForm.attachment = null;
-                        this.composeForm.attachmentName = '';
+                        this.clearComposeAttachment();
                         this.showCompose = true;
                     },
 
@@ -183,19 +248,58 @@ function ticketDetailPage({
                         this.composeForm.to_display = '';
                         this.composeForm.subject = '';
                         this.composeForm.body = '';
-                        this.composeForm.attachment = null;
-                        this.composeForm.attachmentName = '';
+                        this.clearComposeAttachment();
                     },
 
                     handleAttachment(event) {
                         const file = event.target.files?.[0] || null;
                         this.composeForm.attachment = file;
                         this.composeForm.attachmentName = file ? file.name : '';
+                        this.composeForm.attachmentStatus = file ? 'uploading' : '';
+
+                        if (file) {
+                            window.setTimeout(() => {
+                                if (this.composeForm.attachment === file) {
+                                    this.composeForm.attachmentStatus = 'ready';
+                                }
+                            }, 650);
+                        }
+                    },
+
+                    clearComposeAttachment() {
+                        this.composeForm.attachment = null;
+                        this.composeForm.attachmentName = '';
+                        this.composeForm.attachmentStatus = '';
+                        this.composeForm.attachmentInputKey = Date.now();
+                    },
+
+                    composeAttachmentStatusLabel() {
+                        if (!this.composeForm.attachmentName) {
+                            return '';
+                        }
+
+                        return this.composeForm.attachmentStatus === 'uploading' ? 'Uploading...' : 'Attached';
                     },
 
                     async submitMessage() {
                         if (this.messageSubmitting) return;
                         if (!this.composeForm.body.trim()) return;
+                        if (!this.canSendResolverMessage()) {
+                            this.showAlert('Only the current ticket owner can send resolver messages.', 'error');
+                            return;
+                        }
+
+                        this.setComposeRecipient();
+
+                        if (!this.composeForm.to_user_id) {
+                            this.showAlert('No valid resolver conversation recipient is available.', 'error');
+                            return;
+                        }
+
+                        if (this.composeForm.attachmentStatus === 'uploading') {
+                            this.showAlert('Please wait until the attachment is ready.', 'error');
+                            return;
+                        }
 
                         this.messageSubmitting = true;
 
@@ -257,25 +361,73 @@ function ticketDetailPage({
                     },
 
 
-                    setComposeRecipient(item = null) {
-                        let target = null;
+                    actions() {
+                        return this.ticket?.actions || {};
+                    },
 
-                        if (item?.id) {
-                            const isSender = Number(item.from_user_id) === Number(this.currentUserId);
-                            target = isSender ? item.recipient : item.sender;
+                    latestResolverUpdate() {
+                        return this.updates?.[0] || null;
+                    },
+
+                    openConversation() {
+                        const latest = this.latestResolverUpdate();
+                        if (latest?.id) {
+                            this.openMessageDetail(latest);
+                            return;
                         }
 
-                        if (!target?.id) {
-                            const role = (this.ticket.viewer_role || '').toLowerCase();
-                            target = (role === 'it' || role === 'admin')
-                                ? this.ticket.creator
-                                : this.ticket.holder;
+                        this.openCompose();
+                    },
+
+                    autoConversationRecipient() {
+                        const role = (this.ticket.viewer_role || '').toLowerCase();
+
+                        if (role === 'it') {
+                            return this.ticket.creator || null;
                         }
+
+                        if (role === 'cs') {
+                            return this.ticket.holder || null;
+                        }
+
+                        if (role === 'admin') {
+                            return this.ticket.holder || this.ticket.creator || null;
+                        }
+
+                        return null;
+                    },
+
+                    recipientLabel(recipient) {
+                        if (!recipient) return 'No recipient available';
+
+                        return `${recipient.name || 'Unknown'}${recipient.email ? ' <' + recipient.email + '>' : ''}`;
+                    },
+
+                    syncAutoMessageRecipient() {
+                        const target = this.autoConversationRecipient();
+                        this.quickMessage.to_user_id = target?.id || '';
+                        this.quickMessage.to_display = this.recipientLabel(target);
+
+                        if (!this.showCompose) {
+                            this.composeForm.to_user_id = target?.id || '';
+                            this.composeForm.to_display = this.recipientLabel(target);
+                        }
+                    },
+
+                    conversationRecipients() {
+                        const target = this.autoConversationRecipient();
+                        return target?.id ? [target] : [];
+                    },
+
+                    canSendResolverMessage() {
+                        return Boolean(this.actions().can_send_resolver_message);
+                    },
+
+                    setComposeRecipient() {
+                        const target = this.autoConversationRecipient();
 
                         this.composeForm.to_user_id = target?.id || '';
-                        this.composeForm.to_display = target
-                            ? `${target.name}${target.email ? ' <' + target.email + '>' : ''}`
-                            : '';
+                        this.composeForm.to_display = this.recipientLabel(target);
                     },
 
                     buildReplySubject() {
@@ -289,17 +441,54 @@ function ticketDetailPage({
                             return this.composeForm.to_display;
                         }
 
-                        const role = (this.ticket.viewer_role || '').toLowerCase();
+                        const target = this.autoConversationRecipient();
+                        return this.recipientLabel(target);
+                    },
 
-                        if (role === 'it' || role === 'admin') {
-                            return this.ticket.creator ?
-                                `${this.ticket.creator.name}${this.ticket.creator.email ? ' <' + this.ticket.creator.email + '>' : ''}` :
-                                'Ticket creator';
+                    handleQuickMessageKeydown(event) {
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                            event.preventDefault();
+                            this.submitQuickMessage();
+                        }
+                    },
+
+                    async submitQuickMessage() {
+                        if (this.quickMessageSubmitting) return;
+                        if (!this.quickMessage.body.trim()) return;
+                        if (!this.canSendResolverMessage()) {
+                            this.showAlert('Only the current ticket owner can send resolver messages.', 'error');
+                            return;
                         }
 
-                        return this.ticket.holder ?
-                            `${this.ticket.holder.name}${this.ticket.holder.email ? ' <' + this.ticket.holder.email + '>' : ''}` :
-                            'Ticket holder';
+                        const target = this.autoConversationRecipient();
+                        if (!target?.id) {
+                            this.showAlert('No valid resolver conversation recipient is available.', 'error');
+                            return;
+                        }
+
+                        this.quickMessageSubmitting = true;
+
+                        try {
+                            const formData = new FormData();
+                            formData.append('ticket_id', this.ticketId);
+                            formData.append('to_user_id', target.id);
+                            formData.append('subject', this.buildReplySubject());
+                            formData.append('body', this.quickMessage.body || '');
+
+                            const result = await apiRequest('/api/resolver-inbox', {
+                                method: 'POST',
+                                body: formData,
+                            });
+
+                            this.quickMessage.body = '';
+                            this.showAlert(result.message || 'Message sent successfully.', 'success');
+                            await this.loadDetail();
+                        } catch (error) {
+                            console.error(error);
+                            this.showAlert(error.message || 'Failed to send message.', 'error');
+                        } finally {
+                            this.quickMessageSubmitting = false;
+                        }
                     },
 
                     displayUpdateTitle(item) {
@@ -332,15 +521,90 @@ function ticketDetailPage({
                     },
 
                     canManageStatus() {
-                        const role = (this.ticket.viewer_role || '').toLowerCase();
-                        return role === 'it' || role === 'admin';
+                        return Boolean(this.actions().can_update_status);
                     },
 
                     canClaimTicket() {
-                        const role = (this.ticket.viewer_role || '').toLowerCase();
-                        if (!(role === 'it' || role === 'admin')) return false;
-                        if ((this.ticket.team || '').toLowerCase() !== 'it') return false;
-                        return !this.ticket.holder_id;
+                        return Boolean(this.actions().can_claim);
+                    },
+
+                    canEscalateTicket() {
+                        return Boolean(this.actions().can_escalate);
+                    },
+
+                    escalationUsers() {
+                        return this.ticket?.handoff?.eligible_users || [];
+                    },
+
+                    escalationModeLabel() {
+                        const mode = this.ticket?.handoff?.mode;
+                        if (mode === 'cs') return 'CS Owner';
+                        if (mode === 'it') return 'IT Holder';
+                        return 'Owner';
+                    },
+
+                    syncEscalationTarget() {
+                        const users = this.escalationUsers();
+                        this.escalationForm.target_user_id = users[0]?.id ? String(users[0].id) : '';
+                    },
+
+                    selectedEscalationUser() {
+                        const targetId = String(this.escalationForm.target_user_id || '');
+                        return this.escalationUsers().find(user => String(user.id) === targetId) || null;
+                    },
+
+                    currentEscalationOwnerLabel() {
+                        const mode = this.ticket?.handoff?.mode;
+                        const currentOwner = mode === 'cs' ? this.ticket.creator : this.ticket.holder;
+
+                        return this.recipientLabel(currentOwner);
+                    },
+
+                    escalationTargetLabel() {
+                        return this.recipientLabel(this.selectedEscalationUser());
+                    },
+
+                    escalationConfirmTitle() {
+                        return `Confirm ${this.escalationModeLabel()} Handoff`;
+                    },
+
+                    escalationConfirmMessage() {
+                        return `This action will move ticket ${this.currentTicketLabel()} from ${this.currentEscalationOwnerLabel()} to ${this.escalationTargetLabel()}. After handoff, the previous owner can still view the ticket detail but cannot update the status or send resolver messages.`;
+                    },
+
+                    openEscalationConfirm() {
+                        if (!this.canEscalateTicket() || this.escalationSubmitting || !this.escalationForm.target_user_id) return;
+
+                        this.showEscalationConfirm = true;
+                    },
+
+                    closeEscalationConfirm() {
+                        if (this.escalationSubmitting) return;
+
+                        this.showEscalationConfirm = false;
+                    },
+
+                    async submitEscalation() {
+                        if (!this.canEscalateTicket() || this.escalationSubmitting || !this.escalationForm.target_user_id) return;
+
+                        this.escalationSubmitting = true;
+
+                        try {
+                            const result = await apiPatch(`/api/tickets/${this.ticketId}/escalate`, {
+                                target_user_id: this.escalationForm.target_user_id,
+                                note: this.escalationForm.note,
+                            });
+
+                            this.showAlert(result.message || 'Ticket handoff completed successfully.', 'success');
+                            this.escalationForm.note = '';
+                            this.showEscalationConfirm = false;
+                            await this.loadAll();
+                        } catch (error) {
+                            console.error(error);
+                            this.showAlert(error.message || 'Failed to handoff ticket.', 'error');
+                        } finally {
+                            this.escalationSubmitting = false;
+                        }
                     },
 
                     slugify(value) {

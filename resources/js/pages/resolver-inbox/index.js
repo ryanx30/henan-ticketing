@@ -49,6 +49,8 @@ const RESOLVER_CURRENT_USER_ID = Number(RESOLVER_INBOX_ROOT?.dataset.userId || 0
                     subject: '',
                     body: '',
                     attachment: null,
+                    attachmentPreview: null,
+                    attachmentInputKey: Date.now(),
                 },
 
                 init() {
@@ -288,7 +290,83 @@ const RESOLVER_CURRENT_USER_ID = Number(RESOLVER_INBOX_ROOT?.dataset.userId || 0
                 },
 
                 handleAttachment(event) {
-                    this.form.attachment = event.target.files[0] || null;
+                    const file = event.target.files?.[0] || null;
+                    this.form.attachment = file;
+
+                    if (!file) {
+                        this.form.attachmentPreview = null;
+                        return;
+                    }
+
+                    this.form.attachmentPreview = {
+                        name: file.name,
+                        size: file.size,
+                        status: 'uploading',
+                    };
+
+                    window.setTimeout(() => {
+                        if (this.form.attachment === file && this.form.attachmentPreview) {
+                            this.form.attachmentPreview = {
+                                ...this.form.attachmentPreview,
+                                status: 'ready',
+                            };
+                        }
+                    }, 650);
+                },
+
+                clearAttachment() {
+                    this.form.attachment = null;
+                    this.form.attachmentPreview = null;
+                    this.form.attachmentInputKey = Date.now();
+                },
+
+                attachmentFileName() {
+                    return this.form.attachmentPreview?.name || this.form.attachment?.name || '';
+                },
+
+                attachmentStatusLabel() {
+                    if (!this.form.attachmentPreview) {
+                        return '';
+                    }
+
+                    return this.form.attachmentPreview.status === 'uploading' ? 'Uploading...' : 'Attached';
+                },
+
+                attachmentSizeLabel(size = null) {
+                    const bytes = Number(size ?? this.form.attachmentPreview?.size ?? this.form.attachment?.size ?? 0);
+
+                    if (!bytes) {
+                        return '';
+                    }
+
+                    if (bytes < 1024) {
+                        return `${bytes} B`;
+                    }
+
+                    if (bytes < 1024 * 1024) {
+                        return `${(bytes / 1024).toFixed(1)} KB`;
+                    }
+
+                    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+                },
+
+                attachmentIconClass(message) {
+                    const name = String(message?.attachment_name || this.attachmentFileName() || '').toLowerCase();
+
+                    if (name.endsWith('.pdf')) return 'bg-red-50 text-red-600 ring-red-100';
+                    if (name.match(/\.(doc|docx)$/)) return 'bg-blue-50 text-blue-600 ring-blue-100';
+                    if (name.match(/\.(xls|xlsx|csv)$/)) return 'bg-emerald-50 text-emerald-600 ring-emerald-100';
+                    if (name.match(/\.(jpg|jpeg|png)$/)) return 'bg-purple-50 text-purple-600 ring-purple-100';
+
+                    return 'bg-slate-50 text-slate-600 ring-slate-100';
+                },
+
+                attachmentUrl(message) {
+                    if (!message?.id || !message?.attachment_name) {
+                        return '#';
+                    }
+
+                    return `/api/resolver-inbox/${message.id}/attachment/download`;
                 },
 
                 syncTicketMeta() {
@@ -338,12 +416,17 @@ const RESOLVER_CURRENT_USER_ID = Number(RESOLVER_INBOX_ROOT?.dataset.userId || 0
                     this.form.to_display = '';
                     this.form.subject = '';
                     this.form.body = '';
-                    this.form.attachment = null;
+                    this.clearAttachment();
                     this.showCompose = false;
                 },
 
                 async submitCompose() {
                     try {
+                        if (this.form.attachmentPreview?.status === 'uploading') {
+                            this.showAlert('Please wait until the attachment is ready.', 'error');
+                            return;
+                        }
+
                         const formData = new FormData();
                         formData.append('ticket_id', this.form.ticket_id || '');
                         formData.append('to_user_id', this.form.to_user_id || '');
@@ -356,7 +439,14 @@ const RESOLVER_CURRENT_USER_ID = Number(RESOLVER_INBOX_ROOT?.dataset.userId || 0
 
                         const result = await apiPost('/api/resolver-inbox', formData);
                         this.showAlert(result.message || 'Message sent successfully', 'success');
+
+                        const sentMessage = result.data || null;
                         this.discardDraft();
+
+                        if (sentMessage?.id) {
+                            this.messages = [sentMessage, ...(this.messages || []).filter((message) => Number(message.id) !== Number(sentMessage.id))];
+                        }
+
                         await this.loadMessages();
                     } catch (error) {
                         console.error(error);

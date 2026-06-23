@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Manages resolver messages, follow-up inbox data, message mutations, and resolver-specific API payloads.
@@ -188,6 +189,10 @@ class ResolverInboxApiController extends BaseApiController
             ->findOrFail($validated['ticket_id']);
         Gate::authorize('view', $ticket);
 
+        if (! $this->canMessageTicket($ticket, $user)) {
+            return $this->validationError([], 'Only the current CS owner or current IT holder can send resolver messages for this ticket.');
+        }
+
         $toUserId = $this->resolveRecipientId($validated, $ticket, $user);
 
         if (!$toUserId) {
@@ -241,7 +246,7 @@ class ResolverInboxApiController extends BaseApiController
         );
     }
 
-    public function downloadAttachment(Request $request, ResolverMessage $resolverMessage): BinaryFileResponse
+    public function downloadAttachment(Request $request, ResolverMessage $resolverMessage): BinaryFileResponse|StreamedResponse
     {
         Gate::authorize('view', $resolverMessage);
 
@@ -322,7 +327,10 @@ class ResolverInboxApiController extends BaseApiController
             return;
         }
 
-        $query->where('to_user_id', $user->id);
+        $query->where(function ($query) use ($user) {
+            $query->where('to_user_id', $user->id)
+                ->orWhere('from_user_id', $user->id);
+        });
     }
 
 
@@ -336,6 +344,23 @@ class ResolverInboxApiController extends BaseApiController
             $query->where('from_user_id', $user->id)
                 ->orWhere('to_user_id', $user->id);
         });
+    }
+
+    protected function canMessageTicket(Ticket $ticket, User $user): bool
+    {
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        if ($user->isCS()) {
+            return (int) $ticket->created_by === (int) $user->id;
+        }
+
+        if ($user->isIT()) {
+            return (int) $ticket->holder_id === (int) $user->id;
+        }
+
+        return false;
     }
 
     protected function resolveRecipientId(array $validated, Ticket $ticket, User $user): ?int

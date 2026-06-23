@@ -207,9 +207,19 @@
                 </div>
             </div>
 
-            {{-- ===== RESOLVED ===== --}}
+            {{-- ===== RESOLVED PREVIEW ===== --}}
             <div class="mb-2">
-                <div class="font-semibold text-lg mb-3">Resolved Tickets</div>
+                <div class="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <div class="font-semibold text-lg">Resolved Tickets</div>
+                        <p class="text-sm text-slate-500">Showing latest 5 resolved tickets.</p>
+                    </div>
+
+                    <a href="{{ route('it.history', ['status' => 'resolved']) }}"
+                       class="text-sm font-semibold text-blue-600 hover:text-blue-700 hover:underline">
+                        View all resolved tickets →
+                    </a>
+                </div>
 
                 <div class="bg-white rounded shadow overflow-hidden">
                     <div class="overflow-x-auto">
@@ -229,7 +239,7 @@
                                     <tr><td colspan="5" class="py-10 text-center text-gray-500">No tickets.</td></tr>
                                 </template>
 
-                                <template x-for="t in resolvedTickets" :key="t.id">
+                                <template x-for="t in resolvedTickets.slice(0, 5)" :key="t.id">
                                     <tr class="border-b">
                                         <td class="py-3 px-3 font-mono" x-text="ticketLabel(t)"></td>
 

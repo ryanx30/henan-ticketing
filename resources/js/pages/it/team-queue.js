@@ -52,7 +52,9 @@ function teamQueuePage() {
                 this.newTickets = data.new_tickets || [];
                 this.ongoingTickets = data.ongoing_tickets || [];
                 this.waitingTickets = data.waiting_tickets || [];
-                this.resolvedTickets = data.resolved_tickets || [];
+                this.resolvedTickets = (data.resolved_tickets || [])
+                    .filter((ticket) => ticket.status === 'resolved')
+                    .slice(0, 5);
             } catch (error) {
                 console.error(error);
                 this.showAlert(error.message || 'Failed to load team queue', 'error');

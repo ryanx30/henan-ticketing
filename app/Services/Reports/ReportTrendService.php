@@ -23,30 +23,30 @@ final class ReportTrendService
 
     public function build(Carbon $start, Carbon $end, string $scope, User $user, string $range): array
     {
-        $isOneYear = ($range === 'one_year');
+        $groupMonthly = $this->shouldGroupMonthly($range, $start, $end);
 
         $canUseGlobalAggregate = $scope === 'all'
             && ($user->isAdmin() || $user->isSupervisor())
             && $this->statsReader->canUsePreAggregated($start, $end);
 
         if ($canUseGlobalAggregate) {
-            return $this->fromPreAggregatedStats($start, $end, $isOneYear);
+            return $this->fromPreAggregatedStats($start, $end, $groupMonthly);
         }
 
-        return $isOneYear
+        return $groupMonthly
             ? $this->fromLiveMonthlyQuery($start, $end, $scope, $user)
             : $this->fromLiveDailyQuery($start, $end, $scope, $user);
     }
 
-    private function fromPreAggregatedStats(Carbon $start, Carbon $end, bool $isOneYear): array
+    private function fromPreAggregatedStats(Carbon $start, Carbon $end, bool $groupMonthly): array
     {
         $labels = [];
         $values = [];
-        $groupBy = $isOneYear ? 'month' : 'day';
+        $groupBy = $groupMonthly ? 'month' : 'day';
         $trendData = $this->statsReader->trend($start, $end, $groupBy);
 
         foreach ($trendData as $row) {
-            $labels[] = $this->formatLabel((string) $row['label'], $isOneYear);
+            $labels[] = $this->formatLabel((string) $row['label'], $groupMonthly);
             $values[] = $row['resolved'] + $row['closed'];
         }
 
@@ -129,11 +129,17 @@ final class ReportTrendService
         return $months;
     }
 
-    private function formatLabel(string $label, bool $isOneYear): string
+    private function shouldGroupMonthly(string $range, Carbon $start, Carbon $end): bool
+    {
+        return in_array($range, ['3m', 'ytd', '1y', '3y', '5y', 'one_year'], true)
+            || $start->diffInDays($end) > 62;
+    }
+
+    private function formatLabel(string $label, bool $groupMonthly): string
     {
         try {
-            return Carbon::createFromFormat($isOneYear ? 'Y-m' : 'Y-m-d', $label)
-                ->format($isOneYear ? 'M Y' : 'd M');
+            return Carbon::createFromFormat($groupMonthly ? 'Y-m' : 'Y-m-d', $label)
+                ->format($groupMonthly ? 'M Y' : 'd M');
         } catch (\Throwable) {
             return $label;
         }

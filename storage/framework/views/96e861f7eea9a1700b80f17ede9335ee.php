@@ -1,0 +1,226 @@
+
+
+
+        <div
+            x-show="modal.open"
+            x-transition.opacity
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+            style="display: none;">
+            <div
+                @click.outside="closeModal()"
+                class="w-full max-w-[760px] rounded-2xl bg-white shadow-2xl">
+                <div class="border-b border-slate-200 px-6 py-4">
+                    <h3 class="text-xl font-semibold text-slate-800" x-text="modal.mode === 'create' ? `Add ${currentLabelSingle()}` : `Edit ${currentLabelSingle()}`"></h3>
+                </div>
+
+                <div
+                    x-show="hasSensitiveChanges()"
+                    x-transition
+                    class="mx-6 mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <div class="font-semibold">Sensitive Master Data changes detected</div>
+                    <p class="mt-1 text-xs leading-5" x-text="sensitiveWarningText()"></p>
+                    <ul class="mt-2 list-disc space-y-1 pl-5 text-xs">
+                        <template x-for="change in sensitiveChanges()" :key="change.key">
+                            <li>
+                                <span class="font-medium" x-text="change.label"></span>:
+                                <span x-text="change.before"></span>
+                                <span>→</span>
+                                <span x-text="change.after"></span>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+
+                <div class="space-y-5 px-6 py-5">
+                    <template x-if="activeTab === 'categories'">
+                        <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700">Category Code</label>
+                                <input x-model="form.code_num" maxlength="2" type="text" class="h-11 w-full rounded-md border border-slate-300 px-3 text-sm focus:border-slate-400 focus:outline-none" placeholder="2 digits, e.g. 01">
+                                <p x-show="errors.code_num" x-text="errors.code_num" class="mt-1 text-xs text-red-600"></p>
+                            </div>
+
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700">Name</label>
+                                <input x-model="form.name" type="text" class="h-11 w-full rounded-md border border-slate-300 px-3 text-sm focus:border-slate-400 focus:outline-none">
+                                <p x-show="errors.name" x-text="errors.name" class="mt-1 text-xs text-red-600"></p>
+                            </div>
+
+                            <div class="md:col-span-2">
+                                <label class="mb-2 block text-sm font-medium text-slate-700">Slug</label>
+                                <input x-model="form.slug" type="text" class="h-11 w-full rounded-md border border-slate-300 px-3 text-sm focus:border-slate-400 focus:outline-none" placeholder="optional-auto-generated">
+                                <p x-show="errors.slug" x-text="errors.slug" class="mt-1 text-xs text-red-600"></p>
+                            </div>
+
+                            <div class="md:col-span-2">
+                                <label class="inline-flex items-center gap-3 rounded-md border border-slate-300 px-4 py-3">
+                                    <input x-model="form.is_active" type="checkbox" class="rounded border-slate-300 text-slate-900 focus:ring-slate-400">
+                                    <span class="text-sm text-slate-700">Set as active</span>
+                                </label>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="activeTab === 'issue-types'">
+                        <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700">Category</label>
+                                <select x-model="form.category_id" class="h-11 w-full rounded-md border border-slate-300 px-3 text-sm focus:border-slate-400 focus:outline-none">
+                                    <option value="">Select category</option>
+                                    <template x-for="item in options.categories" :key="item.id">
+                                        <option :value="item.id" x-text="`${item.name} (${item.code_num})`"></option>
+                                    </template>
+                                </select>
+                                <p x-show="errors.category_id" x-text="errors.category_id" class="mt-1 text-xs text-red-600"></p>
+                            </div>
+
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700">Issue Type Code</label>
+                                <input x-model="form.code_num" maxlength="3" type="text" class="h-11 w-full rounded-md border border-slate-300 px-3 text-sm focus:border-slate-400 focus:outline-none" placeholder="3 digits, e.g. 001">
+                                <p x-show="errors.code_num" x-text="errors.code_num" class="mt-1 text-xs text-red-600"></p>
+                            </div>
+
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700">Name</label>
+                                <input x-model="form.name" type="text" class="h-11 w-full rounded-md border border-slate-300 px-3 text-sm focus:border-slate-400 focus:outline-none">
+                                <p x-show="errors.name" x-text="errors.name" class="mt-1 text-xs text-red-600"></p>
+                            </div>
+
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700">Slug</label>
+                                <input x-model="form.slug" type="text" class="h-11 w-full rounded-md border border-slate-300 px-3 text-sm focus:border-slate-400 focus:outline-none" placeholder="optional-auto-generated">
+                                <p x-show="errors.slug" x-text="errors.slug" class="mt-1 text-xs text-red-600"></p>
+                            </div>
+
+                            <div class="md:col-span-2">
+                                <label class="inline-flex items-center gap-3 rounded-md border border-slate-300 px-4 py-3">
+                                    <input x-model="form.is_active" type="checkbox" class="rounded border-slate-300 text-slate-900 focus:ring-slate-400">
+                                    <span class="text-sm text-slate-700">Set as active</span>
+                                </label>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="activeTab === 'teams'">
+                        <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700">Team Digit</label>
+                                <input x-model="form.code_num" maxlength="1" type="text" class="h-11 w-full rounded-md border border-slate-300 px-3 text-sm focus:border-slate-400 focus:outline-none" placeholder="1 digit, e.g. 1">
+                                <p x-show="errors.code_num" x-text="errors.code_num" class="mt-1 text-xs text-red-600"></p>
+                            </div>
+
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700">Name</label>
+                                <input x-model="form.name" type="text" class="h-11 w-full rounded-md border border-slate-300 px-3 text-sm focus:border-slate-400 focus:outline-none">
+                                <p x-show="errors.name" x-text="errors.name" class="mt-1 text-xs text-red-600"></p>
+                            </div>
+
+                            <div class="md:col-span-2">
+                                <label class="mb-2 block text-sm font-medium text-slate-700">System Key</label>
+                                <input x-model="form.code" type="text" class="h-11 w-full rounded-md border border-slate-300 px-3 text-sm lowercase focus:border-slate-400 focus:outline-none" placeholder="it / finance / compliance">
+                                <p x-show="errors.code" x-text="errors.code" class="mt-1 text-xs text-red-600"></p>
+                            </div>
+
+                            <div class="md:col-span-2">
+                                <label class="inline-flex items-center gap-3 rounded-md border border-slate-300 px-4 py-3">
+                                    <input x-model="form.is_active" type="checkbox" class="rounded border-slate-300 text-slate-900 focus:ring-slate-400">
+                                    <span class="text-sm text-slate-700">Set as active</span>
+                                </label>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="activeTab === 'priorities'">
+                        <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700">Priority Digit</label>
+                                <input x-model="form.code_num" maxlength="1" type="text" class="h-11 w-full rounded-md border border-slate-300 px-3 text-sm focus:border-slate-400 focus:outline-none" placeholder="1 digit, e.g. 2">
+                                <p x-show="errors.code_num" x-text="errors.code_num" class="mt-1 text-xs text-red-600"></p>
+                            </div>
+
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700">Name</label>
+                                <input x-model="form.name" type="text" class="h-11 w-full rounded-md border border-slate-300 px-3 text-sm focus:border-slate-400 focus:outline-none">
+                                <p x-show="errors.name" x-text="errors.name" class="mt-1 text-xs text-red-600"></p>
+                            </div>
+
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700">System Key</label>
+                                <input x-model="form.code" type="text" class="h-11 w-full rounded-md border border-slate-300 px-3 text-sm lowercase focus:border-slate-400 focus:outline-none" placeholder="critical / high / medium / low">
+                                <p x-show="errors.code" x-text="errors.code" class="mt-1 text-xs text-red-600"></p>
+                            </div>
+
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700">Sort Order</label>
+                                <input x-model="form.sort_order" type="number" min="0" class="h-11 w-full rounded-md border border-slate-300 px-3 text-sm focus:border-slate-400 focus:outline-none">
+                                <p x-show="errors.sort_order" x-text="errors.sort_order" class="mt-1 text-xs text-red-600"></p>
+                            </div>
+
+                            <div class="md:col-span-2">
+                                <label class="inline-flex items-center gap-3 rounded-md border border-slate-300 px-4 py-3">
+                                    <input x-model="form.is_active" type="checkbox" class="rounded border-slate-300 text-slate-900 focus:ring-slate-400">
+                                    <span class="text-sm text-slate-700">Set as active</span>
+                                </label>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="activeTab === 'sla-rules'">
+                        <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700">Team</label>
+                                <select x-model="form.team_id" class="h-11 w-full rounded-md border border-slate-300 px-3 text-sm focus:border-slate-400 focus:outline-none">
+                                    <option value="">Select team</option>
+                                    <template x-for="item in options.teams" :key="item.id">
+                                        <option :value="item.id" x-text="`${item.name} (${item.code_num})`"></option>
+                                    </template>
+                                </select>
+                                <p x-show="errors.team_id" x-text="errors.team_id" class="mt-1 text-xs text-red-600"></p>
+                            </div>
+
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700">Priority</label>
+                                <select x-model="form.priority_id" class="h-11 w-full rounded-md border border-slate-300 px-3 text-sm focus:border-slate-400 focus:outline-none">
+                                    <option value="">Select priority</option>
+                                    <template x-for="item in options.priorities" :key="item.id">
+                                        <option :value="item.id" x-text="`${item.name} (${item.code_num})`"></option>
+                                    </template>
+                                </select>
+                                <p x-show="errors.priority_id" x-text="errors.priority_id" class="mt-1 text-xs text-red-600"></p>
+                            </div>
+
+                            <div>
+                                <label class="mb-2 block text-sm font-medium text-slate-700">Hours</label>
+                                <input x-model="form.hours" type="number" min="1" class="h-11 w-full rounded-md border border-slate-300 px-3 text-sm focus:border-slate-400 focus:outline-none">
+                                <p x-show="errors.hours" x-text="errors.hours" class="mt-1 text-xs text-red-600"></p>
+                            </div>
+
+                            <div class="flex items-end">
+                                <label class="inline-flex items-center gap-3 rounded-md border border-slate-300 px-4 py-3">
+                                    <input x-model="form.is_active" type="checkbox" class="rounded border-slate-300 text-slate-900 focus:ring-slate-400">
+                                    <span class="text-sm text-slate-700">Set as active</span>
+                                </label>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
+                    <button
+                        type="button"
+                        @click="closeModal()"
+                        class="rounded border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                        Cancel
+                    </button>
+
+                    <button
+                        type="button"
+                        @click="submit()"
+                        :disabled="saving"
+                        class="rounded bg-slate-900 px-5 py-2 text-sm text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60">
+                        <span x-text="saving ? 'Saving...' : (modal.mode === 'create' ? 'Create' : 'Save Changes')"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+<?php /**PATH C:\laragon\www\henan-ticketing\resources\views/admin/master-data/partials/form-modal.blade.php ENDPATH**/ ?>

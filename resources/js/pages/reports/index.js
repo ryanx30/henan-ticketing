@@ -13,7 +13,7 @@ function reportsPage() {
                 loading: false,
 
                 filters: {
-                    range: 'this_week',
+                    range: '1w',
                     date_from: '',
                     date_to: '',
                     scope: 'my',
@@ -63,7 +63,7 @@ function reportsPage() {
 
                 init() {
                     const params = new URLSearchParams(window.location.search);
-                    this.filters.range = params.get('range') || 'this_week';
+                    this.filters.range = params.get('range') || '1w';
                     this.filters.date_from = params.get('date_from') || '';
                     this.filters.date_to = params.get('date_to') || '';
                     this.filters.scope = params.get('scope') || 'my';

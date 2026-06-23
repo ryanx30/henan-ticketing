@@ -241,6 +241,40 @@ function ticketEditForm(config) {
         selectedPriority() {
             return this.findById(this.master.priorities, this.priority_id);
         },
+
+
+        normalizeTicketPayload(payload) {
+            const code = payload.code || {};
+            const classification = payload.classification || {};
+            const assignment = payload.assignment || {};
+            const timestamps = payload.timestamps || {};
+            const client = payload.client || null;
+            const status = payload.status || {};
+            const priority = classification.priority || {};
+            const team = classification.team || {};
+            const category = classification.category || {};
+            const issueType = classification.issue_type || {};
+
+            return {
+                ...payload,
+                ticket_code: code.raw || payload.ticket_code || '',
+                status: status.code || payload.status || 'new',
+                priority: priority.code || priority.name || payload.priority || 'medium',
+                team: team.code || team.name || payload.team || 'it',
+                category: category.name || category.slug || payload.category || '',
+                issue_type: issueType.name || issueType.slug || payload.issue_type || '',
+                client_name: client?.name || payload.client_name || '',
+                client_contact: client?.contact || payload.client_contact || '',
+                client_email: client?.email || payload.client_email || '',
+                platform_type: payload.platform_type || '',
+                amount: payload.amount || '',
+                flow_type: payload.flow_type || '',
+                request_time: timestamps.request_time || payload.request_time || '',
+                internal_notes: payload.internal_notes || '',
+                creator: assignment.creator || payload.creator || null,
+                holder: assignment.holder || payload.holder || null,
+            };
+        },
         ticketLabel(ticket) {
             return sharedTicketLabel(ticket);
         },
@@ -264,7 +298,7 @@ function ticketEditForm(config) {
             try {
                 const result = await apiGet(this.loadUrl);
 
-                const t = result.data || {};
+                const t = this.normalizeTicketPayload(result.data || {});
 
                 this.ticket_code = t.ticket_code || '';
                 this.title = t.title || '';

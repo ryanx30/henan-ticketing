@@ -21,7 +21,9 @@
                 <div class="flex items-start gap-4">
                     <a
                         href="{{ route('resolver-inbox.index') }}"
-                        aria-label="Back to inbox"
+                        data-smart-back
+                        data-fallback-url="{{ route('resolver-inbox.index') }}"
+                        aria-label="Back to previous page"
                         class="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6" />

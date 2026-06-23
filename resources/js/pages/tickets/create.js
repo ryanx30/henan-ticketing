@@ -8,6 +8,8 @@ import { formatDateTime } from '../../utils/formatter';
 import { showAlert as showPageAlert } from '../../utils/toast';
 
 function createTicketPage() {
+    const DRAFT_KEY = 'henan:create-ticket:draft:v1';
+
     return {
         submitting: false,
         similarLoading: false,
@@ -17,6 +19,8 @@ function createTicketPage() {
         clientSuggestOpen: false,
         clientHistoryLoading: false,
         attachmentName: '',
+        draftRestored: false,
+        draftWatchReady: false,
         similarTickets: [],
         clientSuggestions: [],
         clientHistory: [],
@@ -57,6 +61,14 @@ function createTicketPage() {
 
         async init() {
             await this.loadFormOptions();
+            await this.restoreDraft();
+
+            if (typeof this.$watch === 'function') {
+                this.$watch('form', () => this.persistDraft(), { deep: true });
+                this.$watch('sections', () => this.persistDraft(), { deep: true });
+            }
+
+            this.draftWatchReady = true;
         },
 
         csrf() {
@@ -204,7 +216,8 @@ function createTicketPage() {
             }
         },
 
-        async loadIssueTypes() {
+        async loadIssueTypes(preserveSelected = false) {
+            const previousIssueTypeId = this.form.issue_type_id;
             this.issueTypes = [];
             this.form.issue_type_id = '';
 
@@ -217,6 +230,10 @@ function createTicketPage() {
                 const result = await apiGet(`/api/ticket-form/issue-types?${params.toString()}`);
 
                 this.issueTypes = result.data || [];
+
+                if (preserveSelected && this.issueTypes.some(item => String(item.id) === String(previousIssueTypeId))) {
+                    this.form.issue_type_id = String(previousIssueTypeId);
+                }
             } catch (error) {
                 console.error(error);
                 this.showAlert(error.message || 'Failed to load issue types.', 'error');
@@ -474,6 +491,80 @@ function createTicketPage() {
             }
         },
 
+        draftPayload() {
+            return {
+                form: {
+                    ...this.form,
+                    attachment: null,
+                },
+                sections: { ...this.sections },
+                selectedClient: this.selectedClient,
+                attachmentName: '',
+                saved_at: new Date().toISOString(),
+            };
+        },
+
+        persistDraft() {
+            if (!this.draftWatchReady) return;
+
+            try {
+                localStorage.setItem(DRAFT_KEY, JSON.stringify(this.draftPayload()));
+            } catch (error) {
+                console.warn('Failed to persist ticket draft', error);
+            }
+        },
+
+        async restoreDraft() {
+            try {
+                const raw = localStorage.getItem(DRAFT_KEY);
+                if (!raw) return;
+
+                const draft = JSON.parse(raw);
+                if (!draft || typeof draft !== 'object') return;
+
+                this.form = {
+                    ...this.form,
+                    ...(draft.form || {}),
+                    attachment: null,
+                };
+
+                this.sections = {
+                    ...this.sections,
+                    ...(draft.sections || {}),
+                };
+
+                this.selectedClient = draft.selectedClient || null;
+                this.attachmentName = '';
+                this.draftRestored = true;
+
+                if (this.form.category_id) {
+                    await this.loadIssueTypes(true);
+                }
+
+                if (this.selectedClient?.id) {
+                    await this.loadClientHistory(this.selectedClient.id);
+                }
+
+                await this.loadSimilarTickets();
+            } catch (error) {
+                console.warn('Failed to restore ticket draft', error);
+            }
+        },
+
+        clearDraft() {
+            try {
+                localStorage.removeItem(DRAFT_KEY);
+            } catch (error) {
+                console.warn('Failed to clear ticket draft', error);
+            }
+        },
+
+        openSimilarTicket(item) {
+            if (!item?.id) return;
+            this.persistDraft();
+            window.location.href = `/tickets/${item.id}`;
+        },
+
         async submitTicket() {
             if (this.submitDisabled() || this.submitting) return;
 
@@ -508,6 +599,7 @@ function createTicketPage() {
                     body: formData,
                 });
 
+                this.clearDraft();
                 this.showAlert('Ticket created successfully.', 'success');
 
                 setTimeout(() => {
@@ -526,7 +618,8 @@ function createTicketPage() {
         },
 
         saveDraft() {
-            this.showAlert('Draft flow is not connected to backend yet.', 'error');
+            this.persistDraft();
+            this.showAlert('Draft saved in this browser.', 'success');
         },
     }
 }

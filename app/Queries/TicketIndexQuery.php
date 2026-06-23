@@ -18,8 +18,7 @@ final class TicketIndexQuery
 
     public function build(Request $request, User $viewer): Builder
     {
-        $query = Ticket::query()
-            ->with(['creator', 'holder', 'teamMaster', 'categoryMaster', 'issueTypeMaster', 'priorityMaster']);
+        $query = Ticket::query();
 
         $this->scopeForViewer($query, $viewer, $request);
         $this->applySearch($query, trim((string) $request->query('q', '')));

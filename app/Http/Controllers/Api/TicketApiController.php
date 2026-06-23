@@ -9,6 +9,9 @@ use App\Models\SlaRule;
 use App\Models\Team;
 use App\Models\Ticket;
 use App\Models\TicketAttachment;
+use App\Models\TicketStatusHistory;
+use App\Models\User;
+use App\Http\Resources\TicketIndexResource;
 use App\Http\Resources\TicketResource;
 use App\Queries\TicketIndexQuery;
 use App\Queries\SimilarTicketQuery;
@@ -20,6 +23,7 @@ use App\Support\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
@@ -54,7 +58,7 @@ class TicketApiController extends BaseApiController
             ->withQueryString();
 
         $tickets->setCollection(
-            TicketResource::collection($tickets->getCollection())->collection
+            TicketIndexResource::collection($tickets->getCollection())->collection
         );
 
         return $this->paginated($tickets, 'Tickets loaded');
@@ -204,6 +208,98 @@ class TicketApiController extends BaseApiController
         return $this->success(
             TicketResource::make($freshTicket),
             'Ticket updated successfully'
+        );
+    }
+
+
+    public function escalate(Request $request, Ticket $ticket)
+    {
+        Gate::authorize('transferHolder', $ticket);
+
+        $actor = $request->user();
+
+        $validated = $request->validate([
+            'target_user_id' => ['required', 'integer', 'exists:users,id'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $target = User::query()
+            ->whereKey($validated['target_user_id'])
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        $mode = $actor->isCS() ? User::ROLE_CS : User::ROLE_IT;
+
+        if ($actor->isAdmin()) {
+            $mode = $ticket->isTeamCode('it') && $ticket->holder_id ? User::ROLE_IT : User::ROLE_CS;
+        }
+
+        if ($target->role !== $mode) {
+            return $this->validationError([
+                'target_user_id' => ['Ticket can only be handed off to another active user with the same operational role.'],
+            ], 'Invalid handoff target.');
+        }
+
+        $ownerColumn = $mode === User::ROLE_CS ? 'created_by' : 'holder_id';
+        $currentOwnerId = (int) ($ticket->{$ownerColumn} ?? 0);
+
+        if ((int) $target->id === $currentOwnerId) {
+            return $this->validationError([
+                'target_user_id' => ['The selected user is already the current owner.'],
+            ], 'The selected user is already the current owner.');
+        }
+
+        $freshTicket = DB::transaction(function () use ($request, $ticket, $actor, $target, $mode, $ownerColumn, $validated) {
+            $lockedTicket = Ticket::query()
+                ->with(['creator', 'holder', 'teamMaster', 'priorityMaster'])
+                ->whereKey($ticket->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $before = $this->ticketService->snapshot($lockedTicket);
+            $previousOwnerId = $lockedTicket->{$ownerColumn};
+            $lockedTicket->{$ownerColumn} = $target->id;
+            $lockedTicket->save();
+
+            $note = $validated['note']
+                ?: 'Ticket handoff from ' . ($mode === User::ROLE_CS ? 'CS owner' : 'IT holder') . ' to ' . $target->name . '.';
+
+            TicketStatusHistory::create([
+                'ticket_id' => $lockedTicket->id,
+                'from_status' => $lockedTicket->status,
+                'to_status' => $lockedTicket->status,
+                'changed_by' => $actor->id,
+                'changed_at' => now(),
+                'note' => $note,
+            ]);
+
+            $lockedTicket = $lockedTicket->fresh(['creator', 'holder', 'teamMaster', 'priorityMaster']);
+
+            AuditLogger::record(
+                $request,
+                'holder_transferred',
+                'ticket',
+                $lockedTicket->id,
+                AuditLogger::ticketLabel($lockedTicket),
+                'Transferred ' . ($mode === User::ROLE_CS ? 'CS owner' : 'IT holder') . ' for ' . AuditLogger::ticketLabel($lockedTicket) . ' to ' . $target->name,
+                array_merge($before, [
+                    'owner_column' => $ownerColumn,
+                    'previous_owner_id' => $previousOwnerId,
+                ]),
+                array_merge($this->ticketService->snapshot($lockedTicket), [
+                    'owner_column' => $ownerColumn,
+                    'new_owner_id' => $target->id,
+                ])
+            );
+
+            return $lockedTicket;
+        });
+
+        $this->dashboardCache->invalidate();
+
+        return $this->success(
+            $this->ticketDetailPayloadService->build($freshTicket, $request),
+            'Ticket handoff completed successfully.'
         );
     }
 

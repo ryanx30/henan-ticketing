@@ -83,7 +83,7 @@ class CaseAnalyticsApiController extends BaseApiController
     private function validatedFilters(Request $request): array
     {
         $validated = $request->validate([
-            'time_range' => ['nullable', 'in:1m,3m,6m,1y,all_time'],
+            'time_range' => ['nullable', 'in:1d,1w,1m,3m,ytd,1y,3y,5y,all_time'],
             'team' => ['nullable', 'in:all,it,finance,compliance'],
         ]);
 

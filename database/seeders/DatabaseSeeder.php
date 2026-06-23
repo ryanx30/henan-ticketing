@@ -28,7 +28,17 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // 3) User dummy IT
+        // 3) User dummy CS 2
+        User::updateOrCreate(
+            ['email' => 'cs_kedua@henanputihrai.com'],
+            [
+                'name' => 'Test CS Kedua',
+                'role' => 'cs',
+                'password' => bcrypt('password'),
+            ]
+        );
+
+        // 4) User dummy IT
         User::updateOrCreate(
             ['email' => 'it@henanputihrai.com'],
             [
@@ -38,7 +48,17 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // 4) User dummy SPV
+        // 5) User dummy IT 2
+        User::updateOrCreate(
+            ['email' => 'it_kedua@henanputihrai.com'],
+            [
+                'name' => 'Test IT Kedua',
+                'role' => 'it',
+                'password' => bcrypt('password'),
+            ]
+        );
+
+        // 6) User dummy SPV
         User::updateOrCreate(
             ['email' => 'spv@henanputihrai.com'],
             [
@@ -48,7 +68,7 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // 5) Seeder ticket random
+        // 7) Seeder ticket random
         $this->call([
             TicketSeeder::class,
         ]);

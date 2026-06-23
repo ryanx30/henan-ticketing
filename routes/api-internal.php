@@ -88,6 +88,10 @@ Route::middleware(['web', 'auth', 'active', 'throttle:120,1'])->group(function (
         Route::get('/tickets/{ticket}/attachments/{attachment}/download', [TicketApiController::class, 'downloadAttachment']);
     });
 
+    Route::middleware('role:cs,it,admin')->group(function () {
+        Route::patch('/tickets/{ticket}/escalate', [TicketApiController::class, 'escalate']);
+    });
+
     // IT Queue monitoring
     Route::middleware(NavigationMenu::roleMiddlewareFor('team-queue'))->group(function () {
         Route::get('/it/team-queue', [ITQueueApiController::class, 'teamQueue']);
@@ -111,6 +115,7 @@ Route::middleware(['web', 'auth', 'active', 'throttle:120,1'])->group(function (
     // Resolver Inbox read access
     Route::middleware(NavigationMenu::roleMiddlewareFor('resolver-inbox'))->group(function () {
         Route::get('/resolver-inbox', [ResolverInboxApiController::class, 'index']);
+        Route::get('/resolver-inbox/{resolverMessage}/attachment/download', [ResolverInboxApiController::class, 'downloadAttachment']);
         Route::get('/resolver-inbox/{resolverMessage}', [ResolverInboxApiController::class, 'show']);
     });
 
@@ -146,7 +151,7 @@ Route::middleware(['web', 'auth', 'active', 'throttle:120,1'])->group(function (
         Route::get('/', [AdminMasterDataApiController::class, 'index']);
     });
 
-    Route::middleware('role:admin,it')->prefix('admin/master-data')->group(function () {
+    Route::middleware('role:admin,it,cs')->prefix('admin/master-data')->group(function () {
         Route::post('/{type}', [AdminMasterDataApiController::class, 'store']);
         Route::patch('/{type}/{id}', [AdminMasterDataApiController::class, 'update']);
         Route::delete('/{type}/{id}', [AdminMasterDataApiController::class, 'destroy']);

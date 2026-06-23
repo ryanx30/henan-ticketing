@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Ticket;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Renders ticket pages only; ticket data and mutations are handled by internal API controllers.
@@ -45,9 +46,11 @@ class TicketPageController extends Controller
     // Render edit/open ticket page
     public function edit(Request $request, Ticket $ticket)
     {
-        if (!in_array($request->user()->role, ['cs', 'admin', 'supervisor'], true)) {
+        if (!in_array($request->user()->role, ['cs', 'admin'], true)) {
             abort(403);
         }
+
+        Gate::authorize('update', $ticket);
 
         return view('tickets.edit', compact('ticket'));
     }

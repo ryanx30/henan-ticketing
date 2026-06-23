@@ -9,7 +9,7 @@ import { showAlert as showSharedAlert } from '../../utils/toast';
 
 function masterDataPage() {
             return {
-                tabs: [{
+                allTabs: [{
                         key: 'categories',
                         label: 'Categories'
                     },
@@ -30,6 +30,7 @@ function masterDataPage() {
                         label: 'SLA Rules'
                     },
                 ],
+                tabs: [],
                 activeTab: 'categories',
                 loading: false,
                 saving: false,
@@ -63,6 +64,7 @@ function masterDataPage() {
                 originalForm: {},
 
                 init() {
+                    this.tabs = this.allTabs;
                     const params = new URLSearchParams(window.location.search);
                     this.activeTab = params.get('tab') || 'categories';
                     this.filters.q = params.get('q') || '';
@@ -114,6 +116,8 @@ function masterDataPage() {
                 },
 
                 switchTab(tab) {
+                    if (!this.tabs.some(item => item.key === tab)) return;
+
                     this.activeTab = tab;
                     this.filters.q = '';
                     this.filters.per_page = '10';
@@ -169,6 +173,14 @@ function masterDataPage() {
                         this.rows = result.data?.rows || [];
                         this.meta = result.data?.meta || this.meta;
                         this.options = result.data?.options || this.options;
+
+                        if (Array.isArray(this.options.allowed_types) && this.options.allowed_types.length > 0) {
+                            this.tabs = this.allTabs.filter(tab => this.options.allowed_types.includes(tab.key));
+
+                            if (!this.tabs.some(tab => tab.key === this.activeTab)) {
+                                this.activeTab = this.tabs[0]?.key || 'categories';
+                            }
+                        }
                     } catch (error) {
                         console.error(error);
                         this.showAlert(error.message || 'Failed to load master data', 'error');

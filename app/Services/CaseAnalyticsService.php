@@ -150,10 +150,14 @@ class CaseAnalyticsService
     private function timeRangeOptions(): array
     {
         return [
+            ['label' => '1 Day', 'value' => '1d'],
+            ['label' => '1 Week', 'value' => '1w'],
             ['label' => '1 Month', 'value' => '1m'],
-            ['label' => '3 Months', 'value' => '3m'],
-            ['label' => '6 Months', 'value' => '6m'],
+            ['label' => '3 Month', 'value' => '3m'],
+            ['label' => 'YTD', 'value' => 'ytd'],
             ['label' => '1 Year', 'value' => '1y'],
+            ['label' => '3 Year', 'value' => '3y'],
+            ['label' => '5 Year', 'value' => '5y'],
             ['label' => 'All Time', 'value' => 'all_time'],
         ];
     }
@@ -218,7 +222,7 @@ class CaseAnalyticsService
             $this->excelTable('Top Issues', ['Issue Type', 'Category', 'Tickets', 'Team with Most Tickets'], $this->topIssueExportRows($payload['top_issue_types']['items'] ?? []));
             $this->excelTable('Agent Performance', ['Rank', 'Agent', 'Resolved', 'Avg. Resolution Time', 'CSAT'], $this->leaderboardExportRows($payload['agent_performance_leaderboard'] ?? []));
             $this->excelTable('Top Teams', ['Rank', 'Team', 'Tickets', 'Resolved', 'Avg. Resolution Time'], $this->topTeamExportRows($payload['top_teams']['items'] ?? []));
-            $this->excelTable('Monthly Trend', ['Month', 'Incoming', 'Resolved'], $this->trendExportRows($payload['ticket_volume_trend'] ?? []));
+            $this->excelTable('Ticket Volume Trend', ['Period', 'Incoming', 'Resolved'], $this->trendExportRows($payload['ticket_volume_trend'] ?? []));
             $this->excelTable('Peak Time Ticket Volume', ['Hour', 'Tickets'], $this->peakTimeExportRows($payload['peak_time_ticket_volume'] ?? []));
             $this->excelRawAnalyticsTable('Raw Analytics Data', $this->rawExportHeaders(), $team, $start, $end);
 
@@ -442,24 +446,52 @@ class CaseAnalyticsService
         $now = now();
 
         switch ($timeRange) {
-            case '1m':
-                $currentStart = $now->copy()->startOfMonth();
+            case '1d':
+                $currentStart = $now->copy()->startOfDay();
                 $currentEnd = $now->copy()->endOfDay();
-                $previousStart = $currentStart->copy()->subMonth()->startOfMonth();
+                $previousStart = $currentStart->copy()->subDay();
+                $previousEnd = $currentStart->copy()->subSecond();
+                break;
+
+            case '1w':
+                $currentStart = $now->copy()->subDays(6)->startOfDay();
+                $currentEnd = $now->copy()->endOfDay();
+                $previousStart = $currentStart->copy()->subDays(7);
+                $previousEnd = $currentStart->copy()->subSecond();
+                break;
+
+            case '1m':
+                $currentStart = $now->copy()->subMonth()->addDay()->startOfDay();
+                $currentEnd = $now->copy()->endOfDay();
+                $previousStart = $currentStart->copy()->subDays($currentStart->diffInDays($currentEnd) + 1);
                 $previousEnd = $currentStart->copy()->subSecond();
                 break;
 
             case '3m':
-                $currentStart = $now->copy()->startOfMonth()->subMonths(2);
+                $currentStart = $now->copy()->subMonths(3)->addDay()->startOfDay();
                 $currentEnd = $now->copy()->endOfDay();
-                $previousStart = $currentStart->copy()->subMonths(3);
+                $previousStart = $currentStart->copy()->subDays($currentStart->diffInDays($currentEnd) + 1);
                 $previousEnd = $currentStart->copy()->subSecond();
                 break;
 
-            case '6m':
-                $currentStart = $now->copy()->startOfMonth()->subMonths(5);
+            case 'ytd':
+                $currentStart = $now->copy()->startOfYear();
                 $currentEnd = $now->copy()->endOfDay();
-                $previousStart = $currentStart->copy()->subMonths(6);
+                $previousStart = $currentStart->copy()->subYear();
+                $previousEnd = $currentEnd->copy()->subYear();
+                break;
+
+            case '3y':
+                $currentStart = $now->copy()->subYears(3)->addDay()->startOfDay();
+                $currentEnd = $now->copy()->endOfDay();
+                $previousStart = $currentStart->copy()->subYears(3);
+                $previousEnd = $currentStart->copy()->subSecond();
+                break;
+
+            case '5y':
+                $currentStart = $now->copy()->subYears(5)->addDay()->startOfDay();
+                $currentEnd = $now->copy()->endOfDay();
+                $previousStart = $currentStart->copy()->subYears(5);
                 $previousEnd = $currentStart->copy()->subSecond();
                 break;
 
@@ -477,25 +509,39 @@ class CaseAnalyticsService
 
             case '1y':
             default:
-                $currentStart = $now->copy()->startOfMonth()->subMonths(11);
+                $currentStart = $now->copy()->subYear()->addDay()->startOfDay();
                 $currentEnd = $now->copy()->endOfDay();
                 $previousStart = $currentStart->copy()->subYear();
                 $previousEnd = $currentStart->copy()->subSecond();
                 break;
         }
 
+        $labels = $this->trendLabels($currentStart, $currentEnd);
+
+        return [$currentStart, $currentEnd, $previousStart, $previousEnd, $labels];
+    }
+
+    private function trendLabels(Carbon $start, Carbon $end): array
+    {
         $labels = [];
+        $isMonthly = $this->shouldGroupTrendMonthly($start, $end);
+
         $period = CarbonPeriod::create(
-            $currentStart->copy()->startOfMonth(),
-            '1 month',
-            $currentEnd->copy()->startOfMonth()
+            $isMonthly ? $start->copy()->startOfMonth() : $start->copy()->startOfDay(),
+            $isMonthly ? '1 month' : '1 day',
+            $isMonthly ? $end->copy()->startOfMonth() : $end->copy()->startOfDay()
         );
 
         foreach ($period as $date) {
-            $labels[] = $date->format('M');
+            $labels[] = $isMonthly ? $date->format('M Y') : $date->format('d M');
         }
 
-        return [$currentStart, $currentEnd, $previousStart, $previousEnd, $labels];
+        return $labels;
+    }
+
+    private function shouldGroupTrendMonthly(Carbon $start, Carbon $end): bool
+    {
+        return $start->diffInDays($end) > 62;
     }
 
     private function teamIdByCode(string $code): ?int
@@ -614,11 +660,14 @@ class CaseAnalyticsService
 
     private function ticketVolumeTrend(string $team, Carbon $start, Carbon $end, array $labels): array
     {
+        $groupMonthly = $this->shouldGroupTrendMonthly($start, $end);
+        $dateFormat = $groupMonthly ? '%Y-%m' : '%Y-%m-%d';
+
         $incomingMap = (clone $this->baseTicketQuery($team))
             ->whereBetween('created_at', [$start, $end])
-            ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as month_key, COUNT(*) as total")
-            ->groupByRaw("DATE_FORMAT(created_at, '%Y-%m')")
-            ->pluck('total', 'month_key')
+            ->selectRaw("DATE_FORMAT(created_at, '{$dateFormat}') as period_key, COUNT(*) as total")
+            ->groupByRaw("DATE_FORMAT(created_at, '{$dateFormat}')")
+            ->pluck('total', 'period_key')
             ->all();
 
         $resolvedMap = (clone $this->baseTicketQuery($team))
@@ -627,22 +676,22 @@ class CaseAnalyticsService
                 $query->whereBetween('resolved_at', [$start, $end])
                     ->orWhereBetween('closed_at', [$start, $end]);
             })
-            ->selectRaw("DATE_FORMAT(COALESCE(resolved_at, closed_at), '%Y-%m') as month_key, COUNT(*) as total")
-            ->groupByRaw("DATE_FORMAT(COALESCE(resolved_at, closed_at), '%Y-%m')")
-            ->pluck('total', 'month_key')
+            ->selectRaw("DATE_FORMAT(COALESCE(resolved_at, closed_at), '{$dateFormat}') as period_key, COUNT(*) as total")
+            ->groupByRaw("DATE_FORMAT(COALESCE(resolved_at, closed_at), '{$dateFormat}')")
+            ->pluck('total', 'period_key')
             ->all();
 
         $incomingSeries = [];
         $resolvedSeries = [];
 
-        $cursor = $start->copy()->startOfMonth();
-        $endMonth = $end->copy()->startOfMonth();
+        $cursor = $groupMonthly ? $start->copy()->startOfMonth() : $start->copy()->startOfDay();
+        $endPeriod = $groupMonthly ? $end->copy()->startOfMonth() : $end->copy()->startOfDay();
 
-        while ($cursor->lte($endMonth)) {
-            $key = $cursor->format('Y-m');
+        while ($cursor->lte($endPeriod)) {
+            $key = $groupMonthly ? $cursor->format('Y-m') : $cursor->format('Y-m-d');
             $incomingSeries[] = (int) ($incomingMap[$key] ?? 0);
             $resolvedSeries[] = (int) ($resolvedMap[$key] ?? 0);
-            $cursor->addMonth();
+            $groupMonthly ? $cursor->addMonth() : $cursor->addDay();
         }
 
         $axisMax = $this->roundedAxisMax(array_merge($incomingSeries, $resolvedSeries));

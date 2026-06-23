@@ -13,7 +13,7 @@
             <div id="page-alert" class="hidden mb-4 rounded p-3 text-sm"></div>
 
             <div class="mb-6">
-                <a href="{{ route('admin.users.index') }}" class="text-sm text-slate-500 hover:text-slate-700">
+                <a href="{{ route('admin.users.index') }}" data-smart-back data-fallback-url="{{ route('admin.users.index') }}" class="text-sm text-slate-500 hover:text-slate-700">
                     ← Back to Users
                 </a>
 

@@ -15,20 +15,24 @@ final class ReportRangeResolver
      */
     public function fromRequest(Request $request): array
     {
-        $range = (string) $request->query('range', 'this_week');
+        $range = (string) $request->query('range', '1w');
         $customFrom = (string) $request->query('date_from', '');
         $customTo = (string) $request->query('date_to', '');
 
         return match ($range) {
-            '7d' => [now()->copy()->subDays(6)->startOfDay(), now()->copy()->endOfDay()],
-            '30d' => [now()->copy()->subDays(29)->startOfDay(), now()->copy()->endOfDay()],
-            'this_month' => [now()->copy()->startOfMonth(), now()->copy()->endOfDay()],
-            'one_year' => [now()->copy()->subMonths(11)->startOfMonth(), now()->copy()->endOfDay()],
+            '1d' => [now()->copy()->startOfDay(), now()->copy()->endOfDay()],
+            '1w', '7d', 'this_week' => [now()->copy()->subDays(6)->startOfDay(), now()->copy()->endOfDay()],
+            '1m', '30d', 'this_month' => [now()->copy()->subMonth()->addDay()->startOfDay(), now()->copy()->endOfDay()],
+            '3m' => [now()->copy()->subMonths(3)->addDay()->startOfDay(), now()->copy()->endOfDay()],
+            'ytd' => [now()->copy()->startOfYear(), now()->copy()->endOfDay()],
+            '1y', 'one_year' => [now()->copy()->subYear()->addDay()->startOfDay(), now()->copy()->endOfDay()],
+            '3y' => [now()->copy()->subYears(3)->addDay()->startOfDay(), now()->copy()->endOfDay()],
+            '5y' => [now()->copy()->subYears(5)->addDay()->startOfDay(), now()->copy()->endOfDay()],
             'custom' => [
-                $customFrom !== '' ? Carbon::parse($customFrom)->startOfDay() : now()->copy()->startOfWeek(),
+                $customFrom !== '' ? Carbon::parse($customFrom)->startOfDay() : now()->copy()->subDays(6)->startOfDay(),
                 $customTo !== '' ? Carbon::parse($customTo)->endOfDay() : now()->copy()->endOfDay(),
             ],
-            default => [now()->copy()->startOfWeek(), now()->copy()->endOfDay()],
+            default => [now()->copy()->subDays(6)->startOfDay(), now()->copy()->endOfDay()],
         };
     }
 }

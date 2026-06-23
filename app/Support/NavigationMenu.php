@@ -128,7 +128,7 @@ class NavigationMenu
             'route' => 'admin.master-data.index',
             'icon' => 'database',
             'group' => 'system_control',
-            'roles' => ['admin', 'supervisor', 'it'],
+            'roles' => ['admin', 'supervisor', 'it', 'cs'],
             'active_patterns' => ['admin/master-data', 'admin/master-data/*'],
         ],
         [

@@ -24,6 +24,7 @@ const historyExportUrl = "/api/it/history/export";
                     q: '',
                     date_from: '',
                     date_to: '',
+                    status: '',
                     sort_by: 'resolved_at',
                     sort_dir: 'desc',
                     per_page: '10',
@@ -37,6 +38,7 @@ const historyExportUrl = "/api/it/history/export";
                     this.filters.q = params.get('q') || '';
                     this.filters.date_from = params.get('date_from') || '';
                     this.filters.date_to = params.get('date_to') || '';
+                    this.filters.status = params.get('status') || '';
                     this.filters.sort_by = params.get('sort_by') || 'resolved_at';
                     this.filters.sort_dir = params.get('sort_dir') || 'desc';
                     this.filters.per_page = params.get('per_page') || '10';
@@ -56,6 +58,7 @@ const historyExportUrl = "/api/it/history/export";
                     if (this.filters.q) params.set('q', this.filters.q);
                     if (this.filters.date_from) params.set('date_from', this.filters.date_from);
                     if (this.filters.date_to) params.set('date_to', this.filters.date_to);
+                    if (this.filters.status) params.set('status', this.filters.status);
 
                     params.set('sort_by', this.filters.sort_by);
                     params.set('sort_dir', this.filters.sort_dir);
