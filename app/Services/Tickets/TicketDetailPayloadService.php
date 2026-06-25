@@ -7,6 +7,7 @@ use App\Models\Ticket;
 use App\Models\TicketAttachment;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -121,7 +122,7 @@ final class TicketDetailPayloadService
         return min($value, $max);
     }
 
-    private function attachmentRelationPage($paginator, Ticket $ticket): array
+    private function attachmentRelationPage(LengthAwarePaginator $paginator, Ticket $ticket): array
     {
         return [
             'data' => collect($paginator->items())->map(fn (TicketAttachment $attachment) => [
@@ -140,7 +141,7 @@ final class TicketDetailPayloadService
         ];
     }
 
-    private function relationPage($paginator): array
+    private function relationPage(LengthAwarePaginator $paginator): array
     {
         return [
             'data' => $paginator->items(),
@@ -149,7 +150,7 @@ final class TicketDetailPayloadService
         ];
     }
 
-    private function paginationMeta($paginator): array
+    private function paginationMeta(LengthAwarePaginator $paginator): array
     {
         return [
             'current_page' => $paginator->currentPage(),
@@ -161,7 +162,7 @@ final class TicketDetailPayloadService
         ];
     }
 
-    private function paginationLinks($paginator): array
+    private function paginationLinks(LengthAwarePaginator $paginator): array
     {
         return [
             'next' => $paginator->nextPageUrl(),

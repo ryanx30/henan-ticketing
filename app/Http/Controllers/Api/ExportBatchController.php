@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Storage;
 use App\Support\ExportBatchAccess;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * Tracks queued export batches and exposes polling endpoints for frontend export progress.
@@ -61,7 +61,7 @@ class ExportBatchController extends BaseApiController
     /**
      * Download a completed queued export.
      */
-    public function download(Request $request, string $batchId): StreamedResponse
+    public function download(Request $request, string $batchId): BinaryFileResponse
     {
         $validated = $request->validate([
             'path' => ['required', 'string', 'max:255'],
@@ -77,7 +77,8 @@ class ExportBatchController extends BaseApiController
         abort_if($batch->hasFailures(), 500, 'Export batch failed.');
         abort_if(! Storage::disk('local')->exists($path), 404, 'Export file was not found.');
 
-        return Storage::disk('local')->download($path, basename($validated['filename']));
+        $file = Storage::disk('local')->path($path);
+        return response()->download($file, basename($validated['filename']));
     }
 
     /**

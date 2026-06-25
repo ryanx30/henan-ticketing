@@ -5,6 +5,7 @@ namespace App\Queries;
 use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -84,7 +85,7 @@ final class SimilarTicketQuery
             ->values();
     }
 
-    private function score(Ticket $source, Ticket $candidate, $words): int
+    private function score(Ticket $source, Ticket $candidate, SupportCollection $words): int
     {
         $score = 0;
 

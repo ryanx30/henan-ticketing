@@ -9,6 +9,7 @@ use App\Models\Ticket;
 use App\Models\TicketStatusHistory;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Reads pre-aggregated ticket stats and falls back to live queries when needed.
@@ -295,7 +296,7 @@ class AggregatedStatsReader
     // Helpers
     // -------------------------------------------------------------------------
 
-    private function applyDimension($query, ?int $teamId, ?int $priorityId): void
+    private function applyDimension(Builder $query, ?int $teamId, ?int $priorityId): void
     {
         if ($teamId !== null) {
             $team = Team::find($teamId);

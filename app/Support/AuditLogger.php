@@ -44,7 +44,7 @@ class AuditLogger
         }
     }
 
-    public static function ticketLabel($ticket): string
+    public static function ticketLabel(?object $ticket): string
     {
         $rawCode = $ticket?->ticket_code ?: $ticket?->id;
         $cleanCode = preg_replace('/[\s#]+/', '', (string) $rawCode);

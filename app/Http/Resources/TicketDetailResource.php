@@ -123,7 +123,7 @@ class TicketDetailResource extends JsonResource
         ];
     }
 
-    private function userPayload($user): ?array
+    private function userPayload(?\Illuminate\Database\Eloquent\Model $user): ?array
     {
         if (!$user) {
             return null;

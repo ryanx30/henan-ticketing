@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Manages resolver messages, follow-up inbox data, message mutations, and resolver-specific API payloads.
@@ -257,14 +258,20 @@ class ResolverInboxApiController extends BaseApiController
         abort_if(! str_starts_with($path, 'resolver-messages/'), 422, 'Invalid attachment path.');
 
         if (Storage::disk('local')->exists($path)) {
-            return Storage::disk('local')->download($path, basename($resolverMessage->attachment_name));
+            return response()->download(
+                Storage::disk('local')->path($path),
+                basename($resolverMessage->attachment_name)
+            );
         }
 
         // Backward-compatible fallback for older resolver attachments that were
         // previously stored on the public disk before this privacy hardening.
         abort_if(! Storage::disk('public')->exists($path), 404, 'Attachment file was not found.');
 
-        return Storage::disk('public')->download($path, basename($resolverMessage->attachment_name));
+        return response()->download(
+            Storage::disk('public')->path($path),
+            basename($resolverMessage->attachment_name)
+        );
     }
 
     public function markAsRead(Request $request, ResolverMessage $resolverMessage)
@@ -321,7 +328,7 @@ class ResolverInboxApiController extends BaseApiController
     }
 
 
-    protected function scopeInboxMessages($query, User $user): void
+    protected function scopeInboxMessages(Builder $query, User $user): void
     {
         if ($user->isAdmin() || $user->isSupervisor()) {
             return;
@@ -334,7 +341,7 @@ class ResolverInboxApiController extends BaseApiController
     }
 
 
-    protected function scopeThreadMessages($query, User $user): void
+    protected function scopeThreadMessages(Builder $query, User $user): void
     {
         if ($user->isAdmin() || $user->isSupervisor()) {
             return;
@@ -434,7 +441,7 @@ class ResolverInboxApiController extends BaseApiController
     /**
      * Scope compose ticket choices to records the current user can legitimately reference.
      */
-    protected function scopeComposeTickets($query, User $user): void
+    protected function scopeComposeTickets(Builder $query, User $user): void
     {
         if ($user->isAdmin() || $user->isSupervisor()) {
             return;

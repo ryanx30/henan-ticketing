@@ -8,6 +8,7 @@ use App\Models\Priority;
 use App\Models\SlaRule;
 use App\Models\Team;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -208,7 +209,7 @@ class MasterDataIntegrityService
         return $errors;
     }
 
-    private function validateTableCodes(array &$errors, string $table, $rows, int $length, bool $hasSystemCode): void
+    private function validateTableCodes(array &$errors, string $table, Collection $rows, int $length, bool $hasSystemCode): void
     {
         foreach ($rows as $row) {
             if (!preg_match('/^\d{' . $length . '}$/', (string) $row->code_num)) {
@@ -581,7 +582,7 @@ class MasterDataIntegrityService
         return $code;
     }
 
-    private function hasChanges($model, array $changes): bool
+    private function hasChanges(\Illuminate\Database\Eloquent\Model $model, array $changes): bool
     {
         foreach ($changes as $key => $value) {
             if ((string) $model->{$key} !== (string) $value) {
