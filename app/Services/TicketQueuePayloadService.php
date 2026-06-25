@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Tickets;
+namespace App\Services;
 
 use App\Http\Resources\TicketResource;
 use App\Models\Ticket;

@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature\Tickets;
+namespace Tests\Feature;
 
 use App\Models\AuditLog;
 use App\Models\Category;

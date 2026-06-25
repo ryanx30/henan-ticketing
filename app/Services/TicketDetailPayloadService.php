@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Tickets;
+namespace App\Services;
 
 use App\Http\Resources\TicketDetailResource;
 use App\Models\Ticket;
@@ -121,7 +121,7 @@ final class TicketDetailPayloadService
         ];
     }
 
-    private function userSummary($user): ?array
+    private function userSummary(?\App\Models\User $user): ?array
     {
         if (!$user) {
             return null;
@@ -136,7 +136,7 @@ final class TicketDetailPayloadService
         ];
     }
 
-    private function paginationMeta($paginator): array
+    private function paginationMeta(LengthAwarePaginator $paginator): array
     {
         return [
             'current_page' => $paginator->currentPage(),
@@ -148,7 +148,7 @@ final class TicketDetailPayloadService
         ];
     }
 
-    private function paginationLinks($paginator): array
+    private function paginationLinks(LengthAwarePaginator $paginator): array
     {
         return [
             'next' => $paginator->nextPageUrl(),
