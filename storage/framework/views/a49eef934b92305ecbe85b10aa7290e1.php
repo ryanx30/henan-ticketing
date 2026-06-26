@@ -1,7 +1,7 @@
-{{-- ========= TOP NAVIGATION ========= --}}
-{{-- Shared top navigation with role-aware menu links and profile/logout actions. --}}
 
-@php
+
+
+<?php
     use App\Services\Notifications\NotificationPayloadService;
     use App\Support\NavigationMenu;
 
@@ -14,10 +14,10 @@
     $notificationCount = (int) ($notificationPayload['count'] ?? 0);
     $latestNotifications = $notificationPayload['latest'] ?? [];
     $mobileMenus = NavigationMenu::flatForUser($user);
-@endphp
+?>
 
 <nav x-data="{ open: false, dropdownOpen: false, notificationOpen: false }" class="shrink-0 bg-white border-b border-gray-200 z-40">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
 
     <div class="w-full px-6">
         <div class="flex justify-between items-center h-16">
@@ -44,9 +44,10 @@
 
                         <span
                             data-notification-count
-                            data-base-count="{{ $notificationCount }}"
-                            class="{{ $notificationCount > 0 ? '' : 'hidden' }} absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 text-[11px] leading-[18px] text-center rounded-full bg-red-600 text-white">
-                            {{ $notificationCount > 99 ? '99+' : $notificationCount }}
+                            data-base-count="<?php echo e($notificationCount); ?>"
+                            class="<?php echo e($notificationCount > 0 ? '' : 'hidden'); ?> absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 text-[11px] leading-[18px] text-center rounded-full bg-red-600 text-white">
+                            <?php echo e($notificationCount > 99 ? '99+' : $notificationCount); ?>
+
                         </span>
                     </button>
 
@@ -64,13 +65,13 @@
                             <span
                                 data-notification-summary
                                 class="text-[11px] font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-600">
-                                {{ $notificationCount }} active
+                                <?php echo e($notificationCount); ?> active
                             </span>
                         </div>
 
                         <div data-notification-list class="max-h-[420px] overflow-y-auto">
-                            @forelse ($latestNotifications as $notification)
-                                @php
+                            <?php $__empty_1 = true; $__currentLoopData = $latestNotifications; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $notification): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                                <?php
                                     $notificationAccentClass = match ($notification['type'] ?? null) {
                                         'sla_breached' => 'bg-red-600',
                                         'sla_warning' => 'bg-amber-500',
@@ -80,51 +81,57 @@
                                         'ticket_status' => 'bg-sky-600',
                                         default => 'bg-blue-600',
                                     };
-                                @endphp
+                                ?>
                                 <a
-                                    href="{{ $notification['url'] }}"
+                                    href="<?php echo e($notification['url']); ?>"
                                     class="group block px-4 py-3 border-b border-slate-100 hover:bg-blue-50/70 transition">
                                     <div class="flex gap-3">
-                                        <span class="mt-1 h-2.5 w-2.5 rounded-full shrink-0 {{ $notificationAccentClass }}"></span>
+                                        <span class="mt-1 h-2.5 w-2.5 rounded-full shrink-0 <?php echo e($notificationAccentClass); ?>"></span>
                                         <div class="min-w-0 flex-1">
                                             <div class="flex items-start justify-between gap-3">
                                                 <div class="min-w-0">
                                                     <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                                        {{ $notification['label'] }}
+                                                        <?php echo e($notification['label']); ?>
+
                                                     </div>
                                                     <div class="text-sm font-semibold text-slate-800 truncate group-hover:text-blue-700">
-                                                        {{ $notification['title'] }}
+                                                        <?php echo e($notification['title']); ?>
+
                                                     </div>
                                                 </div>
                                                 <div class="shrink-0 text-[11px] text-slate-400 whitespace-nowrap">
-                                                    {{ $notification['time'] }}
+                                                    <?php echo e($notification['time']); ?>
+
                                                 </div>
                                             </div>
                                             <p class="mt-1 text-xs text-slate-600 line-clamp-2">
-                                                {{ $notification['description'] }}
+                                                <?php echo e($notification['description']); ?>
+
                                             </p>
                                             <div class="mt-1 text-[11px] font-medium text-slate-400 truncate">
-                                                {{ $notification['meta'] }}
+                                                <?php echo e($notification['meta']); ?>
+
                                             </div>
                                         </div>
                                     </div>
                                 </a>
-                            @empty
+                            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                                 <div data-notification-empty class="px-4 py-8 text-center">
                                     <div class="text-sm font-medium text-slate-700">No active notifications</div>
                                     <div class="mt-1 text-xs text-slate-500">You're all caught up for now.</div>
                                 </div>
-                            @endforelse
+                            <?php endif; ?>
 
                             <div data-export-notifications></div>
                         </div>
 
                         <div class="grid grid-cols-2 divide-x divide-slate-100 border-t border-slate-100 bg-slate-50">
-                            <a href="{{ route('resolver-inbox.index', ['unread' => 'unread']) }}" class="px-4 py-3 text-center text-xs font-semibold text-slate-600 hover:bg-white hover:text-blue-700">
+                            <a href="<?php echo e(route('resolver-inbox.index', ['unread' => 'unread'])); ?>" class="px-4 py-3 text-center text-xs font-semibold text-slate-600 hover:bg-white hover:text-blue-700">
                                 Resolver Inbox
                             </a>
-                            <a href="{{ $user?->isIT() ? route('it.my-queue') : route('tickets.index') }}" class="px-4 py-3 text-center text-xs font-semibold text-slate-600 hover:bg-white hover:text-blue-700">
-                                {{ $user?->isIT() ? 'My Queue' : 'View Tickets' }}
+                            <a href="<?php echo e($user?->isIT() ? route('it.my-queue') : route('tickets.index')); ?>" class="px-4 py-3 text-center text-xs font-semibold text-slate-600 hover:bg-white hover:text-blue-700">
+                                <?php echo e($user?->isIT() ? 'My Queue' : 'View Tickets'); ?>
+
                             </a>
                         </div>
                     </div>
@@ -136,8 +143,8 @@
                         @click="dropdownOpen = !dropdownOpen"
                         class="flex items-center gap-2 text-right leading-tight hover:opacity-90 focus:outline-none">
                         <div>
-                            <div class="text-sm font-medium text-slate-800">{{ $user?->email ?? '-' }}</div>
-                            <div class="text-xs text-slate-500">{{ $roleLabel ?: '-' }}</div>
+                            <div class="text-sm font-medium text-slate-800"><?php echo e($user?->email ?? '-'); ?></div>
+                            <div class="text-xs text-slate-500"><?php echo e($roleLabel ?: '-'); ?></div>
                         </div>
 
                         <svg class="h-4 w-4 text-slate-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -151,8 +158,8 @@
                         x-transition
                         class="absolute right-0 mt-2 w-48 rounded-md bg-white shadow-lg border border-slate-200 z-50"
                         style="display: none;">
-                        <form action="{{ route('logout') }}" method="POST">
-                            @csrf
+                        <form action="<?php echo e(route('logout')); ?>" method="POST">
+                            <?php echo csrf_field(); ?>
                             <button type="submit" class="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
                                 Log Out
                             </button>
@@ -182,28 +189,29 @@
 
     <div :class="{'block': open, 'hidden': !open}" class="hidden sm:hidden border-t border-gray-200">
         <div class="pt-2 pb-3 space-y-1 px-4">
-            @foreach ($mobileMenus as $menu)
+            <?php $__currentLoopData = $mobileMenus; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $menu): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                 <a
-                    href="{{ $menu['href'] }}"
-                    class="block px-3 py-2 rounded-md text-sm {{ $menu['active'] ? 'bg-slate-100 text-slate-900 font-medium' : 'text-slate-700 hover:bg-slate-50' }}"
-                    @if ($menu['active']) aria-current="page" @endif>
-                    {{ $menu['label'] }}
+                    href="<?php echo e($menu['href']); ?>"
+                    class="block px-3 py-2 rounded-md text-sm <?php echo e($menu['active'] ? 'bg-slate-100 text-slate-900 font-medium' : 'text-slate-700 hover:bg-slate-50'); ?>"
+                    <?php if($menu['active']): ?> aria-current="page" <?php endif; ?>>
+                    <?php echo e($menu['label']); ?>
+
                 </a>
-            @endforeach
+            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
         </div>
 
         <div class="pt-4 pb-3 border-t border-gray-200 px-4">
-            <div class="font-medium text-base text-slate-800">{{ $user?->name ?? '-' }}</div>
-            <div class="font-medium text-sm text-slate-500">{{ $user?->email ?? '-' }}</div>
-            <div class="text-xs text-slate-500 mt-1">{{ $roleLabel ?: '-' }}</div>
+            <div class="font-medium text-base text-slate-800"><?php echo e($user?->name ?? '-'); ?></div>
+            <div class="font-medium text-sm text-slate-500"><?php echo e($user?->email ?? '-'); ?></div>
+            <div class="text-xs text-slate-500 mt-1"><?php echo e($roleLabel ?: '-'); ?></div>
 
             <div class="mt-3 space-y-1">
-                <a href="{{ route('profile.edit') }}" class="block px-3 py-2 rounded-md text-sm text-slate-700 hover:bg-slate-50">
+                <a href="<?php echo e(route('profile.edit')); ?>" class="block px-3 py-2 rounded-md text-sm text-slate-700 hover:bg-slate-50">
                     Profile
                 </a>
 
-                <form action="{{ route('logout') }}" method="POST">
-                    @csrf
+                <form action="<?php echo e(route('logout')); ?>" method="POST">
+                    <?php echo csrf_field(); ?>
                     <button type="submit" class="block w-full text-left px-3 py-2 rounded-md text-sm text-slate-700 hover:bg-slate-50">
                         Log Out
                     </button>
@@ -212,3 +220,4 @@
         </div>
     </div>
 </nav>
+<?php /**PATH C:\laragon\www\henan-ticketing\resources\views/layouts/navigation.blade.php ENDPATH**/ ?>

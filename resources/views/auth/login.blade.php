@@ -100,12 +100,6 @@
                         >
                         <span>Remember me</span>
                     </label>
-
-                    @if (Route::has('password.request'))
-                        <a class="underline hover:text-white" href="{{ route('password.request') }}">
-                            Forgot Password?
-                        </a>
-                    @endif
                 </div>
 
                 <button
