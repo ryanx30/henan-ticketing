@@ -8,9 +8,10 @@ import { formatHumanDate, toYmd } from '../../utils/formatter';
 import { statusBadgeClass as buildStatusBadgeClass, statusLabel as buildStatusLabel, slaResultBadgeClass, slaTimeBadgeClass as buildSlaTimeBadgeClass } from '../../utils/badges';
 import { showAlert as showPageAlert } from '../../utils/toast';
 
-function reportsPage() {
+function reportsPage(config = {}) {
             return {
                 loading: false,
+                defaultReportType: config.defaultReportType || 'my',
 
                 filters: {
                     range: '1w',
@@ -18,6 +19,7 @@ function reportsPage() {
                     date_to: '',
                     scope: 'my',
                     per_page: '10',
+                    user_id: '',
                 },
 
                 cards: {
@@ -58,6 +60,12 @@ function reportsPage() {
                 },
 
                 rows: [],
+                userFilter: {
+                    available: false,
+                    label: 'User',
+                    placeholder: 'All Users',
+                    options: [],
+                },
                 picker: null,
                 trendChart: null,
 
@@ -66,8 +74,9 @@ function reportsPage() {
                     this.filters.range = params.get('range') || '1w';
                     this.filters.date_from = params.get('date_from') || '';
                     this.filters.date_to = params.get('date_to') || '';
-                    this.filters.scope = params.get('scope') || 'my';
+                    this.filters.scope = params.get('scope') || this.defaultReportType;
                     this.filters.per_page = params.get('per_page') || '10';
+                    this.filters.user_id = params.get('user_id') || '';
                     this.pagination.current_page = Number(params.get('page') || 1);
 
                     this.$nextTick(() => {
@@ -120,6 +129,10 @@ function reportsPage() {
                     params.set('scope', this.filters.scope);
                     params.set('per_page', this.filters.per_page);
 
+                    if (this.filters.user_id) {
+                        params.set('user_id', this.filters.user_id);
+                    }
+
                     if (this.filters.range === 'custom') {
                         if (this.filters.date_from) params.set('date_from', this.filters.date_from);
                         if (this.filters.date_to) params.set('date_to', this.filters.date_to);
@@ -155,6 +168,12 @@ function reportsPage() {
                         this.rows = data.rows || [];
                         this.pagination = data.pagination || this.pagination;
                         this.meta = data.meta || this.meta;
+                        this.filters.scope = data.meta?.scope || this.filters.scope;
+                        this.userFilter = data.meta?.user_filter || this.userFilter;
+
+                        if (!this.userFilter.available) {
+                            this.filters.user_id = '';
+                        }
                     } catch (error) {
                         console.error(error);
                         this.showAlert(error.message || 'Failed to load reports', 'error');
@@ -206,6 +225,24 @@ function reportsPage() {
                     pages.push(last);
 
                     return pages;
+                },
+
+                userOptionLabel(user) {
+                    if (!user) return '';
+
+                    return user.email
+                        ? `${user.name} (${user.email})`
+                        : user.name;
+                },
+
+                ticketDetailUrl(row) {
+                    return row?.id ? `/tickets/${row.id}` : '#';
+                },
+
+                openTicket(row) {
+                    if (!row?.id) return;
+
+                    window.location.href = this.ticketDetailUrl(row);
                 },
 
                 async exportCsv() {

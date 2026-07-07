@@ -21,7 +21,7 @@ final class ReportTrendService
     ) {
     }
 
-    public function build(Carbon $start, Carbon $end, string $scope, User $user, string $range): array
+    public function build(Carbon $start, Carbon $end, string $scope, User $user, string $range, ?int $selectedUserId = null): array
     {
         $groupMonthly = $this->shouldGroupMonthly($range, $start, $end);
 
@@ -34,8 +34,8 @@ final class ReportTrendService
         }
 
         return $groupMonthly
-            ? $this->fromLiveMonthlyQuery($start, $end, $scope, $user)
-            : $this->fromLiveDailyQuery($start, $end, $scope, $user);
+            ? $this->fromLiveMonthlyQuery($start, $end, $scope, $user, $selectedUserId)
+            : $this->fromLiveDailyQuery($start, $end, $scope, $user, $selectedUserId);
     }
 
     private function fromPreAggregatedStats(Carbon $start, Carbon $end, bool $groupMonthly): array
@@ -57,13 +57,13 @@ final class ReportTrendService
         ];
     }
 
-    private function fromLiveMonthlyQuery(Carbon $start, Carbon $end, string $scope, User $user): array
+    private function fromLiveMonthlyQuery(Carbon $start, Carbon $end, string $scope, User $user, ?int $selectedUserId = null): array
     {
         $labels = [];
         $values = [];
         $months = $this->makeMonthRange($start, $end);
 
-        $trendRows = $this->reportTicketQuery->completed($start, $end, $scope, $user)
+        $trendRows = $this->reportTicketQuery->completed($start, $end, $scope, $user, $selectedUserId)
             ->get(['id', 'resolved_at', 'closed_at'])
             ->groupBy(fn (Ticket $ticket) => $this->dateResolver->completedAt($ticket)?->format('Y-m'));
 
@@ -80,13 +80,13 @@ final class ReportTrendService
         ];
     }
 
-    private function fromLiveDailyQuery(Carbon $start, Carbon $end, string $scope, User $user): array
+    private function fromLiveDailyQuery(Carbon $start, Carbon $end, string $scope, User $user, ?int $selectedUserId = null): array
     {
         $labels = [];
         $values = [];
         $days = $this->makeDayRange($start, $end);
 
-        $trendRows = $this->reportTicketQuery->completed($start, $end, $scope, $user)
+        $trendRows = $this->reportTicketQuery->completed($start, $end, $scope, $user, $selectedUserId)
             ->get(['id', 'resolved_at', 'closed_at'])
             ->groupBy(fn (Ticket $ticket) => $this->dateResolver->completedAt($ticket)?->format('Y-m-d'));
 

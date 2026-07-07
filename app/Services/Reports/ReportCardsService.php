@@ -25,10 +25,10 @@ final class ReportCardsService
     /**
      * Reports use the same real ticket data, but card labels/calculations change by role.
      */
-    public function build(Builder $baseTickets, Carbon $start, Carbon $end, string $scope, User $user): array
+    public function build(Builder $baseTickets, Carbon $start, Carbon $end, string $scope, User $user, ?int $selectedUserId = null): array
     {
-        $completedCount = $this->reportTicketQuery->completed($start, $end, $scope, $user)->count();
-        $slaBreachRate = $this->slaService->breachRate($start, $end, $scope, $user);
+        $completedCount = $this->reportTicketQuery->completed($start, $end, $scope, $user, $selectedUserId)->count();
+        $slaBreachRate = $this->slaService->breachRate($start, $end, $scope, $user, $selectedUserId);
 
         if ($user->isIT()) {
             $activeCount = (clone $baseTickets)
@@ -36,11 +36,16 @@ final class ReportCardsService
                 ->count();
 
             $avgResolutionSeconds = $this->averageResolutionSeconds(
-                $this->reportTicketQuery->completed($start, $end, $scope, $user)
+                $this->reportTicketQuery->completed($start, $end, $scope, $user, $selectedUserId)
             );
 
+            $activeLabel = $scope === 'team' ? 'Team Active Tickets' : 'My Active Tickets';
+            $activeDescription = $scope === 'team'
+                ? 'Tickets assigned to the IT team that are still open.'
+                : 'Tickets assigned to you that are still open.';
+
             $items = [
-                $this->cardItem('my_active_tickets', 'My Active Tickets', $activeCount, 'Tickets assigned to you that are still open.'),
+                $this->cardItem('active_tickets', $activeLabel, $activeCount, $activeDescription),
                 $this->cardItem('avg_resolution_time', 'Avg Resolution Time', $this->durationFormatter->human($avgResolutionSeconds), 'Average time from claim to resolution.'),
                 $this->cardItem('completed_tickets', 'Completed Tickets', $completedCount, 'Resolved or closed tickets in the selected range.'),
                 $this->cardItem('sla_breach_rate', 'SLA Breach Rate', $this->durationFormatter->percent($slaBreachRate), 'Percentage of SLA-tracked tickets that breached the deadline.'),
@@ -55,7 +60,7 @@ final class ReportCardsService
             ]);
         }
 
-        if ($user->isCS()) {
+        if ($user->isCsStaffOrHead()) {
             $createdCount = (clone $baseTickets)->count();
             $activeCount = (clone $baseTickets)
                 ->whereIn('status', TicketStatus::activeValues())
@@ -80,7 +85,7 @@ final class ReportCardsService
             ]);
         }
 
-        $totalCount = $this->reportTicketQuery->activity($start, $end, $scope, $user)->count();
+        $totalCount = $this->reportTicketQuery->activity($start, $end, $scope, $user, $selectedUserId)->count();
         $activeCount = (clone $baseTickets)
             ->whereIn('status', TicketStatus::activeValues())
             ->count();

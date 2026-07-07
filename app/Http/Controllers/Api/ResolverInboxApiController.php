@@ -330,7 +330,7 @@ class ResolverInboxApiController extends BaseApiController
 
     protected function scopeInboxMessages(Builder $query, User $user): void
     {
-        if ($user->isAdmin() || $user->isSupervisor()) {
+        if ($user->isAdmin() || $user->isSupervisor() || $user->isHeadCS()) {
             return;
         }
 
@@ -343,7 +343,7 @@ class ResolverInboxApiController extends BaseApiController
 
     protected function scopeThreadMessages(Builder $query, User $user): void
     {
-        if ($user->isAdmin() || $user->isSupervisor()) {
+        if ($user->isAdmin() || $user->isSupervisor() || $user->isHeadCS()) {
             return;
         }
 
@@ -356,6 +356,10 @@ class ResolverInboxApiController extends BaseApiController
     protected function canMessageTicket(Ticket $ticket, User $user): bool
     {
         if ($user->isAdmin()) {
+            return true;
+        }
+
+        if ($user->isHeadCS()) {
             return true;
         }
 
@@ -399,7 +403,7 @@ class ResolverInboxApiController extends BaseApiController
         return User::query()
             ->whereKey($recipientId)
             ->where('is_active', true)
-            ->whereIn('role', [User::ROLE_ADMIN, User::ROLE_SUPERVISOR])
+            ->whereIn('role', [User::ROLE_ADMIN, User::ROLE_SUPERVISOR, User::ROLE_HEAD_CS])
             ->exists();
     }
 
@@ -419,7 +423,7 @@ class ResolverInboxApiController extends BaseApiController
 
     protected function getComposeRecipients(User $user)
     {
-        if ($user->role === 'cs') {
+        if ($user->isCS() || $user->isHeadCS()) {
             return User::query()
                 ->whereIn('role', ['it', 'admin', 'supervisor'])
                 ->orderBy('name')
@@ -428,7 +432,7 @@ class ResolverInboxApiController extends BaseApiController
 
         if ($user->role === 'it') {
             return User::query()
-                ->whereIn('role', ['cs', 'admin', 'supervisor'])
+                ->whereIn('role', ['cs', 'head_cs', 'admin', 'supervisor'])
                 ->orderBy('name')
                 ->get();
         }
@@ -443,7 +447,7 @@ class ResolverInboxApiController extends BaseApiController
      */
     protected function scopeComposeTickets(Builder $query, User $user): void
     {
-        if ($user->isAdmin() || $user->isSupervisor()) {
+        if ($user->isAdmin() || $user->isSupervisor() || $user->isHeadCS()) {
             return;
         }
 

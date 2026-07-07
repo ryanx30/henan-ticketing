@@ -11,7 +11,7 @@ class InsightsPageController extends Controller
 {
     public function reports(Request $request)
     {
-        if (!in_array($request->user()->role, ['cs', 'it', 'admin', 'supervisor'], true)) {
+        if (!in_array($request->user()->role, ['cs', 'head_cs', 'it', 'admin', 'supervisor'], true)) {
             abort(403);
         }
 

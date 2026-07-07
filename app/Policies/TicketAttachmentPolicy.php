@@ -23,7 +23,7 @@ class TicketAttachmentPolicy
             return false;
         }
 
-        if ($user->isAdmin() || $user->isSupervisor()) {
+        if ($user->isAdmin() || $user->isSupervisor() || $user->isHeadCS()) {
             return true;
         }
 

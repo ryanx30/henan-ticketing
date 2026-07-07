@@ -1,6 +1,6 @@
 /**
  * IT Team Queue page controller.
- * Renders available team tickets and claim/update actions for resolver workflow.
+ * Renders team queue tickets with status tabs and claim/status actions for resolver workflow.
  */
 
 import { apiGet, apiPost, apiPatch } from '../../utils/apiClient';
@@ -11,11 +11,58 @@ const TEAM_QUEUE_CURRENT_USER_ID = Number(
     document.getElementById('team-queue-page')?.dataset.userId || 0
 );
 
+const QUEUE_TABS = [
+    {
+        key: 'new',
+        label: 'New Ticket',
+        description: 'Unclaimed IT tickets that are ready to be claimed.',
+    },
+    {
+        key: 'ongoing',
+        label: 'Ongoing',
+        description: 'Tickets currently being handled by IT resolvers.',
+    },
+    {
+        key: 'waiting',
+        label: 'Waiting Info',
+        description: 'Tickets waiting for additional information.',
+    },
+    {
+        key: 'resolved',
+        label: 'Resolved/Closed',
+        description: 'Latest resolved or closed team tickets.',
+    },
+];
+
+const QUEUE_TAB_COLLECTIONS = {
+    new: 'newTickets',
+    ongoing: 'ongoingTickets',
+    waiting: 'waitingTickets',
+    resolved: 'resolvedTickets',
+};
+
+const STATUS_TRANSITIONS = {
+    new: ['in_progress', 'waiting_info', 'resolved', 'closed'],
+    in_progress: ['waiting_info', 'resolved', 'closed'],
+    waiting_info: ['in_progress', 'resolved', 'closed'],
+    resolved: ['in_progress', 'waiting_info', 'closed'],
+    closed: [],
+};
+
+function normalizeStatus(status = '') {
+    return String(status || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, '_')
+        .replace(/^ongoing$/, 'in_progress');
+}
+
 function teamQueuePage() {
     return {
         loading: false,
         timer: null,
         currentUserId: TEAM_QUEUE_CURRENT_USER_ID,
+        activeTab: 'new',
         newTickets: [],
         ongoingTickets: [],
         waitingTickets: [],
@@ -28,6 +75,7 @@ function teamQueuePage() {
                 this.newTickets = [...this.newTickets];
                 this.ongoingTickets = [...this.ongoingTickets];
                 this.waitingTickets = [...this.waitingTickets];
+                this.resolvedTickets = [...this.resolvedTickets];
             }, 1000);
         },
 
@@ -49,12 +97,11 @@ function teamQueuePage() {
             try {
                 const result = await apiGet('/api/it/team-queue');
                 const data = result.data || {};
+
                 this.newTickets = data.new_tickets || [];
                 this.ongoingTickets = data.ongoing_tickets || [];
                 this.waitingTickets = data.waiting_tickets || [];
-                this.resolvedTickets = (data.resolved_tickets || [])
-                    .filter((ticket) => ticket.status === 'resolved')
-                    .slice(0, 5);
+                this.resolvedTickets = data.resolved_tickets || [];
             } catch (error) {
                 console.error(error);
                 this.showAlert(error.message || 'Failed to load team queue', 'error');
@@ -71,6 +118,7 @@ function teamQueuePage() {
             } catch (error) {
                 console.error(error);
                 this.showAlert(error.message || 'Failed to claim ticket', 'error');
+                await this.loadQueue();
             }
         },
 
@@ -85,13 +133,87 @@ function teamQueuePage() {
                 await this.loadQueue();
             }
         },
+
+        handleStatusChange(ticket, event) {
+            const nextStatus = event.target.value;
+
+            if (!nextStatus || nextStatus === this.statusValue(ticket)) {
+                event.target.value = this.statusValue(ticket);
+                return;
+            }
+
+            this.updateStatus(ticket.id, nextStatus);
+        },
+
+        tabs() {
+            return QUEUE_TABS.map((tab) => ({
+                ...tab,
+                count: this.ticketsForTab(tab.key).length,
+            }));
+        },
+
+        setActiveTab(tabKey) {
+            if (!QUEUE_TAB_COLLECTIONS[tabKey]) return;
+
+            this.activeTab = tabKey;
+        },
+
+        ticketsForTab(tabKey) {
+            return this[QUEUE_TAB_COLLECTIONS[tabKey]] || [];
+        },
+
+        activeTickets() {
+            return this.ticketsForTab(this.activeTab);
+        },
+
+        activeTabData() {
+            return this.tabs().find((tab) => tab.key === this.activeTab) || this.tabs()[0];
+        },
+
+        tabButtonClass(tabKey) {
+            return this.activeTab === tabKey
+                ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50';
+        },
+
+        emptyMessage() {
+            const messages = {
+                new: 'No new unclaimed tickets.',
+                ongoing: 'No ongoing tickets.',
+                waiting: 'No waiting info tickets.',
+                resolved: 'No resolved or closed tickets.',
+            };
+
+            return messages[this.activeTab] || 'No tickets.';
+        },
+
+        canClaimTicket(ticket) {
+            return this.statusValue(ticket) === 'new' && !Number(ticket?.holder_id || 0);
+        },
+
+        canUpdateStatus(ticket) {
+            return Number(ticket?.holder_id || 0) === Number(this.currentUserId)
+                && this.statusOptionsFor(ticket).length > 0;
+        },
+
+        statusOptionsFor(ticket) {
+            return (STATUS_TRANSITIONS[this.statusValue(ticket)] || []).map((status) => ({
+                value: status,
+                label: this.statusLabel(status),
+            }));
+        },
+
+        statusValue(ticket) {
+            return normalizeStatus(ticket?.status || '');
+        },
+
         ticketLabel(ticket) {
             return window.HenanApp?.ticketLabel(ticket) ?? '-';
         },
 
-
         ucfirst(value) {
             if (!value) return '-';
+
             value = String(value);
             return value.charAt(0).toUpperCase() + value.slice(1);
         },
@@ -124,7 +246,7 @@ function teamQueuePage() {
 
             return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
         }
-    }
+    };
 }
 
 window.teamQueuePage = teamQueuePage;

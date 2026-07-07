@@ -228,7 +228,7 @@ class TicketApiController extends BaseApiController
             ->where('is_active', true)
             ->firstOrFail();
 
-        $mode = $actor->isCS() ? User::ROLE_CS : User::ROLE_IT;
+        $mode = $actor->isCsStaffOrHead() ? User::ROLE_CS : User::ROLE_IT;
 
         if ($actor->isAdmin()) {
             $mode = $ticket->isTeamCode('it') && $ticket->holder_id ? User::ROLE_IT : User::ROLE_CS;

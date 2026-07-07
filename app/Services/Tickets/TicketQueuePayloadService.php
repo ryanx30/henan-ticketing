@@ -69,7 +69,7 @@ final class TicketQueuePayloadService
     {
         $data = collect($sections)
             ->map(fn (Builder $query) => TicketResource::collection(
-                $query->latest()->take($limit)->get()
+                $this->applyQueueOrdering($query)->take($limit)->get()
             ))
             ->all();
 
@@ -78,6 +78,31 @@ final class TicketQueuePayloadService
         ];
 
         return $data;
+    }
+
+    /**
+     * Queue priority: highest severity first, nearest SLA next, oldest ticket as fallback.
+     */
+    private function applyQueueOrdering(Builder $query): Builder
+    {
+        return $query
+            ->orderByRaw($this->prioritySortExpression())
+            ->orderByRaw('tickets.sla_deadline_at IS NULL')
+            ->orderBy('tickets.sla_deadline_at')
+            ->orderBy('tickets.created_at')
+            ->orderBy('tickets.id');
+    }
+
+    private function prioritySortExpression(): string
+    {
+        return implode(' ', [
+            "CASE LOWER(COALESCE((SELECT priorities.code FROM priorities WHERE priorities.id = tickets.priority_id), tickets.priority))",
+            "WHEN 'critical' THEN 1",
+            "WHEN 'high' THEN 2",
+            "WHEN 'medium' THEN 3",
+            "WHEN 'low' THEN 4",
+            'ELSE 5 END',
+        ]);
     }
 
     private function limit(Request $request): int

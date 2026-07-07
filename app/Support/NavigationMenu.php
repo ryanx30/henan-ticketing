@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 
 /**
- * Defines the single source of truth for menu visibility, role access, active states, and navigation payloads.
+ * Defines menu visibility, role access, active states, and navigation payloads.
  */
 class NavigationMenu
 {
@@ -27,7 +27,7 @@ class NavigationMenu
             'route' => 'dashboard',
             'icon' => 'dashboard',
             'group' => 'operations',
-            'roles' => ['admin', 'supervisor', 'cs', 'it'],
+            'roles' => ['admin', 'supervisor', 'head_cs', 'cs', 'it'],
             'active_patterns' => ['dashboard'],
         ],
         [
@@ -37,7 +37,7 @@ class NavigationMenu
             'route' => 'tickets.create',
             'icon' => 'new-tickets',
             'group' => 'operations',
-            'roles' => ['admin', 'cs'],
+            'roles' => ['admin', 'head_cs', 'cs'],
             'active_patterns' => ['tickets/create'],
         ],
         [
@@ -47,7 +47,7 @@ class NavigationMenu
             'route' => 'tickets.index',
             'icon' => 'ticket',
             'group' => 'operations',
-            'roles' => ['admin', 'supervisor', 'cs'],
+            'roles' => ['admin', 'supervisor', 'head_cs', 'cs'],
             'active_patterns' => ['tickets', 'tickets/*'],
             'inactive_patterns' => ['tickets/create'],
         ],
@@ -58,7 +58,7 @@ class NavigationMenu
             'route' => 'resolver-inbox.index',
             'icon' => 'inbox',
             'group' => 'operations',
-            'roles' => ['admin', 'supervisor', 'cs', 'it'],
+            'roles' => ['admin', 'supervisor', 'head_cs', 'cs', 'it'],
             'active_patterns' => ['resolver-inbox', 'resolver-inbox/*'],
         ],
         [
@@ -68,7 +68,7 @@ class NavigationMenu
             'route' => 'reports.index',
             'icon' => 'reports',
             'group' => 'operations',
-            'roles' => ['admin', 'supervisor', 'cs', 'it'],
+            'roles' => ['admin', 'supervisor', 'head_cs', 'cs', 'it'],
             'active_patterns' => ['reports', 'reports/*'],
         ],
         [
@@ -128,7 +128,7 @@ class NavigationMenu
             'route' => 'admin.master-data.index',
             'icon' => 'database',
             'group' => 'system_control',
-            'roles' => ['admin', 'supervisor', 'it', 'cs'],
+            'roles' => ['admin', 'supervisor', 'head_cs', 'it'],
             'active_patterns' => ['admin/master-data', 'admin/master-data/*'],
         ],
         [
@@ -215,6 +215,7 @@ class NavigationMenu
     {
         return match ($role) {
             'cs' => 'Customer Service',
+            'head_cs' => 'Head CS',
             'it' => 'IT',
             'admin' => 'Administrator',
             'supervisor' => 'Supervisor',

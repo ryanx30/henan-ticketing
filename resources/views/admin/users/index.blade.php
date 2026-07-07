@@ -36,6 +36,7 @@
                         <option value="all">All Roles</option>
                         <option value="admin">Admin</option>
                         <option value="cs">CS</option>
+                        <option value="head_cs">Head CS</option>
                         <option value="it">IT</option>
                         <option value="supervisor">Supervisor</option>
                     </select>
@@ -129,7 +130,7 @@
                                         <span
                                             class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold uppercase"
                                             :class="roleBadgeClass(row.role)"
-                                            x-text="row.role">
+                                            x-text="roleLabel(row.role)">
                                         </span>
                                     </td>
 
@@ -234,6 +235,64 @@
                 </div>
             </div>
         </div>
+
+            {{-- ========= USER STATUS CONFIRMATION MODAL ========= --}}
+            <div
+                x-show="confirmation.open"
+                x-transition.opacity
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+                style="display: none;">
+                <div class="w-full max-w-[560px] rounded-2xl bg-white shadow-2xl">
+                    <div class="border-b border-slate-200 px-6 py-4">
+                        <h3 class="text-lg font-semibold text-slate-800" x-text="`${confirmation.actionLabel} User`"></h3>
+                        <p class="mt-1 text-sm text-slate-500">
+                            Please review this account status change before continuing.
+                        </p>
+                    </div>
+
+                    <div class="space-y-5 px-6 py-5">
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <div class="text-sm font-semibold text-slate-700">Change Summary</div>
+                            <div class="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
+                                <template x-for="change in confirmation.changes" :key="change.key">
+                                    <div class="grid grid-cols-1 gap-2 border-b border-slate-100 px-3 py-2 text-sm last:border-b-0 md:grid-cols-[145px_1fr]">
+                                        <div class="font-medium text-slate-600" x-text="change.label"></div>
+                                        <div class="text-slate-700">
+                                            <span class="text-slate-400" x-text="change.before"></span>
+                                            <span class="mx-2 text-slate-400">→</span>
+                                            <span class="font-semibold text-slate-900" x-text="change.after"></span>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                            <div class="font-semibold">Review required</div>
+                            <p class="mt-1 text-xs leading-5">
+                                This action changes whether the user can access the system. Continue only if this status change is intentional.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
+                        <button
+                            type="button"
+                            @click="closeConfirmation()"
+                            class="rounded border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                            Cancel
+                        </button>
+
+                        <button
+                            type="button"
+                            @click="confirmToggleStatus()"
+                            class="rounded bg-slate-900 px-5 py-2 text-sm text-white shadow hover:bg-slate-800">
+                            Confirm
+                        </button>
+                    </div>
+                </div>
+            </div>
+
     </div>
 
 </x-app-layout>

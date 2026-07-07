@@ -33,7 +33,7 @@ final class TicketIndexQuery
 
     public function scopeForViewer(Builder $query, User $viewer, ?Request $request = null, bool $forceOwnerScope = false): void
     {
-        if ($viewer->isAdmin() || $viewer->isSupervisor()) {
+        if ($viewer->isAdmin() || $viewer->isSupervisor() || $viewer->isHeadCS()) {
             return;
         }
 

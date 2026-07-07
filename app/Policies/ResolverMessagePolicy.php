@@ -26,6 +26,7 @@ class ResolverMessagePolicy
         return in_array($user->role, [
             User::ROLE_ADMIN,
             User::ROLE_SUPERVISOR,
+            User::ROLE_HEAD_CS,
             User::ROLE_CS,
             User::ROLE_IT,
         ], true);
@@ -37,7 +38,7 @@ class ResolverMessagePolicy
      */
     public function view(User $user, ResolverMessage $resolverMessage): bool
     {
-        if ($user->isAdmin() || $user->isSupervisor()) {
+        if ($user->isAdmin() || $user->isSupervisor() || $user->isHeadCS()) {
             return true;
         }
 
@@ -52,6 +53,7 @@ class ResolverMessagePolicy
     {
         return in_array($user->role, [
             User::ROLE_ADMIN,
+            User::ROLE_HEAD_CS,
             User::ROLE_CS,
             User::ROLE_IT,
         ], true);
@@ -64,6 +66,7 @@ class ResolverMessagePolicy
     {
         return $user->isAdmin()
             || $user->isSupervisor()
+            || $user->isHeadCS()
             || (int) $resolverMessage->to_user_id === (int) $user->id;
     }
 
@@ -75,6 +78,7 @@ class ResolverMessagePolicy
     {
         return $user->isAdmin()
             || $user->isSupervisor()
+            || $user->isHeadCS()
             || (int) $resolverMessage->to_user_id === (int) $user->id
             || (int) $resolverMessage->from_user_id === (int) $user->id;
     }

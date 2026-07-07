@@ -25,6 +25,12 @@ function adminUsersPage() {
             from: null,
             to: null,
         },
+        confirmation: {
+            open: false,
+            row: null,
+            changes: [],
+            actionLabel: '',
+        },
 
         init() {
             const params = new URLSearchParams(window.location.search);
@@ -88,12 +94,45 @@ function adminUsersPage() {
             }
         },
 
-        async toggleStatus(row) {
+        toggleStatus(row) {
+            const nextStatus = !row.is_active;
+
+            this.confirmation = {
+                open: true,
+                row,
+                actionLabel: nextStatus ? 'Activate' : 'Deactivate',
+                changes: [{
+                    key: 'is_active',
+                    label: 'Account Status',
+                    before: row.is_active ? 'Active' : 'Inactive',
+                    after: nextStatus ? 'Active' : 'Inactive',
+                }],
+            };
+        },
+
+        closeConfirmation() {
+            this.confirmation = {
+                open: false,
+                row: null,
+                changes: [],
+                actionLabel: '',
+            };
+        },
+
+        async confirmToggleStatus() {
+            const row = this.confirmation.row;
+
+            if (!row) {
+                this.closeConfirmation();
+                return;
+            }
+
             try {
-                const result = await apiPatch(`/api/admin/users/${row.id}/status`);
+                const result = await apiPatch(`/api/admin/users/${row.id}/status`, {});
 
                 row.is_active = result.data?.is_active ?? row.is_active;
                 this.showAlert(result.message || 'Status updated successfully', 'success');
+                this.closeConfirmation();
             } catch (error) {
                 console.error(error);
                 this.showAlert(error.message || 'Failed to update status', 'error');
@@ -147,12 +186,32 @@ function adminUsersPage() {
                     return 'bg-red-100 text-red-700';
                 case 'cs':
                     return 'bg-blue-100 text-blue-700';
+                case 'head_cs':
+                    return 'bg-cyan-100 text-cyan-700';
                 case 'it':
                     return 'bg-amber-100 text-amber-700';
                 case 'supervisor':
                     return 'bg-violet-100 text-violet-700';
                 default:
                     return 'bg-slate-100 text-slate-700';
+            }
+        },
+
+
+        roleLabel(role) {
+            switch (role) {
+                case 'admin':
+                    return 'Admin';
+                case 'head_cs':
+                    return 'Head CS';
+                case 'cs':
+                    return 'CS';
+                case 'it':
+                    return 'IT';
+                case 'supervisor':
+                    return 'Supervisor';
+                default:
+                    return role || '-';
             }
         },
 

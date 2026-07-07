@@ -28,14 +28,15 @@
                                         <span
                                             class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
                                             :class="row.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-700'"
-                                            x-text="row.is_active ? 'Active' : 'Inactive'">
+                                            x-text="statusLabel(row)">
                                         </span>
                                     </td>
                                     <td x-show="activeTab === 'categories'" class="px-5 py-3" x-text="formatDate(row.created_at)"></td>
                                     <td x-show="activeTab === 'categories'" class="px-5 py-3">
                                         <div class="flex justify-end gap-2">
-                                            <button type="button" @click="openEdit(row)" class="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">Edit</button>
-                                            <button type="button" @click="destroyRow(row)" class="rounded bg-red-50 px-3 py-1.5 text-xs text-red-700 hover:bg-red-100">Delete</button>
+                                            <button x-show="canUpdateCurrent()" x-cloak type="button" @click="openEdit(row)" class="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">Edit</button>
+                                            <button x-show="canToggleStatusCurrent()" x-cloak type="button" @click="toggleStatus(row)" :class="statusActionClass(row)" x-text="statusActionLabel(row)"></button>
+                                            <span x-show="isViewOnly()" x-cloak class="text-xs text-slate-400">View only</span>
                                         </div>
                                     </td>
 
@@ -48,13 +49,14 @@
                                         <span
                                             class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
                                             :class="row.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-700'"
-                                            x-text="row.is_active ? 'Active' : 'Inactive'">
+                                            x-text="statusLabel(row)">
                                         </span>
                                     </td>
                                     <td x-show="activeTab === 'issue-types'" class="px-5 py-3">
                                         <div class="flex justify-end gap-2">
-                                            <button type="button" @click="openEdit(row)" class="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">Edit</button>
-                                            <button type="button" @click="destroyRow(row)" class="rounded bg-red-50 px-3 py-1.5 text-xs text-red-700 hover:bg-red-100">Delete</button>
+                                            <button x-show="canUpdateCurrent()" x-cloak type="button" @click="openEdit(row)" class="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">Edit</button>
+                                            <button x-show="canToggleStatusCurrent()" x-cloak type="button" @click="toggleStatus(row)" :class="statusActionClass(row)" x-text="statusActionLabel(row)"></button>
+                                            <span x-show="isViewOnly()" x-cloak class="text-xs text-slate-400">View only</span>
                                         </div>
                                     </td>
 
@@ -66,14 +68,15 @@
                                         <span
                                             class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
                                             :class="row.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-700'"
-                                            x-text="row.is_active ? 'Active' : 'Inactive'">
+                                            x-text="statusLabel(row)">
                                         </span>
                                     </td>
                                     <td x-show="activeTab === 'teams'" class="px-5 py-3" x-text="formatDate(row.created_at)"></td>
                                     <td x-show="activeTab === 'teams'" class="px-5 py-3">
                                         <div class="flex justify-end gap-2">
-                                            <button type="button" @click="openEdit(row)" class="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">Edit</button>
-                                            <button type="button" @click="destroyRow(row)" class="rounded bg-red-50 px-3 py-1.5 text-xs text-red-700 hover:bg-red-100">Delete</button>
+                                            <button x-show="canUpdateCurrent()" x-cloak type="button" @click="openEdit(row)" class="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">Edit</button>
+                                            <button x-show="canToggleStatusCurrent()" x-cloak type="button" @click="toggleStatus(row)" :class="statusActionClass(row)" x-text="statusActionLabel(row)"></button>
+                                            <span x-show="isViewOnly()" x-cloak class="text-xs text-slate-400">View only</span>
                                         </div>
                                     </td>
 
@@ -86,13 +89,14 @@
                                         <span
                                             class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
                                             :class="row.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-700'"
-                                            x-text="row.is_active ? 'Active' : 'Inactive'">
+                                            x-text="statusLabel(row)">
                                         </span>
                                     </td>
                                     <td x-show="activeTab === 'priorities'" class="px-5 py-3">
                                         <div class="flex justify-end gap-2">
-                                            <button type="button" @click="openEdit(row)" class="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">Edit</button>
-                                            <button type="button" @click="destroyRow(row)" class="rounded bg-red-50 px-3 py-1.5 text-xs text-red-700 hover:bg-red-100">Delete</button>
+                                            <button x-show="canUpdateCurrent()" x-cloak type="button" @click="openEdit(row)" class="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">Edit</button>
+                                            <button x-show="canToggleStatusCurrent()" x-cloak type="button" @click="toggleStatus(row)" :class="statusActionClass(row)" x-text="statusActionLabel(row)"></button>
+                                            <span x-show="isViewOnly()" x-cloak class="text-xs text-slate-400">View only</span>
                                         </div>
                                     </td>
 
@@ -104,13 +108,14 @@
                                         <span
                                             class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
                                             :class="row.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-700'"
-                                            x-text="row.is_active ? 'Active' : 'Inactive'">
+                                            x-text="statusLabel(row)">
                                         </span>
                                     </td>
                                     <td x-show="activeTab === 'sla-rules'" class="px-5 py-3">
                                         <div class="flex justify-end gap-2">
-                                            <button type="button" @click="openEdit(row)" class="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">Edit</button>
-                                            <button type="button" @click="destroyRow(row)" class="rounded bg-red-50 px-3 py-1.5 text-xs text-red-700 hover:bg-red-100">Delete</button>
+                                            <button x-show="canUpdateCurrent()" x-cloak type="button" @click="openEdit(row)" class="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">Edit</button>
+                                            <button x-show="canToggleStatusCurrent()" x-cloak type="button" @click="toggleStatus(row)" :class="statusActionClass(row)" x-text="statusActionLabel(row)"></button>
+                                            <span x-show="isViewOnly()" x-cloak class="text-xs text-slate-400">View only</span>
                                         </div>
                                     </td>
                                 </tr>

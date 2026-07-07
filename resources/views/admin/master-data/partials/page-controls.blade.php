@@ -57,11 +57,20 @@
                         </button>
 
                         <button
+                            x-show="canCreateCurrent()"
+                            x-cloak
                             type="button"
                             @click="openCreate()"
                             class="rounded bg-slate-900 px-4 py-2 text-sm text-white shadow hover:bg-slate-800">
                             <span x-text="`+ Add ${currentLabelSingle()}`"></span>
                         </button>
+
+                        <span
+                            x-show="isViewOnly()"
+                            x-cloak
+                            class="rounded bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-500">
+                            View only
+                        </span>
                     </div>
                 </div>
             </div>

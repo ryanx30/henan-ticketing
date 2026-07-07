@@ -6,6 +6,8 @@ use App\Http\Resources\TicketDetailResource;
 use App\Models\Ticket;
 use App\Models\TicketAttachment;
 use App\Models\User;
+use App\Services\TicketWorkflowService;
+use App\Support\TicketStatus;
 use Illuminate\Http\Request;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Gate;
@@ -15,6 +17,11 @@ use Illuminate\Support\Facades\Gate;
  */
 final class TicketDetailPayloadService
 {
+    public function __construct(
+        private TicketWorkflowService $ticketWorkflowService
+    ) {
+    }
+
     public function build(Ticket $ticket, Request $request): array
     {
         $ticket->load([
@@ -47,6 +54,7 @@ final class TicketDetailPayloadService
         $data['viewer_role'] = $user->role;
         $data['viewer_id'] = $user->id;
         $data['actions'] = $this->actions($ticket, $user);
+        $data['status_options'] = $this->statusOptions($ticket);
         $data['handoff'] = $this->handoffPayload($ticket, $user);
         $data['relations'] = [
             'history' => $this->relationPage($history),
@@ -55,6 +63,20 @@ final class TicketDetailPayloadService
         ];
 
         return $data;
+    }
+
+    private function statusOptions(Ticket $ticket): array
+    {
+        $currentStatus = $this->ticketWorkflowService->normalizeStatus((string) $ticket->status);
+        $transitionMap = $this->ticketWorkflowService->transitionMap();
+
+        return collect($transitionMap[$currentStatus] ?? [])
+            ->map(fn (string $status) => [
+                'value' => $status,
+                'label' => TicketStatus::label($status),
+            ])
+            ->values()
+            ->all();
     }
 
     private function actions(Ticket $ticket, User $user): array
@@ -67,7 +89,7 @@ final class TicketDetailPayloadService
             'can_update_status' => Gate::forUser($user)->allows('updateStatus', $ticket),
             'can_claim' => Gate::forUser($user)->allows('claim', $ticket),
             'can_escalate' => Gate::forUser($user)->allows('transferHolder', $ticket),
-            'can_send_resolver_message' => $user->isAdmin() || $isCurrentCsOwner || $isCurrentItHolder,
+            'can_send_resolver_message' => $user->isAdmin() || $user->isHeadCS() || $isCurrentCsOwner || $isCurrentItHolder,
         ];
     }
 
@@ -81,7 +103,7 @@ final class TicketDetailPayloadService
             ];
         }
 
-        $mode = $user->isCS() ? 'cs' : 'it';
+        $mode = $user->isCsStaffOrHead() ? 'cs' : 'it';
         $currentOwnerId = $mode === 'cs' ? $ticket->created_by : $ticket->holder_id;
 
         if ($user->isAdmin()) {

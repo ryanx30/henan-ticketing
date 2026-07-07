@@ -1,5 +1,5 @@
 {{-- ========= AUDIT LOGS SHELL ========= --}}
-{{-- Audit log filter, table, and export containers for API-backed rendering. --}}
+{{-- Audit log tabs, filters, summary cards, table, and export containers for API-backed rendering. --}}
 
 <x-app-layout>
     <style>
@@ -15,32 +15,25 @@
         <div class="mx-auto w-full max-w-[1600px]">
             <div id="page-alert" class="hidden mb-4 rounded p-3 text-sm"></div>
 
-            <div class="mb-6">
+            <div class="mb-5">
                 <h1 class="text-[34px] font-bold text-[#051823]">AUDIT LOGS</h1>
                 <p class="mt-1 text-sm text-slate-500">
                     Monitor admin changes, ticket activity, resolver messages, and system events.
                 </p>
             </div>
 
-            <div class="mb-5 grid gap-4 md:grid-cols-4">
-                <div class="rounded bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
-                    <p class="text-sm text-slate-500">Total Logs</p>
-                    <p class="mt-2 text-2xl font-bold text-[#051823]" x-text="summary.total ?? 0"></p>
-                </div>
-
-                <div class="rounded bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
-                    <p class="text-sm text-slate-500">Today</p>
-                    <p class="mt-2 text-2xl font-bold text-[#051823]" x-text="summary.today ?? 0"></p>
-                </div>
-
-                <div class="rounded bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
-                    <p class="text-sm text-slate-500">Last 7 Days</p>
-                    <p class="mt-2 text-2xl font-bold text-[#051823]" x-text="summary.last_7_days ?? 0"></p>
-                </div>
-
-                <div class="rounded bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
-                    <p class="text-sm text-slate-500">Critical Changes</p>
-                    <p class="mt-2 text-2xl font-bold text-red-600" x-text="summary.critical_changes ?? 0"></p>
+            <div class="mb-5 rounded bg-white p-2 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
+                <div class="grid gap-2 md:grid-cols-4">
+                    <template x-for="tab in tabs" :key="tab.value">
+                        <button
+                            type="button"
+                            @click="setEntityGroup(tab.value)"
+                            class="rounded-md px-4 py-3 text-left transition"
+                            :class="tabButtonClass(tab.value)">
+                            <span class="block text-sm font-bold" x-text="tab.label"></span>
+                            <span class="mt-1 block text-xs leading-4" x-text="tab.description"></span>
+                        </button>
+                    </template>
                 </div>
             </div>
 
@@ -50,8 +43,8 @@
                         x-model="filters.q"
                         @keydown.enter.prevent="applyFilters()"
                         type="text"
-                        placeholder="Search actor, action, ticket, IP, or description..."
-                        class="h-10 w-full max-w-[340px] rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none">
+                        :placeholder="isMasterDataTab() ? 'Search actor, action, IP, reason, or description...' : 'Search actor, action, ticket, IP, or description...'"
+                        class="h-10 w-full max-w-[380px] rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none">
 
                     <select
                         x-model="filters.action"
@@ -64,11 +57,13 @@
                     </select>
 
                     <select
-                        x-model="filters.entity"
+                        x-show="isMasterDataTab()"
+                        x-cloak
+                        x-model="filters.entity_type"
                         @change="applyFilters()"
-                        class="h-10 w-[120px] rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none">
+                        class="h-10 w-[140px] rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none">
                         <option value="all">All Entities</option>
-                        <template x-for="entity in options.entities" :key="entity.value">
+                        <template x-for="entity in masterDataEntities()" :key="entity.value">
                             <option :value="entity.value" x-text="entity.label"></option>
                         </template>
                     </select>
@@ -76,7 +71,7 @@
                     <select
                         x-model="filters.date_range"
                         @change="applyFilters()"
-                        class="h-10 w-[120px] rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none">
+                        class="h-10 w-[130px] rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none">
                         <option value="today">Today</option>
                         <option value="7d">Last 7 days</option>
                         <option value="30d">Last 30 days</option>
@@ -169,13 +164,38 @@
                 </div>
             </div>
 
+            <div class="mb-5 grid gap-4 md:grid-cols-4">
+                <div class="rounded bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
+                    <p class="text-sm text-slate-500" x-text="`${activeTabLabel()} Logs`"></p>
+                    <p class="mt-2 text-2xl font-bold text-[#051823]" x-text="summary.total ?? 0"></p>
+                </div>
+
+                <div class="rounded bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
+                    <p class="text-sm text-slate-500">Today</p>
+                    <p class="mt-2 text-2xl font-bold text-[#051823]" x-text="summary.today ?? 0"></p>
+                </div>
+
+                <div class="rounded bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
+                    <p class="text-sm text-slate-500">Last 7 Days</p>
+                    <p class="mt-2 text-2xl font-bold text-[#051823]" x-text="summary.last_7_days ?? 0"></p>
+                </div>
+
+                <div class="rounded bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
+                    <p class="text-sm text-slate-500">Critical Changes</p>
+                    <p class="mt-2 text-2xl font-bold text-red-600" x-text="summary.critical_changes ?? 0"></p>
+                </div>
+            </div>
+
             <div class="overflow-hidden rounded bg-white shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
-                <div class="bg-[#051823] px-5 py-3">
-                    <h2 class="text-[20px] font-semibold text-white">Activity History</h2>
+                <div class="flex flex-col gap-1 bg-[#051823] px-5 py-3 text-white md:flex-row md:items-end md:justify-between">
+                    <div>
+                        <h2 class="text-[20px] font-semibold" x-text="`${activeTabLabel()} Activity History`"></h2>
+                        <p class="text-xs text-slate-300" x-text="activeTabDescription()"></p>
+                    </div>
                 </div>
 
                 <div class="overflow-x-auto">
-                    <table class="w-full min-w-[1180px] text-sm text-slate-800">
+                    <table class="w-full min-w-[1320px] text-sm text-slate-800">
                         <thead class="bg-[#d5e0e7] text-[#051823]">
                             <tr class="text-left">
                                 <th class="w-[170px] px-5 py-3 font-semibold">Time</th>
@@ -183,6 +203,7 @@
                                 <th class="w-[150px] px-5 py-3 font-semibold">Action</th>
                                 <th class="w-[220px] px-5 py-3 font-semibold">Entity</th>
                                 <th class="px-5 py-3 font-semibold">Description</th>
+                                <th x-show="isMasterDataTab()" x-cloak class="w-[240px] px-5 py-3 font-semibold">Reason</th>
                                 <th class="w-[130px] px-5 py-3 font-semibold">IP</th>
                                 <th class="w-[100px] px-5 py-3 font-semibold text-right">Details</th>
                             </tr>
@@ -191,7 +212,7 @@
                         <tbody>
                             <template x-if="loading">
                                 <tr>
-                                    <td colspan="7" class="px-5 py-8 text-center text-slate-500">
+                                    <td colspan="8" class="px-5 py-8 text-center text-slate-500">
                                         Loading audit logs...
                                     </td>
                                 </tr>
@@ -199,7 +220,7 @@
 
                             <template x-if="!loading && rows.length === 0">
                                 <tr>
-                                    <td colspan="7" class="px-5 py-8 text-center text-slate-500">
+                                    <td colspan="8" class="px-5 py-8 text-center text-slate-500">
                                         No audit logs found.
                                     </td>
                                 </tr>
@@ -236,7 +257,11 @@
                                     </td>
 
                                     <td class="px-5 py-3 text-slate-700">
-                                        <div class="max-w-[420px] truncate" x-text="row.description || '-'"></div>
+                                        <div class="max-w-[380px] truncate" x-text="row.description || '-'"></div>
+                                    </td>
+
+                                    <td x-show="isMasterDataTab()" x-cloak class="px-5 py-3 text-slate-700">
+                                        <div class="max-w-[240px] truncate" x-text="row.change_reason || '-'"></div>
                                     </td>
 
                                     <td class="whitespace-nowrap px-5 py-3 text-slate-600" x-text="row.ip_address || '-'"></td>
@@ -353,6 +378,11 @@
                     <div class="mb-5 rounded border border-slate-200 p-3">
                         <p class="text-xs font-semibold uppercase text-slate-500">Description</p>
                         <p class="mt-1 text-slate-800" x-text="selectedLog?.description || '-'"></p>
+                    </div>
+
+                    <div x-show="selectedLog?.entity_group === 'master_data'" x-cloak class="mb-5 rounded border border-slate-200 p-3">
+                        <p class="text-xs font-semibold uppercase text-slate-500">Reason</p>
+                        <p class="mt-1 text-slate-800" x-text="selectedLog?.change_reason || '-'"></p>
                     </div>
 
                     <div class="grid gap-4 md:grid-cols-2">

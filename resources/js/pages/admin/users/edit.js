@@ -1,6 +1,6 @@
 /**
  * Admin user edit page controller.
- * Loads user edit state and submits updates through the internal API.
+ * Loads user edit state, handles confirmation flow, and submits updates through the internal API.
  */
 
 import { apiGet, apiPatch } from '../../../utils/apiClient';
@@ -14,6 +14,10 @@ function adminUserEditPage({ userId }) {
         errors: {},
         showPassword: false,
         showPasswordConfirm: false,
+        confirmation: {
+            open: false,
+            changes: [],
+        },
         form: {
             name: '',
             email: '',
@@ -22,11 +26,11 @@ function adminUserEditPage({ userId }) {
             password_confirmation: '',
             is_active: true,
         },
+        originalForm: {},
 
         init() {
             this.loadUser();
         },
-
 
         async loadUser() {
             this.loading = true;
@@ -39,6 +43,9 @@ function adminUserEditPage({ userId }) {
                 this.form.email = data.email || '';
                 this.form.role = data.role || 'cs';
                 this.form.is_active = !!data.is_active;
+                this.form.password = '';
+                this.form.password_confirmation = '';
+                this.originalForm = { ...this.form };
             } catch (error) {
                 this.showAlert(error.message || 'Failed to load user', 'error');
             } finally {
@@ -46,7 +53,88 @@ function adminUserEditPage({ userId }) {
             }
         },
 
-        async submit() {
+        roleLabel(role) {
+            switch (role) {
+                case 'admin':
+                    return 'Admin';
+                case 'head_cs':
+                    return 'Head CS';
+                case 'cs':
+                    return 'CS';
+                case 'it':
+                    return 'IT';
+                case 'supervisor':
+                    return 'Supervisor';
+                default:
+                    return role || '-';
+            }
+        },
+
+        normalizeForCompare(value) {
+            if (value === null || value === undefined) {
+                return '';
+            }
+
+            if (typeof value === 'boolean') {
+                return value ? '1' : '0';
+            }
+
+            return String(value).trim();
+        },
+
+        confirmationChanges() {
+            const fields = {
+                name: 'Full Name',
+                email: 'Email',
+                role: 'Role',
+                is_active: 'Account Status',
+            };
+
+            const changes = Object.entries(fields)
+                .filter(([key]) => this.normalizeForCompare(this.form[key]) !== this.normalizeForCompare(this.originalForm[key]))
+                .map(([key, label]) => ({
+                    key,
+                    label,
+                    before: key === 'role'
+                        ? this.roleLabel(this.originalForm[key])
+                        : (key === 'is_active' ? (this.originalForm[key] ? 'Active' : 'Inactive') : (this.originalForm[key] || '-')),
+                    after: key === 'role'
+                        ? this.roleLabel(this.form[key])
+                        : (key === 'is_active' ? (this.form[key] ? 'Active' : 'Inactive') : (this.form[key] || '-')),
+                }));
+
+            if (String(this.form.password || '').trim()) {
+                changes.push({
+                    key: 'password',
+                    label: 'Password',
+                    before: '[hidden]',
+                    after: '[updated]',
+                });
+            }
+
+            return changes;
+        },
+
+        openConfirmation() {
+            this.confirmation = {
+                open: true,
+                changes: this.confirmationChanges(),
+            };
+        },
+
+        closeConfirmation() {
+            this.confirmation = {
+                open: false,
+                changes: [],
+            };
+        },
+
+        submit() {
+            this.errors = {};
+            this.openConfirmation();
+        },
+
+        async confirmSubmit() {
             this.submitting = true;
             this.errors = {};
 
@@ -61,6 +149,7 @@ function adminUserEditPage({ userId }) {
             } catch (error) {
                 if (error.status === 422) {
                     this.errors = this.mapErrors(error.payload?.errors || {});
+                    this.closeConfirmation();
                 }
 
                 if (!Object.keys(this.errors).length) {

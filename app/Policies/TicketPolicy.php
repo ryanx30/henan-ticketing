@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\Ticket;
 use App\Models\User;
+use App\Support\TicketStatus;
 
 /**
  * Defines role-based authorization rules for viewing, creating, updating, and deleting tickets.
@@ -26,6 +27,7 @@ class TicketPolicy
         return in_array($user->role, [
             User::ROLE_ADMIN,
             User::ROLE_SUPERVISOR,
+            User::ROLE_HEAD_CS,
             User::ROLE_CS,
             User::ROLE_IT,
         ], true);
@@ -36,7 +38,7 @@ class TicketPolicy
      */
     public function view(User $user, Ticket $ticket): bool
     {
-        if ($user->isAdmin() || $user->isSupervisor()) {
+        if ($user->isAdmin() || $user->isSupervisor() || $user->isHeadCS()) {
             return true;
         }
 
@@ -60,22 +62,26 @@ class TicketPolicy
     {
         return in_array($user->role, [
             User::ROLE_ADMIN,
+            User::ROLE_HEAD_CS,
             User::ROLE_CS,
         ], true);
     }
 
     /**
-     * CS can still update only their own non-closed tickets; Admin can update all tickets.
+     * Ticket edits are limited to tickets that are still in New status.
      */
     public function update(User $user, Ticket $ticket): bool
     {
-        if ($user->isAdmin()) {
+        if (TicketStatus::normalize((string) $ticket->status) !== TicketStatus::NEW) {
+            return false;
+        }
+
+        if ($user->isAdmin() || $user->isHeadCS()) {
             return true;
         }
 
         return $user->isCS()
-            && (int) $ticket->created_by === (int) $user->id
-            && $ticket->status !== 'closed';
+            && (int) $ticket->created_by === (int) $user->id;
     }
 
     /**
@@ -87,7 +93,7 @@ class TicketPolicy
     }
 
     /**
-     * IT/Admin can claim unassigned IT tickets or re-claim their own ticket.
+     * IT/Admin can claim only unassigned New IT tickets.
      */
     public function claim(User $user, Ticket $ticket): bool
     {
@@ -96,11 +102,8 @@ class TicketPolicy
         }
 
         return $ticket->isTeamCode('it')
-            && $ticket->status !== 'closed'
-            && (
-                $ticket->holder_id === null
-                || (int) $ticket->holder_id === (int) $user->id
-            );
+            && TicketStatus::normalize((string) $ticket->status) === TicketStatus::NEW
+            && $ticket->holder_id === null;
     }
 
     /**
@@ -132,6 +135,10 @@ class TicketPolicy
         }
 
         if ($user->isAdmin()) {
+            return true;
+        }
+
+        if ($user->isHeadCS()) {
             return true;
         }
 

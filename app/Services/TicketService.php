@@ -14,6 +14,7 @@ use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Coordinates ticket creation and update rules that are not tied to a single controller action.
@@ -104,6 +105,12 @@ class TicketService
                 ->whereKey($ticket->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if ($this->ticketWorkflowService->normalizeStatus((string) $freshTicket->status) !== TicketWorkflowService::STATUS_NEW) {
+                throw ValidationException::withMessages([
+                    'ticket' => 'Ticket can only be edited while status is New.',
+                ]);
+            }
 
             $oldTeam = $freshTicket->team;
             $oldPriority = $freshTicket->priority;

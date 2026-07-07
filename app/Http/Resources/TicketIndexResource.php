@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Compact payload for the ticket repository/list page.
@@ -28,6 +29,9 @@ class TicketIndexResource extends JsonResource
             'category' => $this->category,
             'issue_type' => $this->issue_type,
             'created_at' => optional($this->created_at)?->toISOString(),
+            'can_edit' => $request->user()
+                ? Gate::forUser($request->user())->allows('update', $this->resource)
+                : false,
         ];
     }
 }

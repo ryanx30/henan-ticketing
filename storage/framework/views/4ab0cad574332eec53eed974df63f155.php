@@ -1,7 +1,7 @@
-{{-- ========= REPORT FILTER BAR ========= --}}
-{{-- Range, report type, user filter, custom date, and export controls for reports. --}}
 
-            {{-- ========= FILTER BAR ========= --}}
+
+
+            
             <div class="mb-5 rounded bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
                 <div class="flex flex-wrap items-center gap-3">
                     <div class="flex items-center gap-2 text-sm text-slate-700">
@@ -43,20 +43,20 @@
                             x-model="filters.scope"
                             @change="applyFilters()"
                             class="h-10 w-[190px] rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-slate-400 focus:outline-none">
-                            @if(auth()->user()->role === 'admin')
+                            <?php if(auth()->user()->role === 'admin'): ?>
                                 <option value="it_performance">IT Performance</option>
-                            @elseif(auth()->user()->role === 'head_cs')
+                            <?php elseif(auth()->user()->role === 'head_cs'): ?>
                                 <option value="cs_performance">CS Performance</option>
-                            @elseif(auth()->user()->role === 'it')
+                            <?php elseif(auth()->user()->role === 'it'): ?>
                                 <option value="my">My Performance</option>
                                 <option value="team">Team Performance</option>
-                            @elseif(auth()->user()->role === 'cs')
+                            <?php elseif(auth()->user()->role === 'cs'): ?>
                                 <option value="my">My Performance</option>
-                            @elseif(auth()->user()->role === 'supervisor')
+                            <?php elseif(auth()->user()->role === 'supervisor'): ?>
                                 <option value="all">All Tickets</option>
-                            @else
+                            <?php else: ?>
                                 <option value="my">My Performance</option>
-                            @endif
+                            <?php endif; ?>
                         </select>
                     </div>
 
@@ -102,3 +102,4 @@
                     </div>
                 </div>
             </div>
+<?php /**PATH C:\laragon\www\henan-ticketing\resources\views/reports/partials/filter-bar.blade.php ENDPATH**/ ?>

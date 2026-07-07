@@ -45,7 +45,7 @@ Route::middleware(['web', 'auth', 'active', 'throttle:120,1'])->group(function (
     Route::get('/sidebar', [DashboardApiController::class, 'index']);
 
     // Queued exports
-    Route::middleware('role:cs,it,admin,supervisor')->group(function () {
+    Route::middleware('role:cs,head_cs,it,admin,supervisor')->group(function () {
         Route::get('/exports/{batchId}/status', [ExportBatchController::class, 'status']);
         Route::get('/exports/{batchId}/download', [ExportBatchController::class, 'download']);
     });
@@ -76,19 +76,19 @@ Route::middleware(['web', 'auth', 'active', 'throttle:120,1'])->group(function (
         Route::get('/clients/{client}/history', [ClientApiController::class, 'history']);
     });
 
-    Route::middleware('role:cs,admin')->group(function () {
+    Route::middleware('role:cs,head_cs,admin')->group(function () {
         Route::patch('/tickets/{ticket}', [TicketApiController::class, 'update']);
         Route::delete('/tickets/{ticket}', [TicketApiController::class, 'destroy']);
     });
 
     // Ticket detail endpoints for CS / IT / Admin / Supervisor
-    Route::middleware('role:cs,it,admin,supervisor')->group(function () {
+    Route::middleware('role:cs,head_cs,it,admin,supervisor')->group(function () {
         Route::get('/tickets/{ticket}', [TicketApiController::class, 'show']);
         Route::get('/tickets/{ticket}/similar', [TicketApiController::class, 'similarByTicket']);
         Route::get('/tickets/{ticket}/attachments/{attachment}/download', [TicketApiController::class, 'downloadAttachment']);
     });
 
-    Route::middleware('role:cs,it,admin')->group(function () {
+    Route::middleware('role:cs,head_cs,it,admin')->group(function () {
         Route::patch('/tickets/{ticket}/escalate', [TicketApiController::class, 'escalate']);
     });
 
@@ -120,7 +120,7 @@ Route::middleware(['web', 'auth', 'active', 'throttle:120,1'])->group(function (
     });
 
     // Resolver Inbox actions
-    Route::middleware('role:cs,it,admin')->group(function () {
+    Route::middleware('role:cs,head_cs,it,admin')->group(function () {
         Route::post('/resolver-inbox', [ResolverInboxApiController::class, 'store']);
         Route::patch('/resolver-inbox/{resolverMessage}/read', [ResolverInboxApiController::class, 'markAsRead']);
         Route::delete('/resolver-inbox/{resolverMessage}', [ResolverInboxApiController::class, 'destroy']);
@@ -146,15 +146,15 @@ Route::middleware(['web', 'auth', 'active', 'throttle:120,1'])->group(function (
         Route::patch('/users/{user}/status', [AdminUserApiController::class, 'toggleStatus']);
     });
 
-    // Admin - Master Data
+    // Master Data read access follows navigation roles; mutations are limited to Admin and Head CS.
     Route::middleware(NavigationMenu::roleMiddlewareFor('master-data'))->prefix('admin/master-data')->group(function () {
         Route::get('/', [AdminMasterDataApiController::class, 'index']);
     });
 
-    Route::middleware('role:admin,it,cs')->prefix('admin/master-data')->group(function () {
+    Route::middleware('role:admin,head_cs')->prefix('admin/master-data')->group(function () {
         Route::post('/{type}', [AdminMasterDataApiController::class, 'store']);
         Route::patch('/{type}/{id}', [AdminMasterDataApiController::class, 'update']);
-        Route::delete('/{type}/{id}', [AdminMasterDataApiController::class, 'destroy']);
+        Route::patch('/{type}/{id}/status', [AdminMasterDataApiController::class, 'toggleStatus']);
     });
 
     // Admin - Audit Logs read/export access for Admin and IT

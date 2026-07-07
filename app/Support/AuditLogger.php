@@ -19,7 +19,8 @@ class AuditLogger
         ?string $entityLabel = null,
         ?string $description = null,
         ?array $before = null,
-        ?array $after = null
+        ?array $after = null,
+        ?string $reason = null
     ): void {
         try {
             $actor = $request->user();
@@ -34,6 +35,7 @@ class AuditLogger
                 'entity_id' => $entityId,
                 'entity_label' => $entityLabel,
                 'description' => $description,
+                'change_reason' => self::reasonFrom($request, $reason),
                 'before_values' => self::sanitize($before),
                 'after_values' => self::sanitize($after),
                 'ip_address' => $request->ip(),
@@ -69,6 +71,20 @@ class AuditLogger
         }
 
         return $changes;
+    }
+
+
+    protected static function reasonFrom(Request $request, ?string $reason = null): ?string
+    {
+        $value = $reason ?? $request->input('change_reason') ?? $request->input('reason');
+
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : null;
     }
 
     protected static function normalizeKey(string $value): string

@@ -22,6 +22,7 @@ class AuditLog extends Model
         'entity_id',
         'entity_label',
         'description',
+        'change_reason',
         'before_values',
         'after_values',
         'ip_address',

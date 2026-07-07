@@ -18,37 +18,34 @@ class MasterDataPolicy
     }
 
     /**
-     * Admin, Supervisor, IT, and CS can view the master data page.
-     * CS is still type-scoped in AdminMasterDataApiController to Category and Issue Type only.
+     * Admin and Head CS can manage master data, while Supervisor and IT can view it only.
      */
     public function viewAny(User $user): bool
     {
-        return $user->isAdmin() || $user->isSupervisor() || $user->isIT() || $user->isCS();
+        return $user->isAdmin() || $user->isHeadCS() || $user->isSupervisor() || $user->isIT();
     }
 
     /**
-     * Admin, IT, and CS can create allowed master data.
-     * CS is limited to categories and issue types by the API controller.
+     * Master data creation is limited to Admin and Head CS.
      */
     public function create(User $user): bool
     {
-        return $user->isAdmin() || $user->isIT() || $user->isCS();
+        return $user->isAdmin() || $user->isHeadCS();
     }
 
     /**
-     * Admin, IT, and CS can update allowed master data.
-     * CS is limited to categories and issue types by the API controller.
+     * Master data updates are limited to Admin and Head CS.
      */
     public function update(User $user, mixed $model = null): bool
     {
-        return $user->isAdmin() || $user->isIT() || $user->isCS();
+        return $user->isAdmin() || $user->isHeadCS();
     }
 
     /**
-     * Delete remains limited to Admin and IT. CS can add/edit, but not delete.
+     * Physical deletes are disabled for master data to preserve historical relations.
      */
     public function delete(User $user, mixed $model = null): bool
     {
-        return $user->isAdmin() || $user->isIT();
+        return false;
     }
 }

@@ -20,9 +20,9 @@ final class ReportSlaService
     ) {
     }
 
-    public function breachRate(Carbon $start, Carbon $end, string $scope, User $user): float
+    public function breachRate(Carbon $start, Carbon $end, string $scope, User $user, ?int $selectedUserId = null): float
     {
-        $tickets = $this->reportTicketQuery->activity($start, $end, $scope, $user)
+        $tickets = $this->reportTicketQuery->activity($start, $end, $scope, $user, $selectedUserId)
             ->forTeamCode('it')
             ->whereNotNull('sla_deadline_at')
             ->get(['status', 'sla_deadline_at', 'resolved_at', 'closed_at', 'team', 'team_id']);

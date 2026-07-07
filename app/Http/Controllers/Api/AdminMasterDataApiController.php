@@ -7,20 +7,27 @@ use App\Models\IssueType;
 use App\Models\Priority;
 use App\Models\SlaRule;
 use App\Models\Team;
+use App\Services\MasterDataCodeService;
 use App\Support\AuditLogger;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 /**
  * Manages master data endpoints for teams, categories, issue types, priorities, and SLA rules.
  */
 class AdminMasterDataApiController extends BaseApiController
 {
+    public function __construct(protected MasterDataCodeService $masterDataCodeService)
+    {
+    }
+
     public function index(Request $request)
     {
         Gate::authorize('viewAny', Category::class);
@@ -72,46 +79,58 @@ class AdminMasterDataApiController extends BaseApiController
 
         $validated = $this->validatePayload($request, $type);
 
-        $row = match ($type) {
-            'categories' => Category::create([
-                'code_num' => $this->prepareNumericCode($validated['code_num'], 2),
-                'name' => trim($validated['name']),
-                'slug' => $this->prepareSlug($validated['slug'] ?? $validated['name']),
-                'is_active' => (bool) ($validated['is_active'] ?? true),
-            ]),
+        try {
+            $row = DB::transaction(function () use ($type, $validated) {
+                $generatedCode = $this->requiresGeneratedCode($type)
+                    ? $this->masterDataCodeService->generate($type, $validated)
+                    : null;
 
-            'issue-types' => IssueType::create([
-                'category_id' => $validated['category_id'],
-                'code_num' => $this->prepareNumericCode($validated['code_num'], 3),
-                'name' => trim($validated['name']),
-                'slug' => $this->prepareSlug($validated['slug'] ?? $validated['name']),
-                'is_active' => (bool) ($validated['is_active'] ?? true),
-            ]),
+                return match ($type) {
+                    'categories' => Category::create([
+                        'code_num' => $generatedCode,
+                        'name' => trim($validated['name']),
+                        'slug' => $this->prepareSlug($validated['slug'] ?? $validated['name']),
+                        'is_active' => (bool) ($validated['is_active'] ?? true),
+                    ]),
 
-            'teams' => Team::create([
-                'code_num' => $this->prepareNumericCode($validated['code_num'], 1),
-                'name' => trim($validated['name']),
-                'code' => $this->prepareSystemCode($validated['code']),
-                'is_active' => (bool) ($validated['is_active'] ?? true),
-            ]),
+                    'issue-types' => IssueType::create([
+                        'category_id' => $validated['category_id'],
+                        'code_num' => $generatedCode,
+                        'name' => trim($validated['name']),
+                        'slug' => $this->prepareSlug($validated['slug'] ?? $validated['name']),
+                        'is_active' => (bool) ($validated['is_active'] ?? true),
+                    ]),
 
-            'priorities' => Priority::create([
-                'code_num' => $this->prepareNumericCode($validated['code_num'], 1),
-                'name' => trim($validated['name']),
-                'code' => $this->prepareSystemCode($validated['code']),
-                'sort_order' => (int) ($validated['sort_order'] ?? 0),
-                'is_active' => (bool) ($validated['is_active'] ?? true),
-            ]),
+                    'teams' => Team::create([
+                        'code_num' => $generatedCode,
+                        'name' => trim($validated['name']),
+                        'code' => $this->prepareSystemCode($validated['code']),
+                        'is_active' => (bool) ($validated['is_active'] ?? true),
+                    ]),
 
-            'sla-rules' => SlaRule::create([
-                'team_id' => $validated['team_id'],
-                'priority_id' => $validated['priority_id'],
-                'hours' => (int) $validated['hours'],
-                'is_active' => (bool) ($validated['is_active'] ?? true),
-            ]),
+                    'priorities' => Priority::create([
+                        'code_num' => $generatedCode,
+                        'name' => trim($validated['name']),
+                        'code' => $this->prepareSystemCode($validated['code']),
+                        'sort_order' => (int) ($validated['sort_order'] ?? 0),
+                        'is_active' => (bool) ($validated['is_active'] ?? true),
+                    ]),
 
-            default => abort(404),
-        };
+                    'sla-rules' => SlaRule::create([
+                        'team_id' => $validated['team_id'],
+                        'priority_id' => $validated['priority_id'],
+                        'hours' => (int) $validated['hours'],
+                        'is_active' => (bool) ($validated['is_active'] ?? true),
+                    ]),
+
+                    default => abort(404),
+                };
+            });
+        } catch (RuntimeException $e) {
+            return $this->validationError([
+                'code_num' => [$e->getMessage()],
+            ], 'Unable to generate master data code.');
+        }
 
         $row = $this->reloadRelations($type, $row);
         $after = $this->transformRow($type, $row);
@@ -124,7 +143,8 @@ class AdminMasterDataApiController extends BaseApiController
             $this->entityLabel($type, $row),
             'Created ' . strtolower($this->label($type)) . ': ' . $this->entityLabel($type, $row),
             null,
-            $after
+            $after,
+            $validated['change_reason']
         );
 
         return $this->createdResponse(
@@ -145,7 +165,6 @@ class AdminMasterDataApiController extends BaseApiController
 
         match ($type) {
             'categories' => $row->update([
-                'code_num' => $this->prepareNumericCode($validated['code_num'], 2),
                 'name' => trim($validated['name']),
                 'slug' => $this->prepareSlug($validated['slug'] ?? $validated['name']),
                 'is_active' => (bool) ($validated['is_active'] ?? true),
@@ -153,21 +172,18 @@ class AdminMasterDataApiController extends BaseApiController
 
             'issue-types' => $row->update([
                 'category_id' => $validated['category_id'],
-                'code_num' => $this->prepareNumericCode($validated['code_num'], 3),
                 'name' => trim($validated['name']),
                 'slug' => $this->prepareSlug($validated['slug'] ?? $validated['name']),
                 'is_active' => (bool) ($validated['is_active'] ?? true),
             ]),
 
             'teams' => $row->update([
-                'code_num' => $this->prepareNumericCode($validated['code_num'], 1),
                 'name' => trim($validated['name']),
                 'code' => $this->prepareSystemCode($validated['code']),
                 'is_active' => (bool) ($validated['is_active'] ?? true),
             ]),
 
             'priorities' => $row->update([
-                'code_num' => $this->prepareNumericCode($validated['code_num'], 1),
                 'name' => trim($validated['name']),
                 'code' => $this->prepareSystemCode($validated['code']),
                 'sort_order' => (int) ($validated['sort_order'] ?? 0),
@@ -195,7 +211,8 @@ class AdminMasterDataApiController extends BaseApiController
             $this->entityLabel($type, $row),
             'Updated ' . strtolower($this->label($type)) . ': ' . $this->entityLabel($type, $row),
             $before,
-            $after
+            $after,
+            $validated['change_reason']
         );
 
         return $this->success(
@@ -204,53 +221,59 @@ class AdminMasterDataApiController extends BaseApiController
         );
     }
 
-    public function destroy(Request $request, string $type, int $id)
+    public function toggleStatus(Request $request, string $type, int $id)
     {
-        $this->ensureTypeAllowedForUser($request, $type, 'delete');
+        $this->ensureTypeAllowedForUser($request, $type, 'update');
 
         $row = $this->findRow($type, $id);
-        Gate::authorize('delete', $row);
+        Gate::authorize('update', $row);
         $row = $this->reloadRelations($type, $row);
         $before = $this->transformRow($type, $row);
         $entityLabel = $this->entityLabel($type, $row);
+        $validated = $this->validateChangeReason($request);
+        $nextStatus = ! (bool) $row->is_active;
 
-        try {
-            $row->delete();
-        } catch (QueryException $e) {
-            return $this->validationError([], 'This record is already used by another data and cannot be deleted.');
-        }
+        $row->update([
+            'is_active' => $nextStatus,
+        ]);
+
+        $row = $this->reloadRelations($type, $row->refresh());
+        $after = $this->transformRow($type, $row);
+        $action = $nextStatus ? 'activated' : 'deactivated';
+        $actionLabel = $nextStatus ? 'Activate' : 'Deactivate';
 
         AuditLogger::record(
             $request,
-            'deleted',
+            $action,
             $this->entityType($type),
-            $id,
+            $row->id,
             $entityLabel,
-            'Deleted ' . strtolower($this->label($type)) . ': ' . $entityLabel,
+            $actionLabel . ' ' . strtolower($this->label($type)) . ': ' . $entityLabel,
             $before,
-            null
+            $after,
+            $validated['change_reason']
         );
 
-        return $this->deletedResponse($this->label($type) . ' deleted successfully.');
+        return $this->success(
+            $after,
+            $this->label($type) . ' has been set to ' . ($nextStatus ? 'active' : 'inactive') . ' successfully.'
+        );
     }
 
 
     /**
-     * CS may only access Category and Issue Type master data.
-     * Admin/IT/Supervisor keep their existing visibility rules.
+     * Validates role-level access before resolving a master data type.
      */
     protected function ensureTypeAllowedForUser(Request $request, string $type, string $ability): void
     {
-        if (! $request->user()?->isCS()) {
-            return;
+        $user = $request->user();
+
+        if (! $user || $user->isCS()) {
+            abort(403, 'CS role does not have Master Data access.');
         }
 
-        if (! in_array($type, ['categories', 'issue-types'], true)) {
-            abort(403, 'CS can only access Category and Issue Type master data.');
-        }
-
-        if ($ability === 'delete') {
-            abort(403, 'CS can add and edit Category or Issue Type, but cannot delete master data.');
+        if ($ability !== 'view' && ! ($user->isAdmin() || $user->isHeadCS())) {
+            abort(403, 'This Master Data action is limited to Admin and Head CS.');
         }
     }
 
@@ -259,8 +282,8 @@ class AdminMasterDataApiController extends BaseApiController
      */
     protected function allowedTypesForUser(Request $request): array
     {
-        if ($request->user()?->isCS()) {
-            return ['categories', 'issue-types'];
+        if (! $request->user() || $request->user()?->isCS()) {
+            return [];
         }
 
         return ['categories', 'issue-types', 'teams', 'priorities', 'sla-rules'];
@@ -409,15 +432,39 @@ class AdminMasterDataApiController extends BaseApiController
         };
     }
 
+    protected function requiresGeneratedCode(string $type): bool
+    {
+        return in_array($type, ['categories', 'issue-types', 'teams', 'priorities'], true);
+    }
+
+    protected function ensureIssueTypeCodeAvailableForCategory(int $issueTypeId, int $categoryId): void
+    {
+        $issueType = IssueType::query()->find($issueTypeId);
+
+        if (!$issueType) {
+            return;
+        }
+
+        $exists = IssueType::query()
+            ->where('category_id', $categoryId)
+            ->where('code_num', $issueType->code_num)
+            ->whereKeyNot($issueTypeId)
+            ->exists();
+
+        if ($exists) {
+            throw ValidationException::withMessages([
+                'category_id' => [
+                    'This category already has an issue type using generated code ' . $issueType->code_num . '.',
+                ],
+            ]);
+        }
+    }
+
     protected function validatePayload(Request $request, string $type, ?int $id = null): array
     {
-        return match ($type) {
+        $validated = match ($type) {
             'categories' => $request->validate([
-                'code_num' => [
-                    'required',
-                    'digits:2',
-                    Rule::unique('categories', 'code_num')->ignore($id),
-                ],
+                'code_num' => ['prohibited'],
                 'name' => [
                     'required',
                     'string',
@@ -435,13 +482,7 @@ class AdminMasterDataApiController extends BaseApiController
 
             'issue-types' => $request->validate([
                 'category_id' => ['required', 'exists:categories,id'],
-                'code_num' => [
-                    'required',
-                    'digits:3',
-                    Rule::unique('issue_types', 'code_num')
-                        ->where(fn ($q) => $q->where('category_id', $request->input('category_id')))
-                        ->ignore($id),
-                ],
+                'code_num' => ['prohibited'],
                 'name' => [
                     'required',
                     'string',
@@ -460,11 +501,7 @@ class AdminMasterDataApiController extends BaseApiController
             ]),
 
             'teams' => $request->validate([
-                'code_num' => [
-                    'required',
-                    'digits:1',
-                    Rule::unique('teams', 'code_num')->ignore($id),
-                ],
+                'code_num' => ['prohibited'],
                 'name' => [
                     'required',
                     'string',
@@ -483,11 +520,7 @@ class AdminMasterDataApiController extends BaseApiController
             ]),
 
             'priorities' => $request->validate([
-                'code_num' => [
-                    'required',
-                    'digits:1',
-                    Rule::unique('priorities', 'code_num')->ignore($id),
-                ],
+                'code_num' => ['prohibited'],
                 'name' => [
                     'required',
                     'string',
@@ -521,7 +554,27 @@ class AdminMasterDataApiController extends BaseApiController
 
             default => abort(404),
         };
+
+        if ($type === 'issue-types' && $id !== null) {
+            $this->ensureIssueTypeCodeAvailableForCategory($id, (int) $validated['category_id']);
+        }
+
+        $validated['change_reason'] = $this->validateChangeReason($request)['change_reason'];
+
+        return $validated;
     }
+
+    protected function validateChangeReason(Request $request): array
+    {
+        $validated = $request->validate([
+            'change_reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        return [
+            'change_reason' => trim((string) $validated['change_reason']),
+        ];
+    }
+
 
     protected function findRow(string $type, int $id)
     {
@@ -607,10 +660,16 @@ class AdminMasterDataApiController extends BaseApiController
 
     protected function options(Request $request): array
     {
-        $isCs = (bool) $request->user()?->isCS();
+        $user = $request->user();
+        $canManage = (bool) ($user?->isAdmin() || $user?->isHeadCS());
 
         return [
             'allowed_types' => $this->allowedTypesForUser($request),
+            'permissions' => [
+                'can_create' => $canManage,
+                'can_update' => $canManage,
+                'can_toggle_status' => $canManage,
+            ],
             'categories' => Category::query()
                 ->where('is_active', true)
                 ->orderBy('code_num')
@@ -622,9 +681,7 @@ class AdminMasterDataApiController extends BaseApiController
                 ])
                 ->values(),
 
-            'teams' => $isCs
-                ? collect()
-                : Team::query()
+            'teams' => Team::query()
                     ->where('is_active', true)
                     ->orderBy('code_num')
                     ->get(['id', 'code_num', 'name'])
@@ -635,9 +692,7 @@ class AdminMasterDataApiController extends BaseApiController
                     ])
                     ->values(),
 
-            'priorities' => $isCs
-                ? collect()
-                : Priority::query()
+            'priorities' => Priority::query()
                     ->where('is_active', true)
                     ->orderBy('sort_order')
                     ->orderBy('code_num')
@@ -654,9 +709,12 @@ class AdminMasterDataApiController extends BaseApiController
     protected function entityType(string $type): string
     {
         return match ($type) {
+            'categories' => 'category',
             'issue-types' => 'issue_type',
+            'teams' => 'team',
+            'priorities' => 'priority',
             'sla-rules' => 'sla_rule',
-            default => rtrim(str_replace('-', '_', $type), 's'),
+            default => abort(404),
         };
     }
 
@@ -677,11 +735,6 @@ class AdminMasterDataApiController extends BaseApiController
             ->replaceMatches('/_+/', '_')
             ->trim('_')
             ->toString();
-    }
-
-    protected function prepareNumericCode(string $value, int $length): string
-    {
-        return str_pad(preg_replace('/\D/', '', trim($value)), $length, '0', STR_PAD_LEFT);
     }
 
     protected function prepareSlug(string $value): string

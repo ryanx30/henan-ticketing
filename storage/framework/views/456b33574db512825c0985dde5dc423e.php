@@ -6,6 +6,7 @@
 
     $user = auth()->user();
     $role = $user?->role;
+    $roleLabel = NavigationMenu::roleLabel($role);
     $visibleMenuGroups = NavigationMenu::groupsForUser($user);
 
     $menuClasses = function (bool $active): string {
@@ -146,13 +147,13 @@
             <div>
                 Logged in as:
                 <span><?php echo e($user?->name ?? '-'); ?></span>
-                (<span><?php echo e(strtoupper($role ?? '-')); ?></span>)
+                (<span><?php echo e($roleLabel ?: '-'); ?></span>)
             </div>
         </template>
 
         <template x-if="collapsed">
-            <div class="text-center" title="<?php echo e($user?->name ? $user->name . ' (' . strtoupper($role ?? '-') . ')' : ''); ?>">
-                <span><?php echo e(strtoupper($role ?? '-')); ?></span>
+            <div class="text-center" title="<?php echo e($user?->name ? $user->name . ' (' . ($roleLabel ?: '-') . ')' : ''); ?>">
+                <span><?php echo e($roleLabel ?: '-'); ?></span>
             </div>
         </template>
     </div>

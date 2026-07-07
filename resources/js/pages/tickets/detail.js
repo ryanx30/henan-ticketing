@@ -131,7 +131,7 @@ function ticketDetailPage({
                             return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
                         });
 
-                        this.statusForm.status = this.ticket.status || '';
+                        this.statusForm.status = '';
                         this.syncAutoMessageRecipient();
                         this.syncEscalationTarget();
                     },
@@ -386,7 +386,7 @@ function ticketDetailPage({
                             return this.ticket.creator || null;
                         }
 
-                        if (role === 'cs') {
+                        if (role === 'cs' || role === 'head_cs') {
                             return this.ticket.holder || null;
                         }
 
@@ -520,12 +520,24 @@ function ticketDetailPage({
                         return !!item && !item.is_read && Number(item.to_user_id) === Number(this.currentUserId);
                     },
 
+                    statusOptions() {
+                        return Array.isArray(this.ticket?.status_options)
+                            ? this.ticket.status_options
+                            : [];
+                    },
+
+                    hasStatusOptions() {
+                        return this.statusOptions().length > 0;
+                    },
+
                     canManageStatus() {
                         return Boolean(this.actions().can_update_status);
                     },
 
                     canClaimTicket() {
-                        return Boolean(this.actions().can_claim);
+                        return Boolean(this.actions().can_claim)
+                            && !Number(this.ticket?.holder_id || 0)
+                            && !this.ticket?.holder;
                     },
 
                     canEscalateTicket() {

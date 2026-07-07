@@ -32,14 +32,16 @@
                                     <label class="mb-2 block text-sm font-medium text-slate-500">Change Status</label>
                                     <select
                                         x-model="statusForm.status"
-                                        class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-[#2f88d8] focus:outline-none focus:ring-2 focus:ring-[#2f88d8]/20">
-                                        <option value="">Select status</option>
-                                        <option value="new">New</option>
-                                        <option value="in_progress">Ongoing</option>
-                                        <option value="waiting_info">Waiting</option>
-                                        <option value="resolved">Resolved</option>
-                                        <option value="closed">Closed</option>
+                                        :disabled="!hasStatusOptions()"
+                                        class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-[#2f88d8] focus:outline-none focus:ring-2 focus:ring-[#2f88d8]/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500">
+                                        <option value="" x-text="hasStatusOptions() ? 'Select status' : 'No status change available'"></option>
+                                        <template x-for="option in statusOptions()" :key="option.value">
+                                            <option :value="option.value" x-text="option.label"></option>
+                                        </template>
                                     </select>
+                                    <p x-show="!hasStatusOptions()" class="mt-2 text-xs text-slate-500">
+                                        This ticket has no valid next status.
+                                    </p>
                                 </div>
                             </template>
 
@@ -58,7 +60,7 @@
                                 <button
                                     type="button"
                                     @click="submitStatusChange()"
-                                    :disabled="statusSubmitting || !statusForm.status"
+                                    :disabled="statusSubmitting || !statusForm.status || !hasStatusOptions()"
                                     class="inline-flex w-full items-center justify-center rounded-md bg-[#2f88d8] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#2676bb] disabled:cursor-not-allowed disabled:opacity-60">
                                     <span x-text="statusSubmitting ? 'Updating...' : 'Update Status'"></span>
                                 </button>

@@ -330,7 +330,7 @@ class DashboardPayloadService
 
     private function scopeActiveTicketsForDashboard(Builder $query, User $user): void
     {
-        if ($user->isAdmin() || $user->isSupervisor() || $user->isCS()) {
+        if ($user->isAdmin() || $user->isSupervisor() || $user->isHeadCS() || $user->isCS()) {
             return;
         }
 
@@ -345,7 +345,7 @@ class DashboardPayloadService
 
     private function scopeResolverInboxForDashboard(Builder $query, User $user): void
     {
-        if ($user->isAdmin() || $user->isSupervisor()) {
+        if ($user->isAdmin() || $user->isSupervisor() || $user->isHeadCS()) {
             return;
         }
 

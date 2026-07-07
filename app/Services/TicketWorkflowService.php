@@ -188,9 +188,15 @@ class TicketWorkflowService
             ]);
         }
 
-        if ($ticket->holder_id !== null && (int) $ticket->holder_id !== (int) $actor->id) {
+        if ($this->normalizeStatus((string) $ticket->status) !== self::STATUS_NEW) {
             throw ValidationException::withMessages([
-                'ticket' => 'Ticket already claimed by another resolver.',
+                'ticket' => 'Only New tickets can be claimed.',
+            ]);
+        }
+
+        if ($ticket->holder_id !== null) {
+            throw ValidationException::withMessages([
+                'ticket' => 'Ticket already claimed.',
             ]);
         }
 
@@ -202,16 +208,22 @@ class TicketWorkflowService
             array_merge($context, [
                 'action'      => $context['action'] ?? 'claimed',
                 'description' => $context['description'] ?? 'Claimed ticket ' . AuditLogger::ticketLabel($ticket),
-                'guard'       => function (Ticket $freshTicket) use ($actor): void {
+                'guard'       => function (Ticket $freshTicket): void {
                     if (!$freshTicket->isTeamCode('it')) {
                         throw ValidationException::withMessages([
                             'ticket' => 'Only IT tickets can be claimed.',
                         ]);
                     }
 
-                    if ($freshTicket->holder_id !== null && (int) $freshTicket->holder_id !== (int) $actor->id) {
+                    if ($this->normalizeStatus((string) $freshTicket->status) !== self::STATUS_NEW) {
                         throw ValidationException::withMessages([
-                            'ticket' => 'Ticket already claimed by another resolver.',
+                            'ticket' => 'Only New tickets can be claimed.',
+                        ]);
+                    }
+
+                    if ($freshTicket->holder_id !== null) {
+                        throw ValidationException::withMessages([
+                            'ticket' => 'Ticket already claimed.',
                         ]);
                     }
                 },

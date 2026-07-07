@@ -17,18 +17,22 @@ class User extends Authenticatable
 
     public const ROLE_ADMIN = 'admin';
     public const ROLE_CS = 'cs';
+    public const ROLE_HEAD_CS = 'head_cs';
     public const ROLE_IT = 'it';
     public const ROLE_SUPERVISOR = 'supervisor';
 
     public const ROLES = [
         self::ROLE_ADMIN,
         self::ROLE_CS,
+        self::ROLE_HEAD_CS,
         self::ROLE_IT,
         self::ROLE_SUPERVISOR,
     ];
 
     public function isAdmin(): bool { return $this->role === self::ROLE_ADMIN; }
     public function isCS(): bool { return $this->role === self::ROLE_CS; }
+    public function isHeadCS(): bool { return $this->role === self::ROLE_HEAD_CS; }
+    public function isCsStaffOrHead(): bool { return in_array($this->role, [self::ROLE_CS, self::ROLE_HEAD_CS], true); }
     public function isIT(): bool { return $this->role === self::ROLE_IT; }
     public function isSupervisor(): bool { return $this->role === self::ROLE_SUPERVISOR; }
 

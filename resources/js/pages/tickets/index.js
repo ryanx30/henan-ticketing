@@ -180,6 +180,18 @@ function ticketsIndexPage(config = {}) {
             window.location.href = `/tickets/${ticketId}`;
         },
 
+        canEditTicket(ticket) {
+            return Boolean(ticket?.can_edit);
+        },
+
+        editDisabledTitle(ticket) {
+            if (ticket?.status !== 'new') {
+                return 'Tickets can only be edited while status is New.';
+            }
+
+            return 'You do not have permission to edit this ticket.';
+        },
+
         sort(column) {
             if (this.filters.sort_by === column) {
                 this.filters.sort_dir = this.filters.sort_dir === 'asc' ? 'desc' : 'asc';

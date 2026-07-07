@@ -38,7 +38,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     });
 
     // Ticket detail page for CS / IT / Admin / Supervisor
-    Route::middleware('role:cs,it,admin,supervisor')->group(function () {
+    Route::middleware('role:cs,head_cs,it,admin,supervisor')->group(function () {
         Route::get('/tickets/{ticket}', [TicketPageController::class, 'show'])->name('tickets.show');
     });
 
@@ -72,7 +72,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/it/my-queue', [ITQueuePageController::class, 'myQueue'])->name('it.my-queue');
     });
 
-    // System Control - Master Data is visible for Admin, Supervisor, and IT.
+    // System Control - Master Data is visible for Admin, Head CS, Supervisor, and IT.
     Route::middleware([NavigationMenu::roleMiddlewareFor('master-data')])->prefix('admin')->name('admin.')->group(function () {
         Route::get('/master-data', [MasterDataPageController::class, 'index'])->name('master-data.index');
     });

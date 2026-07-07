@@ -1,6 +1,6 @@
 /**
  * Admin audit log page controller.
- * Loads audit log entries, filters, pagination, and export actions.
+ * Loads grouped audit log entries, filters, summary cards, pagination, and export actions.
  */
 
 import { apiGet, buildQueryString } from '../../utils/apiClient';
@@ -16,14 +16,38 @@ function auditLogsPage() {
         selectedLog: null,
         rows: [],
         summary: {},
+        tabs: [
+            {
+                value: 'ticket',
+                label: 'Ticket',
+                description: 'Ticket creation, claim, status, routing, and lifecycle activity.',
+            },
+            {
+                value: 'user',
+                label: 'User',
+                description: 'User account creation, update, activation, and deactivation activity.',
+            },
+            {
+                value: 'resolver_inbox',
+                label: 'Resolver Inbox',
+                description: 'Resolver conversation messages, reads, replies, and attachments.',
+            },
+            {
+                value: 'master_data',
+                label: 'Master Data',
+                description: 'Category, issue type, team, priority, and SLA rule changes.',
+            },
+        ],
         options: {
             actions: [],
-            entities: [],
+            master_data_entities: [],
+            tabs: [],
         },
         filters: {
             q: '',
             action: 'all',
-            entity: 'all',
+            entity_group: 'ticket',
+            entity_type: 'all',
             date_range: '30d',
             date_from: '',
             date_to: '',
@@ -54,11 +78,28 @@ function auditLogsPage() {
                 this.meta = json.data?.meta || this.meta;
                 this.summary = json.data?.summary || {};
                 this.options = json.data?.options || this.options;
+
+                if (this.options.tabs?.length) {
+                    this.tabs = this.options.tabs;
+                }
             } catch (error) {
                 this.showAlert(error.message || 'Failed to load audit logs.', 'error');
             } finally {
                 this.loading = false;
             }
+        },
+
+        setEntityGroup(value) {
+            if (this.filters.entity_group === value) {
+                return;
+            }
+
+            this.filters.entity_group = value;
+            this.filters.action = 'all';
+            this.filters.entity_type = 'all';
+            this.filters.page = 1;
+            this.exportOpen = false;
+            this.fetchLogs();
         },
 
         applyFilters() {
@@ -90,12 +131,14 @@ function auditLogsPage() {
         },
 
         resetFilters() {
+            const entityGroup = this.filters.entity_group;
             this.exportOpen = false;
 
             this.filters = {
                 q: '',
                 action: 'all',
-                entity: 'all',
+                entity_group: entityGroup,
+                entity_type: 'all',
                 date_range: '30d',
                 date_from: '',
                 date_to: '',
@@ -150,6 +193,39 @@ function auditLogsPage() {
             return pages;
         },
 
+        activeTab() {
+            return this.tabs.find(tab => tab.value === this.filters.entity_group) || this.tabs[0] || {};
+        },
+
+        activeTabLabel() {
+            return this.activeTab().label || 'Audit';
+        },
+
+        activeTabDescription() {
+            return this.activeTab().description || '';
+        },
+
+        isMasterDataTab() {
+            return this.filters.entity_group === 'master_data';
+        },
+
+
+        searchPlaceholder() {
+            return this.isMasterDataTab()
+                ? 'Search actor, action, IP, reason, or description...'
+                : 'Search actor, action, ticket, IP, or description...';
+        },
+
+        masterDataEntities() {
+            return this.options.master_data_entities || [];
+        },
+
+        tabButtonClass(value) {
+            return this.filters.entity_group === value
+                ? 'bg-[#051823] text-white shadow-sm'
+                : 'bg-slate-50 text-slate-600 hover:bg-slate-100';
+        },
+
         openDetail(row) {
             this.selectedLog = row;
             this.detailOpen = true;
@@ -183,12 +259,15 @@ function auditLogsPage() {
         actionBadgeClass(action) {
             const classes = {
                 created: 'bg-green-100 text-green-700',
+                created_status: 'bg-green-100 text-green-700',
                 updated: 'bg-blue-100 text-blue-700',
                 deleted: 'bg-red-100 text-red-700',
                 deactivated: 'bg-red-100 text-red-700',
                 activated: 'bg-green-100 text-green-700',
+                reactivated: 'bg-green-100 text-green-700',
                 status_changed: 'bg-yellow-100 text-yellow-800',
                 claimed: 'bg-purple-100 text-purple-700',
+                holder_transferred: 'bg-indigo-100 text-indigo-700',
                 sent: 'bg-cyan-100 text-cyan-700',
                 read: 'bg-slate-200 text-slate-700',
             };

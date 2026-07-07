@@ -12,7 +12,7 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // 1) Admin utama dan Master Data source of truth
+        // 1) Admin utama dan Master Data
         $this->call([
             AdminUserSeeder::class,
             MasterDataSeeder::class,

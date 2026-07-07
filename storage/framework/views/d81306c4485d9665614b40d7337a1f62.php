@@ -1,5 +1,5 @@
-{{-- ========= TICKET INDEX TABLE ========= --}}
-{{-- Table markup; data formatting and API response handling live in JavaScript helpers. --}}
+
+
 
 <div class="overflow-hidden rounded-lg border border-slate-300 shadow-[0_4px_12px_rgba(15,23,42,0.08)]">
     <div class="bg-[#051823] px-5 py-3">
@@ -137,3 +137,4 @@
         </table>
     </div>
 </div>
+<?php /**PATH C:\laragon\www\henan-ticketing\resources\views/tickets/partials/index-table.blade.php ENDPATH**/ ?>

@@ -6,6 +6,7 @@
 
     $user = auth()->user();
     $role = $user?->role;
+    $roleLabel = NavigationMenu::roleLabel($role);
     $visibleMenuGroups = NavigationMenu::groupsForUser($user);
 
     $menuClasses = function (bool $active): string {
@@ -145,13 +146,13 @@
             <div>
                 Logged in as:
                 <span>{{ $user?->name ?? '-' }}</span>
-                (<span>{{ strtoupper($role ?? '-') }}</span>)
+                (<span>{{ $roleLabel ?: '-' }}</span>)
             </div>
         </template>
 
         <template x-if="collapsed">
-            <div class="text-center" title="{{ $user?->name ? $user->name . ' (' . strtoupper($role ?? '-') . ')' : '' }}">
-                <span>{{ strtoupper($role ?? '-') }}</span>
+            <div class="text-center" title="{{ $user?->name ? $user->name . ' (' . ($roleLabel ?: '-') . ')' : '' }}">
+                <span>{{ $roleLabel ?: '-' }}</span>
             </div>
         </template>
     </div>
