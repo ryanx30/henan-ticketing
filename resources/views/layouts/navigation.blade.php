@@ -2,18 +2,19 @@
 {{-- Shared top navigation with role-aware menu links and profile/logout actions. --}}
 
 @php
-    use App\Services\Notifications\NotificationPayloadService;
-    use App\Support\NavigationMenu;
+use App\Services\Notifications\NotificationPayloadService;
+use App\Support\NavigationMenu;
 
-    $user = auth()->user();
-    $role = $user?->role;
-    $roleLabel = NavigationMenu::roleLabel($role);
-    $notificationPayload = $user
-        ? app(NotificationPayloadService::class)->payloadFor($user)
-        : ['count' => 0, 'latest' => []];
-    $notificationCount = (int) ($notificationPayload['count'] ?? 0);
-    $latestNotifications = $notificationPayload['latest'] ?? [];
-    $mobileMenus = NavigationMenu::flatForUser($user);
+$user = auth()->user();
+$role = $user?->role;
+$roleLabel = NavigationMenu::roleLabel($role);
+$notificationPayload = $user
+? app(NotificationPayloadService::class)->payloadFor($user)
+: ['count' => 0, 'latest' => []];
+$notificationCount = (int) ($notificationPayload['unread_count'] ?? $notificationPayload['count'] ?? 0);
+$notificationActionCount = (int) ($notificationPayload['action_count'] ?? 0);
+$latestNotifications = $notificationPayload['latest'] ?? [];
+$mobileMenus = NavigationMenu::flatForUser($user);
 @endphp
 
 <nav x-data="{ open: false, dropdownOpen: false, notificationOpen: false }" class="shrink-0 bg-white border-b border-gray-200 z-40">
@@ -29,9 +30,10 @@
             </div>
 
             <div class="hidden sm:flex sm:items-center gap-5">
-                <div class="relative">
+                <div class="relative" data-notification-root data-initial-unread="{{ $notificationCount }}" data-initial-actions="{{ $notificationActionCount }}">
                     <button
                         type="button"
+                        data-notification-toggle
                         @click="notificationOpen = !notificationOpen; dropdownOpen = false"
                         class="relative text-slate-500 hover:text-slate-700 focus:outline-none"
                         aria-label="Open notifications">
@@ -41,6 +43,11 @@
                             <path stroke-linecap="round" stroke-linejoin="round"
                                 d="M9 17a3 3 0 0 0 6 0" />
                         </svg>
+
+                        <span
+                            data-notification-action-indicator
+                            class="{{ $notificationActionCount > 0 && $notificationCount === 0 ? '' : 'hidden' }} absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-white">
+                        </span>
 
                         <span
                             data-notification-count
@@ -56,67 +63,96 @@
                         x-transition
                         class="absolute right-0 mt-3 w-96 max-w-[calc(100vw-2rem)] rounded-2xl bg-white shadow-xl border border-slate-200 z-50 overflow-hidden"
                         style="display: none;">
-                        <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                            <div>
-                                <div class="text-sm font-semibold text-slate-900">Notifications</div>
-                                <div class="text-xs text-slate-500">Latest actionable updates</div>
+                        <div class="flex items-start justify-between gap-3 px-4 py-3 border-b border-slate-100">
+                            <div class="min-w-0">
+                                <div class="text-sm font-semibold text-slate-900">
+                                    Notifications
+                                </div>
+
+                                <button
+                                    type="button"
+                                    data-notification-read-all
+                                    class="{{ $notificationCount > 0 ? '' : 'hidden' }} mt-1 text-[11px] font-semibold text-blue-700 hover:text-blue-800 disabled:opacity-50 whitespace-nowrap">
+                                    Mark all read
+                                </button>
                             </div>
+
                             <span
                                 data-notification-summary
-                                class="text-[11px] font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-600">
-                                {{ $notificationCount }} active
+                                class="shrink-0 text-[11px] font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-600 whitespace-nowrap">
+                                {{ $notificationCount }} unread · {{ $notificationActionCount }} need action
                             </span>
                         </div>
 
                         <div data-notification-list class="max-h-[420px] overflow-y-auto">
-                            @forelse ($latestNotifications as $notification)
-                                @php
-                                    $notificationAccentClass = match ($notification['type'] ?? null) {
-                                        'sla_breached' => 'bg-red-600',
-                                        'sla_warning' => 'bg-amber-500',
-                                        'waiting_info' => 'bg-violet-600',
-                                        'ticket_reopened' => 'bg-teal-700',
-                                        'team_queue' => 'bg-green-600',
-                                        'ticket_status' => 'bg-sky-600',
-                                        default => 'bg-blue-600',
-                                    };
-                                @endphp
-                                <a
-                                    href="{{ $notification['url'] }}"
-                                    class="group block px-4 py-3 border-b border-slate-100 hover:bg-blue-50/70 transition">
-                                    <div class="flex gap-3">
-                                        <span class="mt-1 h-2.5 w-2.5 rounded-full shrink-0 {{ $notificationAccentClass }}"></span>
-                                        <div class="min-w-0 flex-1">
-                                            <div class="flex items-start justify-between gap-3">
-                                                <div class="min-w-0">
-                                                    <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                                        {{ $notification['label'] }}
+                            <div data-server-notifications>
+                                @foreach ($latestNotifications as $notification)
+                                <div
+                                    data-notification-item
+                                    data-notification-key="{{ $notification['key'] }}"
+                                    class="relative border-b border-slate-100 {{ ($notification['is_unread'] ?? false) ? 'bg-blue-50/50' : 'bg-white' }}">
+                                    <a
+                                        href="{{ $notification['url'] }}"
+                                        data-notification-link
+                                        data-notification-key="{{ $notification['key'] }}"
+                                        data-notification-unread="{{ ($notification['is_unread'] ?? false) ? '1' : '0' }}"
+                                        class="group block px-4 py-3 {{ ($notification['can_dismiss'] ?? false) ? 'pr-10' : '' }} hover:bg-blue-50/70 transition">
+                                        <div class="flex gap-3">
+                                            <span
+                                                class="mt-1 h-2.5 w-2.5 rounded-full shrink-0"
+                                                @style([ 'background-color: ' . ($notification['accent'] ?? '#64748b' ),
+                                                ])>
+                                            </span>
+                                            <div class="min-w-0 flex-1">
+                                                <div class="flex items-start justify-between gap-3">
+                                                    <div class="min-w-0">
+                                                        <div class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                                            <span>{{ $notification['label'] }}</span>
+                                                            @if ($notification['requires_action'] ?? false)
+                                                            <span class="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] text-amber-700">Need action</span>
+                                                            @endif
+                                                        </div>
+                                                        <div class="text-sm font-semibold text-slate-800 truncate group-hover:text-blue-700">
+                                                            {{ $notification['title'] }}
+                                                        </div>
                                                     </div>
-                                                    <div class="text-sm font-semibold text-slate-800 truncate group-hover:text-blue-700">
-                                                        {{ $notification['title'] }}
+                                                    <div class="shrink-0 text-[11px] text-slate-400 whitespace-nowrap">
+                                                        {{ $notification['time'] }}
                                                     </div>
                                                 </div>
-                                                <div class="shrink-0 text-[11px] text-slate-400 whitespace-nowrap">
-                                                    {{ $notification['time'] }}
+                                                <p class="mt-1 text-xs text-slate-600 line-clamp-2">
+                                                    {{ $notification['description'] }}
+                                                </p>
+                                                <div class="mt-1 text-[11px] font-medium text-slate-400 truncate">
+                                                    {{ $notification['meta'] }}
                                                 </div>
-                                            </div>
-                                            <p class="mt-1 text-xs text-slate-600 line-clamp-2">
-                                                {{ $notification['description'] }}
-                                            </p>
-                                            <div class="mt-1 text-[11px] font-medium text-slate-400 truncate">
-                                                {{ $notification['meta'] }}
                                             </div>
                                         </div>
-                                    </div>
-                                </a>
-                            @empty
-                                <div data-notification-empty class="px-4 py-8 text-center">
-                                    <div class="text-sm font-medium text-slate-700">No active notifications</div>
-                                    <div class="mt-1 text-xs text-slate-500">You're all caught up for now.</div>
+                                    </a>
+
+                                    @if ($notification['can_dismiss'] ?? false)
+                                    <button
+                                        type="button"
+                                        data-notification-dismiss="{{ $notification['key'] }}"
+                                        class="absolute right-3 top-3 rounded p-1 text-slate-300 hover:bg-slate-100 hover:text-slate-600"
+                                        aria-label="Dismiss notification">
+                                        <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M4.293 4.293a1 1 0 0 1 1.414 0L10 8.586l4.293-4.293a1 1 0 1 1 1.414 1.414L11.414 10l4.293 4.293a1 1 0 0 1-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 0 1-1.414-1.414L8.586 10 4.293 5.707a1 1 0 0 1 0-1.414Z" />
+                                        </svg>
+                                    </button>
+                                    @endif
                                 </div>
-                            @endforelse
+                                @endforeach
+                            </div>
 
                             <div data-export-notifications></div>
+
+                            <div
+                                data-notification-empty
+                                class="{{ count($latestNotifications) > 0 ? 'hidden' : '' }} px-4 py-8 text-center">
+                                <div class="text-sm font-medium text-slate-700">No active notifications</div>
+                                <div class="mt-1 text-xs text-slate-500">You're all caught up for now.</div>
+                            </div>
                         </div>
 
                         <div class="grid grid-cols-2 divide-x divide-slate-100 border-t border-slate-100 bg-slate-50">
@@ -183,12 +219,12 @@
     <div :class="{'block': open, 'hidden': !open}" class="hidden sm:hidden border-t border-gray-200">
         <div class="pt-2 pb-3 space-y-1 px-4">
             @foreach ($mobileMenus as $menu)
-                <a
-                    href="{{ $menu['href'] }}"
-                    class="block px-3 py-2 rounded-md text-sm {{ $menu['active'] ? 'bg-slate-100 text-slate-900 font-medium' : 'text-slate-700 hover:bg-slate-50' }}"
-                    @if ($menu['active']) aria-current="page" @endif>
-                    {{ $menu['label'] }}
-                </a>
+            <a
+                href="{{ $menu['href'] }}"
+                class="block px-3 py-2 rounded-md text-sm {{ $menu['active'] ? 'bg-slate-100 text-slate-900 font-medium' : 'text-slate-700 hover:bg-slate-50' }}"
+                @if ($menu['active']) aria-current="page" @endif>
+                {{ $menu['label'] }}
+            </a>
             @endforeach
         </div>
 

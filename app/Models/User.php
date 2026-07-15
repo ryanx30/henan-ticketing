@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -35,6 +36,11 @@ class User extends Authenticatable
     public function isCsStaffOrHead(): bool { return in_array($this->role, [self::ROLE_CS, self::ROLE_HEAD_CS], true); }
     public function isIT(): bool { return $this->role === self::ROLE_IT; }
     public function isSupervisor(): bool { return $this->role === self::ROLE_SUPERVISOR; }
+
+    public function notificationStates(): HasMany
+    {
+        return $this->hasMany(NotificationState::class);
+    }
 
     /**
      * The attributes that are mass assignable.

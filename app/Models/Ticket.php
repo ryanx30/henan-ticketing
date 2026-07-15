@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Cache;
 
@@ -244,6 +245,11 @@ class Ticket extends Model
     public function statusHistories(): HasMany
     {
         return $this->hasMany(TicketStatusHistory::class)->orderBy('changed_at');
+    }
+
+    public function latestStatusHistory(): HasOne
+    {
+        return $this->hasOne(TicketStatusHistory::class)->latestOfMany('changed_at');
     }
 
     public function resolverMessages(): HasMany

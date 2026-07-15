@@ -1,19 +1,31 @@
 /**
- * Adds client-side export-ready notifications to the navbar notification dropdown.
+ * Keeps navbar notifications fresh, preserves per-user read state through the
+ * internal API, and retains queued-export notifications in the current browser.
  */
 
-const STORAGE_KEY = 'henan_export_notifications_v1';
+import { apiGet, apiPost } from '../../utils/apiClient';
+
+const EXPORT_STORAGE_KEY = 'henan_export_notifications_v1';
 const MAX_EXPORT_NOTIFICATIONS = 5;
-const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_EXPORT_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const REFRESH_INTERVAL_MS = 60 * 1000;
+
+let serverPayload = {
+    unread_count: 0,
+    action_count: 0,
+    total_count: 0,
+    latest: [],
+};
+let refreshPromise = null;
 
 function readExportNotifications() {
     try {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
+        const raw = window.localStorage.getItem(EXPORT_STORAGE_KEY);
         const items = raw ? JSON.parse(raw) : [];
         const now = Date.now();
 
         return Array.isArray(items)
-            ? items.filter((item) => item && item.id && (now - Date.parse(item.created_at || now)) < MAX_AGE_MS)
+            ? items.filter((item) => item && item.id && (now - Date.parse(item.created_at || now)) < MAX_EXPORT_AGE_MS)
             : [];
     } catch (error) {
         return [];
@@ -21,10 +33,14 @@ function readExportNotifications() {
 }
 
 function writeExportNotifications(items) {
-    window.localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(items.slice(0, MAX_EXPORT_NOTIFICATIONS))
-    );
+    try {
+        window.localStorage.setItem(
+            EXPORT_STORAGE_KEY,
+            JSON.stringify(items.slice(0, MAX_EXPORT_NOTIFICATIONS))
+        );
+    } catch (error) {
+        // Local export notifications are optional. Server notifications still work.
+    }
 }
 
 function addExportNotification(payload) {
@@ -90,6 +106,75 @@ function escapeHtml(value) {
         .replace(/'/g, '&#039;');
 }
 
+function safeAccent(value) {
+    return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : '#2563eb';
+}
+
+function notificationMarkup(item) {
+    const key = escapeHtml(item.key);
+    const href = escapeHtml(item.url || '#');
+    const unreadClass = item.is_unread ? 'bg-blue-50/50' : 'bg-white';
+    const dismissPadding = item.can_dismiss ? 'pr-10' : '';
+    const actionBadge = item.requires_action
+        ? '<span class="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] text-amber-700">Need action</span>'
+        : '';
+    const dismissButton = item.can_dismiss
+        ? `
+            <button
+                type="button"
+                data-notification-dismiss="${key}"
+                class="absolute right-3 top-3 rounded p-1 text-slate-300 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Dismiss notification">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M4.293 4.293a1 1 0 0 1 1.414 0L10 8.586l4.293-4.293a1 1 0 1 1 1.414 1.414L11.414 10l4.293 4.293a1 1 0 0 1-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 0 1-1.414-1.414L8.586 10 4.293 5.707a1 1 0 0 1 0-1.414Z" />
+                </svg>
+            </button>`
+        : '';
+
+    return `
+        <div
+            data-notification-item
+            data-notification-key="${key}"
+            class="relative border-b border-slate-100 ${unreadClass}">
+            <a
+                href="${href}"
+                data-notification-link
+                data-notification-key="${key}"
+                data-notification-unread="${item.is_unread ? '1' : '0'}"
+                class="group block px-4 py-3 ${dismissPadding} hover:bg-blue-50/70 transition">
+                <div class="flex gap-3">
+                    <span
+                        class="mt-1 h-2.5 w-2.5 rounded-full shrink-0"
+                        style="background-color:${safeAccent(item.accent)};">
+                    </span>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                    <span>${escapeHtml(item.label)}</span>
+                                    ${actionBadge}
+                                </div>
+                                <div class="text-sm font-semibold text-slate-800 truncate group-hover:text-blue-700">
+                                    ${escapeHtml(item.title)}
+                                </div>
+                            </div>
+                            <div class="shrink-0 text-[11px] text-slate-400 whitespace-nowrap">
+                                ${escapeHtml(item.time)}
+                            </div>
+                        </div>
+                        <p class="mt-1 text-xs text-slate-600 line-clamp-2">
+                            ${escapeHtml(item.description)}
+                        </p>
+                        <div class="mt-1 text-[11px] font-medium text-slate-400 truncate">
+                            ${escapeHtml(item.meta)}
+                        </div>
+                    </div>
+                </div>
+            </a>
+            ${dismissButton}
+        </div>`;
+}
+
 function exportNotificationMarkup(item) {
     const href = escapeHtml(item.url || '#');
 
@@ -97,48 +182,38 @@ function exportNotificationMarkup(item) {
         <a
             href="${href}"
             data-export-notification-id="${escapeHtml(item.id)}"
-            style="display:block;padding:12px 16px;border-bottom:1px solid #f1f5f9;text-decoration:none;transition:background-color .15s ease;"
-            onmouseover="this.style.backgroundColor='#eff6ff'"
-            onmouseout="this.style.backgroundColor='transparent'">
-            <div style="display:flex;gap:12px;">
-                <span style="width:10px;height:10px;border-radius:9999px;background:#16a34a;flex-shrink:0;margin-top:4px;"></span>
-                <div style="min-width:0;flex:1;">
-                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
-                        <div style="min-width:0;">
-                            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#94a3b8;">${escapeHtml(item.label)}</div>
-                            <div style="font-size:14px;font-weight:700;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.title)}</div>
+            class="group block border-b border-slate-100 bg-emerald-50/40 px-4 py-3 hover:bg-emerald-50 transition">
+            <div class="flex gap-3">
+                <span class="mt-1 h-2.5 w-2.5 rounded-full shrink-0 bg-emerald-600"></span>
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">${escapeHtml(item.label)}</div>
+                            <div class="text-sm font-semibold text-slate-800 truncate group-hover:text-emerald-700">${escapeHtml(item.title)}</div>
                         </div>
-                        <div style="font-size:11px;color:#94a3b8;white-space:nowrap;">${escapeHtml(formatTime(item.created_at))}</div>
+                        <div class="shrink-0 text-[11px] text-slate-400 whitespace-nowrap">${escapeHtml(formatTime(item.created_at))}</div>
                     </div>
-                    <p style="margin:4px 0 0 0;font-size:12px;color:#475569;line-height:1.35;">${escapeHtml(item.description)}</p>
-                    <div style="margin-top:4px;font-size:11px;font-weight:600;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.meta)}</div>
+                    <p class="mt-1 text-xs text-slate-600 line-clamp-2">${escapeHtml(item.description)}</p>
+                    <div class="mt-1 text-[11px] font-medium text-slate-400 truncate">${escapeHtml(item.meta)}</div>
                 </div>
             </div>
         </a>`;
 }
 
-function updateNotificationCount(exportCount) {
-    const badge = document.querySelector('[data-notification-count]');
-    const summary = document.querySelector('[data-notification-summary]');
+function renderServerNotifications() {
+    const container = document.querySelector('[data-server-notifications]');
 
-    if (!badge) {
+    if (!container) {
         return;
     }
 
-    const baseCount = Number.parseInt(badge.dataset.baseCount || '0', 10) || 0;
-    const total = baseCount + exportCount;
-
-    badge.textContent = total > 99 ? '99+' : String(total);
-    badge.classList.toggle('hidden', total <= 0);
-
-    if (summary) {
-        summary.textContent = `${total} active`;
-    }
+    container.innerHTML = (serverPayload.latest || []).map(notificationMarkup).join('');
+    bindServerNotificationActions(container);
+    updateNotificationUi();
 }
 
 function renderExportNotifications() {
     const container = document.querySelector('[data-export-notifications]');
-    const emptyState = document.querySelector('[data-notification-empty]');
 
     if (!container) {
         return;
@@ -146,7 +221,6 @@ function renderExportNotifications() {
 
     const items = readExportNotifications();
     writeExportNotifications(items);
-
     container.innerHTML = items.map(exportNotificationMarkup).join('');
 
     container.querySelectorAll('[data-export-notification-id]').forEach((link) => {
@@ -155,15 +229,179 @@ function renderExportNotifications() {
         });
     });
 
-    if (emptyState && items.length > 0) {
-        emptyState.style.display = 'none';
+    updateNotificationUi();
+}
+
+function bindServerNotificationActions(container = document) {
+    container.querySelectorAll('[data-notification-link]').forEach((link) => {
+        link.addEventListener('click', async (event) => {
+            if (link.dataset.notificationUnread !== '1') {
+                return;
+            }
+
+            event.preventDefault();
+            const destination = link.href;
+
+            try {
+                const response = await apiPost('/api/notifications/read', {
+                    key: link.dataset.notificationKey,
+                });
+                applyServerPayload(response.data);
+            } catch (error) {
+                // Reading state must not block navigation to the ticket/message.
+            }
+
+            window.location.href = destination;
+        });
+    });
+
+    container.querySelectorAll('[data-notification-dismiss]').forEach((button) => {
+        button.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            button.disabled = true;
+
+            try {
+                const response = await apiPost('/api/notifications/dismiss', {
+                    key: button.dataset.notificationDismiss,
+                });
+                applyServerPayload(response.data);
+            } catch (error) {
+                button.disabled = false;
+            }
+        });
+    });
+}
+
+function updateNotificationUi() {
+    const exports = readExportNotifications();
+    const exportCount = exports.length;
+    const serverUnread = Number(serverPayload.unread_count || 0);
+    const actionCount = Number(serverPayload.action_count || 0);
+    const unreadCount = serverUnread + exportCount;
+    const badge = document.querySelector('[data-notification-count]');
+    const actionIndicator = document.querySelector('[data-notification-action-indicator]');
+    const summary = document.querySelector('[data-notification-summary]');
+    const readAllButton = document.querySelector('[data-notification-read-all]');
+    const emptyState = document.querySelector('[data-notification-empty]');
+    const hasServerItems = Number(serverPayload.total_count || 0) > 0 || (serverPayload.latest || []).length > 0;
+
+    if (badge) {
+        badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+        badge.classList.toggle('hidden', unreadCount <= 0);
+        badge.dataset.baseCount = String(serverUnread);
     }
 
-    updateNotificationCount(items.length);
+    if (actionIndicator) {
+        actionIndicator.classList.toggle('hidden', actionCount <= 0 || unreadCount > 0);
+    }
+
+    if (summary) {
+        summary.textContent = `${unreadCount} unread · ${actionCount} need action`;
+    }
+
+    if (readAllButton) {
+        readAllButton.classList.toggle('hidden', unreadCount <= 0);
+    }
+
+    if (emptyState) {
+        emptyState.classList.toggle('hidden', hasServerItems || exportCount > 0);
+    }
+}
+
+function applyServerPayload(payload) {
+    if (!payload || typeof payload !== 'object') {
+        return;
+    }
+
+    serverPayload = {
+        unread_count: Number(payload.unread_count || payload.count || 0),
+        action_count: Number(payload.action_count || 0),
+        total_count: Number(payload.total_count || 0),
+        latest: Array.isArray(payload.latest) ? payload.latest : [],
+    };
+
+    renderServerNotifications();
+}
+
+async function refreshNotifications() {
+    if (!document.querySelector('[data-notification-root]')) {
+        return null;
+    }
+
+    if (refreshPromise) {
+        return refreshPromise;
+    }
+
+    refreshPromise = apiGet('/api/notifications?limit=7')
+        .then((response) => {
+            applyServerPayload(response.data);
+            return response.data;
+        })
+        .catch(() => null)
+        .finally(() => {
+            refreshPromise = null;
+        });
+
+    return refreshPromise;
+}
+
+async function markAllAsRead() {
+    const button = document.querySelector('[data-notification-read-all]');
+
+    if (button) {
+        button.disabled = true;
+    }
+
+    try {
+        const response = await apiPost('/api/notifications/read-all');
+        writeExportNotifications([]);
+        applyServerPayload(response.data);
+        renderExportNotifications();
+    } catch (error) {
+        if (button) {
+            button.disabled = false;
+        }
+    }
+}
+
+function initializeNotifications() {
+    const root = document.querySelector('[data-notification-root]');
+
+    if (!root) {
+        return;
+    }
+
+    serverPayload.unread_count = Number(root.dataset.initialUnread || 0);
+    serverPayload.action_count = Number(root.dataset.initialActions || 0);
+    serverPayload.total_count = document.querySelectorAll('[data-server-notifications] [data-notification-item]').length;
+
+    bindServerNotificationActions(document.querySelector('[data-server-notifications]') || document);
+    renderExportNotifications();
+
+    document.querySelector('[data-notification-toggle]')?.addEventListener('click', () => {
+        refreshNotifications();
+    });
+
+    document.querySelector('[data-notification-read-all]')?.addEventListener('click', markAllAsRead);
+
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            refreshNotifications();
+        }
+    });
+
+    window.setInterval(() => {
+        if (!document.hidden) {
+            refreshNotifications();
+        }
+    }, REFRESH_INTERVAL_MS);
+
+    refreshNotifications();
 }
 
 window.addEventListener('henan:export-ready', (event) => {
     addExportNotification(event.detail || {});
 });
 
-document.addEventListener('DOMContentLoaded', renderExportNotifications);
+document.addEventListener('DOMContentLoaded', initializeNotifications);

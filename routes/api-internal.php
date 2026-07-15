@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\DashboardApiController;
 use App\Http\Controllers\Api\NavigationApiController;
+use App\Http\Controllers\Api\NotificationApiController;
 use App\Http\Controllers\Api\TicketApiController;
 use App\Http\Controllers\Api\ClientApiController;
 use App\Http\Controllers\Api\ITQueueApiController;
@@ -40,6 +41,12 @@ Route::middleware(['web', 'auth', 'active', 'throttle:120,1'])->group(function (
 
     // Navigation Data
     Route::get('/navigation', [NavigationApiController::class, 'index']);
+
+    // Notifications
+    Route::get('/notifications', [NotificationApiController::class, 'index']);
+    Route::post('/notifications/read-all', [NotificationApiController::class, 'markAllAsRead']);
+    Route::post('/notifications/read', [NotificationApiController::class, 'markAsRead']);
+    Route::post('/notifications/dismiss', [NotificationApiController::class, 'dismiss']);
 
     // Sidebar stats
     Route::get('/sidebar', [DashboardApiController::class, 'index']);
