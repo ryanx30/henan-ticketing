@@ -24,14 +24,28 @@
 </head>
 
 <body class="font-sans antialiased overflow-hidden">
+    <?php
+        $authenticatedUser = auth()->user();
+        $sidebarNavigationService = app(\App\Services\Navigation\SidebarNavigationService::class);
+        $sidebarBadgeCounts = $sidebarNavigationService->badgeCountsFor($authenticatedUser);
+        $visibleMenuGroups = $sidebarNavigationService->groupsForUser($authenticatedUser, $sidebarBadgeCounts);
+        $mobileMenus = $sidebarNavigationService->flatForUser($authenticatedUser, $sidebarBadgeCounts);
+    ?>
+
     <div class="h-screen min-h-screen flex overflow-hidden">
 
         
-        <?php echo $__env->make('partials.sidebar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+        <?php echo $__env->make('partials.sidebar', [
+            'user' => $authenticatedUser,
+            'visibleMenuGroups' => $visibleMenuGroups,
+        ], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
         
         <div class="min-w-0 flex-1 flex flex-col h-screen overflow-hidden">
-            <?php echo $__env->make('layouts.navigation', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+            <?php echo $__env->make('layouts.navigation', [
+                'user' => $authenticatedUser,
+                'mobileMenus' => $mobileMenus,
+            ], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
             
             <main class="min-w-0 flex-1 overflow-y-auto bg-gray-100">

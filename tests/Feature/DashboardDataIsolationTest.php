@@ -9,7 +9,9 @@ use App\Models\ResolverMessage;
 use App\Models\Team;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Services\Dashboard\DashboardPayloadService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Tests\TestCase;
 
 class DashboardDataIsolationTest extends TestCase
@@ -68,6 +70,27 @@ class DashboardDataIsolationTest extends TestCase
             ->getJson('/api/tickets/' . $otherTicket->id);
 
         $detailResponse->assertOk()->assertJsonPath('success', true);
+    }
+
+    public function test_dashboard_growth_is_labeled_new_when_previous_period_is_zero(): void
+    {
+        $cs = User::factory()->create(['role' => User::ROLE_CS]);
+
+        $this->makeTicket([
+            'created_by' => $cs->id,
+            'title' => 'First ticket in the comparison period',
+        ]);
+
+        $request = Request::create('/api/dashboard', 'GET');
+        $request->setUserResolver(fn () => $cs);
+
+        $payload = app(DashboardPayloadService::class)->make($request);
+        $growth = $payload['kpi']['total']['mom'];
+
+        $this->assertSame(0, $payload['kpi']['total']['prev_month']);
+        $this->assertNull($growth['value']);
+        $this->assertSame('New', $growth['label']);
+        $this->assertSame('new', $growth['direction']);
     }
 
     public function test_resolver_inbox_preview_is_scoped_to_message_participants(): void

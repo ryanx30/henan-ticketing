@@ -263,16 +263,7 @@
                                 </a>
                             </div>
 
-                            <div class="mt-4 text-md font-semibold">Quick Actions:</div>
-
-                            <div class="mt-2 flex flex-wrap gap-2">
-                                <a
-                                    x-show="!isSupervisor()"
-                                    href="{{ route('tickets.create') }}"
-                                    class="rounded border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm transition duration-200 hover:border-slate-900 hover:bg-slate-900 hover:text-white hover:shadow-md">
-                                    + Create Ticket
-                                </a>
-                            </div>
+                            @include('dashboard.partials.quick-actions', ['class' => 'mt-4'])
                         </div>
 
                         @include('dashboard.partials.cs-my-tickets')

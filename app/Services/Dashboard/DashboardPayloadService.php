@@ -29,33 +29,6 @@ class DashboardPayloadService
         $prevYearMonthStart = now()->copy()->subYear()->startOfMonth();
         $prevYearMonthEnd   = now()->copy()->subYear()->endOfMonth();
 
-        $calcGrowth = function ($current, $previous) {
-            if ((int) $previous === 0) {
-                if ((int) $current === 0) {
-                    return [
-                        'value'     => 0,
-                        'label'     => '0%',
-                        'direction' => 'flat',
-                    ];
-                }
-
-                return [
-                    'value'     => 100,
-                    'label'     => '+100%',
-                    'direction' => 'up',
-                ];
-            }
-
-            $diff    = (($current - $previous) / $previous) * 100;
-            $rounded = round($diff, 1);
-
-            return [
-                'value'     => $rounded,
-                'label'     => ($rounded > 0 ? '+' : '') . $rounded . '%',
-                'direction' => $rounded > 0 ? 'up' : ($rounded < 0 ? 'down' : 'flat'),
-            ];
-        };
-
         // ===== KPI Aggregate =====
         $now = now();
         $resolvedWindowStart = $now->copy()->subDay();
@@ -107,17 +80,17 @@ class DashboardPayloadService
         $slaRiskPrevYear = $previousYearKpi['sla_risk'];
 
         // ===== Growth =====
-        $totalMoM      = $calcGrowth($total, $totalPrevMonth);
-        $newMoM        = $calcGrowth($new, $newPrevMonth);
-        $inProgressMoM = $calcGrowth($inProgress, $inProgressPrevMonth);
-        $resolvedMoM   = $calcGrowth($resolved, $resolvedPrevMonth);
-        $slaRiskMoM    = $calcGrowth($slaRisk, $slaRiskPrevMonth);
+        $totalMoM      = $this->calculateGrowth($total, $totalPrevMonth);
+        $newMoM        = $this->calculateGrowth($new, $newPrevMonth);
+        $inProgressMoM = $this->calculateGrowth($inProgress, $inProgressPrevMonth);
+        $resolvedMoM   = $this->calculateGrowth($resolved, $resolvedPrevMonth);
+        $slaRiskMoM    = $this->calculateGrowth($slaRisk, $slaRiskPrevMonth);
 
-        $totalYoY      = $calcGrowth($total, $totalPrevYear);
-        $newYoY        = $calcGrowth($new, $newPrevYear);
-        $inProgressYoY = $calcGrowth($inProgress, $inProgressPrevYear);
-        $resolvedYoY   = $calcGrowth($resolved, $resolvedPrevYear);
-        $slaRiskYoY    = $calcGrowth($slaRisk, $slaRiskPrevYear);
+        $totalYoY      = $this->calculateGrowth($total, $totalPrevYear);
+        $newYoY        = $this->calculateGrowth($new, $newPrevYear);
+        $inProgressYoY = $this->calculateGrowth($inProgress, $inProgressPrevYear);
+        $resolvedYoY   = $this->calculateGrowth($resolved, $resolvedPrevYear);
+        $slaRiskYoY    = $this->calculateGrowth($slaRisk, $slaRiskPrevYear);
 
         // ===== Today's Focus =====
         $focusAggregate = $this->ticketFocusAggregate($now);
@@ -325,6 +298,36 @@ class DashboardPayloadService
                 'compliance' => $trendCompliance,
             ],
             'top_cases' => $topCases,
+        ];
+    }
+
+    /**
+     * Calculates dashboard growth without presenting an undefined percentage when the baseline is zero.
+     */
+    private function calculateGrowth(int $current, int $previous): array
+    {
+        if ($previous === 0) {
+            if ($current === 0) {
+                return [
+                    'value'     => 0,
+                    'label'     => '0%',
+                    'direction' => 'flat',
+                ];
+            }
+
+            return [
+                'value'     => null,
+                'label'     => 'New',
+                'direction' => 'new',
+            ];
+        }
+
+        $rounded = round((($current - $previous) / $previous) * 100, 1);
+
+        return [
+            'value'     => $rounded,
+            'label'     => ($rounded > 0 ? '+' : '') . $rounded . '%',
+            'direction' => $rounded > 0 ? 'up' : ($rounded < 0 ? 'down' : 'flat'),
         ];
     }
 

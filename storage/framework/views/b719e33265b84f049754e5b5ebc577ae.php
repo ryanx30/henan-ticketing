@@ -1,8 +1,17 @@
-{{-- ========= CREATE TICKET SHELL ========= --}}
-{{-- Structured ticket creation form; dynamic lookup, checklist, similar tickets, and submission live in JavaScript. --}}
 
-<x-app-layout>
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+
+
+<?php if (isset($component)) { $__componentOriginal9ac128a9029c0e4701924bd2d73d7f54 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal9ac128a9029c0e4701924bd2d73d7f54 = $attributes; } ?>
+<?php $component = App\View\Components\AppLayout::resolve([] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('app-layout'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\App\View\Components\AppLayout::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes([]); ?>
+    <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
     <style>
         [x-cloak] {
             display: none !important;
@@ -14,7 +23,7 @@
         x-init="init()"
         class="min-h-screen bg-[#eef1f5] px-8 py-7">
         <div class="mx-auto grid w-full max-w-[1600px] grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-            {{-- MAIN FORM --}}
+            
             <div class="rounded bg-white p-6 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
                 <div id="page-alert" class="hidden mb-4 rounded p-3 text-sm"></div>
 
@@ -28,7 +37,7 @@
                     <h1 class="text-[30px] font-bold text-slate-900">CREATE TICKET</h1>
                 </div>
 
-                {{-- CLIENT CONTACT --}}
+                
                 <div class="mb-4 overflow-visible rounded-md border border-slate-200 bg-white shadow-sm">
                     <button
                         type="button"
@@ -132,7 +141,7 @@
                     </div>
                 </div>
 
-                {{-- ISSUE SUMMARY --}}
+                
                 <div class="mb-4 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
                     <button
                         type="button"
@@ -165,7 +174,7 @@
                     </div>
                 </div>
 
-                {{-- CLASSIFICATION & ROUTING --}}
+                
                 <div class="mb-4 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
                     <button
                         type="button"
@@ -254,7 +263,7 @@
                     </div>
                 </div>
 
-                {{-- DETAILS --}}
+                
                 <div class="mb-4 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
                     <button
                         type="button"
@@ -302,7 +311,7 @@
                     </div>
                 </div>
 
-                {{-- NOTES & ATTACHMENTS --}}
+                
                 <div class="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
                     <button
                         type="button"
@@ -346,7 +355,7 @@
                     </div>
                 </div>
 
-                {{-- SUBMIT ACTION --}}
+                
                 <div class="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-5">
                     <button
                         type="button"
@@ -366,9 +375,9 @@
                 </div>
             </div>
 
-            {{-- RIGHT SIDEBAR --}}
+            
             <div class="space-y-4">
-                {{-- ROUTING PREVIEW --}}
+                
                 <div class="rounded border border-slate-200 bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
                     <div class="mb-3 text-xs font-bold text-slate-900">
                         ROUTING PREVIEW <span class="text-red-500">(Live)</span>
@@ -403,7 +412,7 @@
                     </div>
                 </div>
 
-                {{-- SLA PREVIEW --}}
+                
                 <div class="rounded border border-slate-200 bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
                     <div class="mb-3 text-xs font-bold text-slate-900">SLA PREVIEW</div>
 
@@ -415,7 +424,7 @@
                     </div>
                 </div>
 
-                {{-- REQUIRED CHECKLIST --}}
+                
                 <div class="rounded border border-slate-200 bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
                     <div class="mb-3 text-xs font-bold text-slate-900">
                         REQUIRED CHECKLIST <span class="text-red-500">(Live)</span>
@@ -451,7 +460,7 @@
                     </div>
                 </div>
 
-                {{-- SIMILAR / DUPLICATE --}}
+                
                 <div class="rounded border border-slate-200 bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
                     <div class="mb-3 text-xs font-bold text-slate-900">SIMILAR / DUPLICATE <span class="text-slate-500">(Auto)</span></div>
 
@@ -493,7 +502,7 @@
                     </div>
                 </div>
 
-                {{-- CLIENT HISTORY --}}
+                
                 <div class="rounded border border-slate-200 bg-white p-4 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
                     <div class="mb-3 text-xs font-bold text-slate-900">CLIENT HISTORY <span class="text-slate-500">(Auto)</span></div>
 
@@ -550,7 +559,7 @@
         </div>
 
 
-        {{-- DISCARD DRAFT CONFIRMATION --}}
+        
         <template x-teleport="body">
             <div
                 x-cloak
@@ -692,4 +701,13 @@
         </template>
     </div>
 
-</x-app-layout>
+ <?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal9ac128a9029c0e4701924bd2d73d7f54)): ?>
+<?php $attributes = $__attributesOriginal9ac128a9029c0e4701924bd2d73d7f54; ?>
+<?php unset($__attributesOriginal9ac128a9029c0e4701924bd2d73d7f54); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal9ac128a9029c0e4701924bd2d73d7f54)): ?>
+<?php $component = $__componentOriginal9ac128a9029c0e4701924bd2d73d7f54; ?>
+<?php unset($__componentOriginal9ac128a9029c0e4701924bd2d73d7f54); ?>
+<?php endif; ?><?php /**PATH C:\laragon\www\henan-ticketing\resources\views/tickets/create.blade.php ENDPATH**/ ?>

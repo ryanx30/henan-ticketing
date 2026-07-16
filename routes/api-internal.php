@@ -41,6 +41,7 @@ Route::middleware(['web', 'auth', 'active', 'throttle:120,1'])->group(function (
 
     // Navigation Data
     Route::get('/navigation', [NavigationApiController::class, 'index']);
+    Route::get('/navigation/sidebar-badges', [NavigationApiController::class, 'sidebarBadges']);
 
     // Notifications
     Route::get('/notifications', [NotificationApiController::class, 'index']);

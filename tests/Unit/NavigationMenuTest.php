@@ -17,29 +17,29 @@ class NavigationMenuTest extends TestCase
             'new-ticket',
             'tickets',
             'resolver-inbox',
-            'reports',
-            'case-analytics',
             'my-queue',
             'team-queue',
             'history',
+            'reports',
+            'case-analytics',
             'users',
             'master-data',
             'audit-logs',
         ], $keys);
     }
 
-    public function test_supervisor_can_see_everything_except_users_and_audit_logs(): void
+    public function test_supervisor_menu_matches_read_and_monitoring_access(): void
     {
         $keys = $this->menuKeysForRole(User::ROLE_SUPERVISOR);
 
-        $this->assertContains('new-ticket', $keys);
+        $this->assertNotContains('new-ticket', $keys);
         $this->assertContains('my-queue', $keys);
         $this->assertContains('master-data', $keys);
         $this->assertNotContains('users', $keys);
         $this->assertNotContains('audit-logs', $keys);
     }
 
-    public function test_cs_menu_is_limited_to_operational_pages(): void
+    public function test_cs_menu_is_limited_to_operational_and_reporting_pages(): void
     {
         $this->assertSame([
             'dashboard',
@@ -55,18 +55,39 @@ class NavigationMenuTest extends TestCase
         $this->assertSame([
             'dashboard',
             'resolver-inbox',
-            'reports',
-            'case-analytics',
             'my-queue',
             'team-queue',
             'history',
+            'reports',
+            'case-analytics',
+            'users',
+            'master-data',
+            'audit-logs',
         ], $this->menuKeysForRole(User::ROLE_IT));
+    }
+
+    public function test_menu_groups_follow_the_sidebar_information_architecture(): void
+    {
+        $groups = NavigationMenu::groupsForUser($this->userForRole(User::ROLE_ADMIN));
+
+        $this->assertSame([
+            'operations',
+            'work_management',
+            'insights',
+            'system_control',
+        ], array_keys($groups));
+
+        $this->assertSame('Reports & Insights', $groups['insights']['label']);
+        $this->assertSame(
+            ['reports', 'case-analytics'],
+            array_column($groups['insights']['items'], 'key')
+        );
     }
 
     public function test_menu_roles_can_be_reused_by_routes(): void
     {
-        $this->assertSame(['admin', 'supervisor', 'cs'], NavigationMenu::rolesFor('new-ticket'));
-        $this->assertSame('role:admin,supervisor,cs', NavigationMenu::roleMiddlewareFor('new-ticket'));
+        $this->assertSame(['admin', 'head_cs', 'cs'], NavigationMenu::rolesFor('new-ticket'));
+        $this->assertSame('role:admin,head_cs,cs', NavigationMenu::roleMiddlewareFor('new-ticket'));
 
         $this->assertSame(['admin', 'supervisor', 'it'], NavigationMenu::rolesFor('my-queue'));
         $this->assertSame('role:admin,supervisor,it', NavigationMenu::roleMiddlewareFor('my-queue'));
@@ -74,13 +95,16 @@ class NavigationMenuTest extends TestCase
 
     private function menuKeysForRole(string $role): array
     {
-        $user = new User([
+        return array_column(NavigationMenu::flatForUser($this->userForRole($role)), 'key');
+    }
+
+    private function userForRole(string $role): User
+    {
+        return new User([
             'name' => ucfirst($role),
             'email' => $role . '@example.test',
             'role' => $role,
             'is_active' => true,
         ]);
-
-        return array_column(NavigationMenu::flatForUser($user), 'key');
     }
 }

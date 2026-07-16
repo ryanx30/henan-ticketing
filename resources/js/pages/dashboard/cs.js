@@ -175,6 +175,8 @@ window.dashboardCsPage = function dashboardCsPage() {
 
         trendText(item) {
             if (!item) return '-';
+            if (item.direction === 'new') return item.label || 'New';
+
             const arrow = item.direction === 'up' ? '▲' : (item.direction === 'down' ? '▼' : '•');
             return `${item.label ?? '-'} ${arrow}`;
         },

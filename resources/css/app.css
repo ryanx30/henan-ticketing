@@ -234,3 +234,30 @@
   color: #334155 !important;
 }
 
+
+/*
+  SIDEBAR SCROLLBAR
+  --------------------------------------------------------------
+  Keeps long role-based menus discoverable without using a full-width scrollbar.
+*/
+.sidebar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}

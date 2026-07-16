@@ -7,6 +7,37 @@ import { apiGet, apiRequest } from '../../utils/apiClient';
 import { formatDateTime } from '../../utils/formatter';
 import { showAlert as showPageAlert } from '../../utils/toast';
 
+function createEmptyForm() {
+    return {
+        client_id: '',
+        client_name: '',
+        client_contact: '',
+        client_email: '',
+        title: '',
+        description: '',
+        priority_id: '',
+        team_id: '',
+        category_id: '',
+        issue_type_id: '',
+        platform_type: '',
+        amount: '',
+        flow_type: '',
+        request_time: '',
+        internal_notes: '',
+        attachment: null,
+    };
+}
+
+function createDefaultSections() {
+    return {
+        client: true,
+        summary: true,
+        routing: true,
+        details: true,
+        notes: true,
+    };
+}
+
 function createTicketPage() {
     const DRAFT_KEY = 'henan:create-ticket:draft:v1';
 
@@ -21,6 +52,7 @@ function createTicketPage() {
         attachmentName: '',
         draftRestored: false,
         draftWatchReady: false,
+        discardDraftModalOpen: false,
         similarTickets: [],
         clientSuggestions: [],
         clientHistory: [],
@@ -32,32 +64,9 @@ function createTicketPage() {
             priorities: [],
             slaRules: [],
         },
-        sections: {
-            client: true,
-            summary: true,
-            routing: true,
-            details: true,
-            notes: true,
-        },
+        sections: createDefaultSections(),
 
-        form: {
-            client_id: '',
-            client_name: '',
-            client_contact: '',
-            client_email: '',
-            title: '',
-            description: '',
-            priority_id: '',
-            team_id: '',
-            category_id: '',
-            issue_type_id: '',
-            platform_type: '',
-            amount: '',
-            flow_type: '',
-            request_time: '',
-            internal_notes: '',
-            attachment: null,
-        },
+        form: createEmptyForm(),
 
         async init() {
             await this.loadFormOptions();
@@ -203,11 +212,7 @@ function createTicketPage() {
                 this.master.priorities = result.data?.priorities || [];
                 this.master.slaRules = result.data?.sla_rules || [];
 
-                const defaultTeam = this.master.teams.find(item => (item.code || '').toLowerCase() === 'it') || this.master.teams[0];
-                const defaultPriority = this.master.priorities.find(item => (item.code || '').toLowerCase() === 'medium') || this.master.priorities[0];
-
-                this.form.team_id = defaultTeam ? String(defaultTeam.id) : '';
-                this.form.priority_id = defaultPriority ? String(defaultPriority.id) : '';
+                this.applyDefaultRouting();
             } catch (error) {
                 console.error(error);
                 this.showAlert(error.message || 'Failed to load ticket form options.', 'error');
@@ -557,6 +562,69 @@ function createTicketPage() {
             } catch (error) {
                 console.warn('Failed to clear ticket draft', error);
             }
+        },
+
+        applyDefaultRouting() {
+            const defaultTeam = this.master.teams.find(item => (
+                this.normalizeCode(item.code || item.name) === 'it'
+            )) || this.master.teams[0];
+
+            const defaultPriority = this.master.priorities.find(item => (
+                this.normalizeCode(item.code || item.name) === 'medium'
+            )) || this.master.priorities[0];
+
+            this.form.team_id = defaultTeam ? String(defaultTeam.id) : '';
+            this.form.priority_id = defaultPriority ? String(defaultPriority.id) : '';
+        },
+
+        openDiscardDraftModal() {
+            if (this.submitting) return;
+
+            this.discardDraftModalOpen = true;
+
+            this.$nextTick(() => {
+                this.$refs.discardDraftCancelButton?.focus();
+            });
+        },
+
+        closeDiscardDraftModal() {
+            if (this.submitting) return;
+
+            this.discardDraftModalOpen = false;
+        },
+
+        async discardDraft() {
+            if (this.submitting) return;
+
+            this.discardDraftModalOpen = false;
+            this.draftWatchReady = false;
+            this.form = createEmptyForm();
+            this.sections = createDefaultSections();
+            this.applyDefaultRouting();
+
+            this.attachmentName = '';
+            this.draftRestored = false;
+            this.selectedClient = null;
+            this.clientSuggestions = [];
+            this.clientHistory = [];
+            this.similarTickets = [];
+            this.issueTypes = [];
+            this.clientSuggestOpen = false;
+            this.clientSuggestLoading = false;
+            this.clientHistoryLoading = false;
+            this.similarLoading = false;
+            this.issueTypesLoading = false;
+
+            if (this.$refs.attachmentInput) {
+                this.$refs.attachmentInput.value = '';
+            }
+
+            this.clearDraft();
+
+            await this.$nextTick();
+
+            this.draftWatchReady = true;
+            this.showAlert('Ticket draft discarded.', 'success');
         },
 
         openSimilarTicket(item) {

@@ -194,6 +194,10 @@
             {{-- RIGHT MAIN --}}
             <div class="col-span-12 lg:col-span-9 space-y-6 bg-white rounded shadow p-4">
 
+                <div class="rounded border border-slate-200 bg-slate-50 p-4">
+                    @include('dashboard.partials.quick-actions')
+                </div>
+
                 {{-- Top Issue Types + Chart --}}
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 

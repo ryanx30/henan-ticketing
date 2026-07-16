@@ -24,14 +24,28 @@
 </head>
 
 <body class="font-sans antialiased overflow-hidden">
+    @php
+        $authenticatedUser = auth()->user();
+        $sidebarNavigationService = app(\App\Services\Navigation\SidebarNavigationService::class);
+        $sidebarBadgeCounts = $sidebarNavigationService->badgeCountsFor($authenticatedUser);
+        $visibleMenuGroups = $sidebarNavigationService->groupsForUser($authenticatedUser, $sidebarBadgeCounts);
+        $mobileMenus = $sidebarNavigationService->flatForUser($authenticatedUser, $sidebarBadgeCounts);
+    @endphp
+
     <div class="h-screen min-h-screen flex overflow-hidden">
 
         {{-- Sidebar --}}
-        @include('partials.sidebar')
+        @include('partials.sidebar', [
+            'user' => $authenticatedUser,
+            'visibleMenuGroups' => $visibleMenuGroups,
+        ])
 
         {{-- Main area --}}
         <div class="min-w-0 flex-1 flex flex-col h-screen overflow-hidden">
-            @include('layouts.navigation')
+            @include('layouts.navigation', [
+                'user' => $authenticatedUser,
+                'mobileMenus' => $mobileMenus,
+            ])
 
             {{-- Page Content --}}
             <main class="min-w-0 flex-1 overflow-y-auto bg-gray-100">

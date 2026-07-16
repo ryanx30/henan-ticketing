@@ -13,7 +13,8 @@ class NavigationMenu
 {
     private const GROUPS = [
         'operations' => 'Operations',
-        'it_monitoring' => 'IT Monitoring',
+        'work_management' => 'Work Management',
+        'insights' => 'Reports & Insights',
         'system_control' => 'System Control',
     ];
 
@@ -62,32 +63,12 @@ class NavigationMenu
             'active_patterns' => ['resolver-inbox', 'resolver-inbox/*'],
         ],
         [
-            'key' => 'reports',
-            'label' => 'Reports',
-            'path' => '/reports',
-            'route' => 'reports.index',
-            'icon' => 'reports',
-            'group' => 'operations',
-            'roles' => ['admin', 'supervisor', 'head_cs', 'cs', 'it'],
-            'active_patterns' => ['reports', 'reports/*'],
-        ],
-        [
-            'key' => 'case-analytics',
-            'label' => 'Case Analytics',
-            'path' => '/case-analytics',
-            'route' => 'case-analytics.index',
-            'icon' => 'analytics',
-            'group' => 'it_monitoring',
-            'roles' => ['admin', 'supervisor', 'it'],
-            'active_patterns' => ['case-analytics', 'case-analytics/*'],
-        ],
-        [
             'key' => 'my-queue',
             'label' => 'My Queue',
             'path' => '/it/my-queue',
             'route' => 'it.my-queue',
             'icon' => 'queue',
-            'group' => 'it_monitoring',
+            'group' => 'work_management',
             'roles' => ['admin', 'supervisor', 'it'],
             'active_patterns' => ['it/my-queue', 'it/my-queue/*'],
         ],
@@ -97,7 +78,7 @@ class NavigationMenu
             'path' => '/it/team-queue',
             'route' => 'it.team-queue',
             'icon' => 'team-queue',
-            'group' => 'it_monitoring',
+            'group' => 'work_management',
             'roles' => ['admin', 'supervisor', 'it'],
             'active_patterns' => ['it/team-queue', 'it/team-queue/*'],
         ],
@@ -107,9 +88,29 @@ class NavigationMenu
             'path' => '/it/history',
             'route' => 'it.history',
             'icon' => 'history',
-            'group' => 'it_monitoring',
+            'group' => 'work_management',
             'roles' => ['admin', 'supervisor', 'it'],
             'active_patterns' => ['it/history', 'it/history/*'],
+        ],
+        [
+            'key' => 'reports',
+            'label' => 'Reports',
+            'path' => '/reports',
+            'route' => 'reports.index',
+            'icon' => 'reports',
+            'group' => 'insights',
+            'roles' => ['admin', 'supervisor', 'head_cs', 'cs', 'it'],
+            'active_patterns' => ['reports', 'reports/*'],
+        ],
+        [
+            'key' => 'case-analytics',
+            'label' => 'Case Analytics',
+            'path' => '/case-analytics',
+            'route' => 'case-analytics.index',
+            'icon' => 'analytics',
+            'group' => 'insights',
+            'roles' => ['admin', 'supervisor', 'it'],
+            'active_patterns' => ['case-analytics', 'case-analytics/*'],
         ],
         [
             'key' => 'users',
@@ -181,7 +182,6 @@ class NavigationMenu
         ));
     }
 
-
     public static function rolesFor(string $key, array $fallback = []): array
     {
         foreach (self::ITEMS as $item) {
@@ -230,7 +230,6 @@ class NavigationMenu
         }
 
         $role = (string) ($user->role ?? '');
-
         $roles = $item['roles'] ?? [];
 
         if (! in_array($role, $roles, true)) {
