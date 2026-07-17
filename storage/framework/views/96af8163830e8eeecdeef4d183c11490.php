@@ -1,7 +1,16 @@
-{{-- ========= CS DASHBOARD SHELL ========= --}}
-{{-- Page shell for CS operational cards, active tickets, and resolver updates loaded by JavaScript. --}}
 
-<x-app-layout>
+
+
+<?php if (isset($component)) { $__componentOriginal9ac128a9029c0e4701924bd2d73d7f54 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal9ac128a9029c0e4701924bd2d73d7f54 = $attributes; } ?>
+<?php $component = App\View\Components\AppLayout::resolve([] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('app-layout'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\App\View\Components\AppLayout::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes([]); ?>
     <style>
         .dashboard-ticket-row {
             position: relative;
@@ -34,7 +43,7 @@
 
     <div
         id="dashboard-cs-page"
-        data-current-user-id="{{ auth()->id() }}"
+        data-current-user-id="<?php echo e(auth()->id()); ?>"
         x-data="dashboardCsPage()"
         x-init="init()"
         class="min-h-screen bg-slate-100 p-6">
@@ -43,11 +52,11 @@
 
         <div class="grid grid-cols-12 gap-6">
 
-            {{-- LEFT KPI COLUMN --}}
+            
             <div class="col-span-12 lg:col-span-3">
-                @include('dashboard.partials.kpi-cards')
+                <?php echo $__env->make('dashboard.partials.kpi-cards', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
-                {{-- Status Legend --}}
+                
                 <div class="mt-3 rounded-md border border-slate-200 bg-white p-4 shadow-lg">
                     <div class="mb-3 text-sm font-semibold text-slate-800">Status Legend</div>
 
@@ -80,12 +89,12 @@
                 </div>
             </div>
 
-            {{-- RIGHT MAIN COLUMN --}}
+            
             <div class="col-span-12 space-y-6 lg:col-span-9">
                 <div class="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
                     <div class="space-y-6">
 
-                        {{-- Today's Focus --}}
+                        
                         <div class="rounded bg-white p-4 shadow-lg">
                             <div class="mb-3 text-xl font-semibold">Today's Focus</div>
 
@@ -147,18 +156,18 @@
                                 </a>
                             </div>
 
-                            @include('dashboard.partials.quick-actions', ['class' => 'mt-4'])
+                            <?php echo $__env->make('dashboard.partials.quick-actions', ['class' => 'mt-4'], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
                         </div>
 
-                        @include('dashboard.partials.cs-my-tickets')
+                        <?php echo $__env->make('dashboard.partials.cs-my-tickets', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
-                        @include('dashboard.partials.cs-active-tickets')
+                        <?php echo $__env->make('dashboard.partials.cs-active-tickets', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
-                        @include('dashboard.partials.resolver-inbox-preview', [
+                        <?php echo $__env->make('dashboard.partials.resolver-inbox-preview', [
                             'title' => 'Resolver Update Inbox',
                             'subtitle' => 'Latest resolver conversations that need attention.',
                             'showTimeFilter' => true,
-                        ])
+                        ], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
                     </div>
                 </div>
@@ -168,4 +177,13 @@
     </div>
 
 
-</x-app-layout>
+ <?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal9ac128a9029c0e4701924bd2d73d7f54)): ?>
+<?php $attributes = $__attributesOriginal9ac128a9029c0e4701924bd2d73d7f54; ?>
+<?php unset($__attributesOriginal9ac128a9029c0e4701924bd2d73d7f54); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal9ac128a9029c0e4701924bd2d73d7f54)): ?>
+<?php $component = $__componentOriginal9ac128a9029c0e4701924bd2d73d7f54; ?>
+<?php unset($__componentOriginal9ac128a9029c0e4701924bd2d73d7f54); ?>
+<?php endif; ?><?php /**PATH C:\laragon\www\henan-ticketing\resources\views/dashboard-cs.blade.php ENDPATH**/ ?>

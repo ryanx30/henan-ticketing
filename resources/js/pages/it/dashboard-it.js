@@ -13,6 +13,7 @@ import {
 } from '../../utils/formatter';
 import { priorityBadgeClass as buildPriorityBadgeClass, statusBadgeClass as buildStatusBadgeClass } from '../../utils/badges';
 import { showPageAlert } from '../../utils/toast';
+import { formatKpiTrend, kpiTrendClass } from '../../utils/kpiIndicator';
 
 function dashboardItPage() {
     return {
@@ -21,7 +22,7 @@ function dashboardItPage() {
         chart: null,
 
         kpi: {
-            total: { value: 0, prev_month: 0, prev_year: 0, mom: {}, yoy: {} },
+            total: { value: 0, current_month: 0, prev_month: 0, prev_year: 0, mom: {}, yoy: {} },
             new: { value: 0, prev_month: 0, prev_year: 0, mom: {}, yoy: {} },
             in_progress: { value: 0, prev_month: 0, prev_year: 0, mom: {}, yoy: {} },
             resolved: { value: 0, prev_month: 0, prev_year: 0, mom: {}, yoy: {} },
@@ -218,11 +219,11 @@ function dashboardItPage() {
         },
 
         trendText(item) {
-            if (!item) return '-';
-            if (item.direction === 'new') return item.label || 'New';
+            return formatKpiTrend(item);
+        },
 
-            const arrow = item.direction === 'up' ? '▲' : (item.direction === 'down' ? '▼' : '•');
-            return `${item.label ?? '-'} ${arrow}`;
+        trendClass(item) {
+            return kpiTrendClass(item);
         },
         ticketLabel(ticket) {
             return window.HenanApp?.ticketLabel(ticket) ?? '-';

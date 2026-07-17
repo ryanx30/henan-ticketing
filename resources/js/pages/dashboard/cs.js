@@ -14,6 +14,7 @@ import {
 } from '../../utils/formatter';
 import { priorityBadgeClass as buildPriorityBadgeClass, statusBadgeClass as buildStatusBadgeClass } from '../../utils/badges';
 import { showPageAlert } from '../../utils/toast';
+import { formatKpiTrend, kpiTrendClass } from '../../utils/kpiIndicator';
 
 window.dashboardCsPage = function dashboardCsPage() {
     return {
@@ -23,6 +24,7 @@ window.dashboardCsPage = function dashboardCsPage() {
         kpi: {
             total: {
                 value: 0,
+                current_month: 0,
                 prev_month: 0,
                 prev_year: 0,
                 mom: {},
@@ -174,11 +176,11 @@ window.dashboardCsPage = function dashboardCsPage() {
         },
 
         trendText(item) {
-            if (!item) return '-';
-            if (item.direction === 'new') return item.label || 'New';
+            return formatKpiTrend(item);
+        },
 
-            const arrow = item.direction === 'up' ? '▲' : (item.direction === 'down' ? '▼' : '•');
-            return `${item.label ?? '-'} ${arrow}`;
+        trendClass(item) {
+            return kpiTrendClass(item);
         },
         ticketLabel(ticket) {
             return window.HenanApp?.ticketLabel(ticket) ?? '-';

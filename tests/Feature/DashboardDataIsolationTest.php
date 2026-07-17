@@ -72,7 +72,7 @@ class DashboardDataIsolationTest extends TestCase
         $detailResponse->assertOk()->assertJsonPath('success', true);
     }
 
-    public function test_dashboard_growth_is_labeled_new_when_previous_period_is_zero(): void
+    public function test_dashboard_uses_absolute_difference_when_previous_period_is_zero(): void
     {
         $cs = User::factory()->create(['role' => User::ROLE_CS]);
 
@@ -87,10 +87,12 @@ class DashboardDataIsolationTest extends TestCase
         $payload = app(DashboardPayloadService::class)->make($request);
         $growth = $payload['kpi']['total']['mom'];
 
+        $this->assertSame(1, $payload['kpi']['total']['current_month']);
         $this->assertSame(0, $payload['kpi']['total']['prev_month']);
-        $this->assertNull($growth['value']);
-        $this->assertSame('New', $growth['label']);
-        $this->assertSame('new', $growth['direction']);
+        $this->assertSame(1, $growth['value']);
+        $this->assertSame('+1', $growth['label']);
+        $this->assertSame('up', $growth['direction']);
+        $this->assertSame('neutral', $growth['sentiment']);
     }
 
     public function test_resolver_inbox_preview_is_scoped_to_message_participants(): void

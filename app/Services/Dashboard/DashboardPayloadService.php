@@ -16,6 +16,11 @@ use Illuminate\Support\Facades\DB;
  */
 class DashboardPayloadService
 {
+    public function __construct(
+        private readonly DashboardKpiComparisonService $kpiComparisonService
+    ) {
+    }
+
     public function make(Request $request): array
     {
         $role = $request->user()->role;
@@ -43,6 +48,15 @@ class DashboardPayloadService
             $slaRiskWindowEnd
         );
 
+        $currentMonthKpi = $this->ticketKpiAggregate(
+            $currentMonthStart,
+            $currentMonthEnd,
+            $currentMonthStart,
+            $currentMonthEnd,
+            $currentMonthStart,
+            $currentMonthEnd
+        );
+
         $previousMonthKpi = $this->ticketKpiAggregate(
             $prevMonthStart,
             $prevMonthEnd,
@@ -67,6 +81,7 @@ class DashboardPayloadService
         $resolved = $currentKpi['resolved'];
         $slaRisk = $currentKpi['sla_risk'];
 
+        $totalCurrentMonth = $currentMonthKpi['total'];
         $totalPrevMonth = $previousMonthKpi['total'];
         $newPrevMonth = $previousMonthKpi['new'];
         $inProgressPrevMonth = $previousMonthKpi['in_progress'];
@@ -79,18 +94,58 @@ class DashboardPayloadService
         $resolvedPrevYear = $previousYearKpi['resolved'];
         $slaRiskPrevYear = $previousYearKpi['sla_risk'];
 
-        // ===== Growth =====
-        $totalMoM      = $this->calculateGrowth($total, $totalPrevMonth);
-        $newMoM        = $this->calculateGrowth($new, $newPrevMonth);
-        $inProgressMoM = $this->calculateGrowth($inProgress, $inProgressPrevMonth);
-        $resolvedMoM   = $this->calculateGrowth($resolved, $resolvedPrevMonth);
-        $slaRiskMoM    = $this->calculateGrowth($slaRisk, $slaRiskPrevMonth);
+        // ===== Absolute comparison =====
+        $totalMoM = $this->kpiComparisonService->compare(
+            $total,
+            $totalPrevMonth,
+            DashboardKpiComparisonService::NEUTRAL
+        );
+        $newMoM = $this->kpiComparisonService->compare(
+            $new,
+            $newPrevMonth,
+            DashboardKpiComparisonService::NEUTRAL
+        );
+        $inProgressMoM = $this->kpiComparisonService->compare(
+            $inProgress,
+            $inProgressPrevMonth,
+            DashboardKpiComparisonService::LOWER_IS_BETTER
+        );
+        $resolvedMoM = $this->kpiComparisonService->compare(
+            $resolved,
+            $resolvedPrevMonth,
+            DashboardKpiComparisonService::HIGHER_IS_BETTER
+        );
+        $slaRiskMoM = $this->kpiComparisonService->compare(
+            $slaRisk,
+            $slaRiskPrevMonth,
+            DashboardKpiComparisonService::LOWER_IS_BETTER
+        );
 
-        $totalYoY      = $this->calculateGrowth($total, $totalPrevYear);
-        $newYoY        = $this->calculateGrowth($new, $newPrevYear);
-        $inProgressYoY = $this->calculateGrowth($inProgress, $inProgressPrevYear);
-        $resolvedYoY   = $this->calculateGrowth($resolved, $resolvedPrevYear);
-        $slaRiskYoY    = $this->calculateGrowth($slaRisk, $slaRiskPrevYear);
+        $totalYoY = $this->kpiComparisonService->compare(
+            $total,
+            $totalPrevYear,
+            DashboardKpiComparisonService::NEUTRAL
+        );
+        $newYoY = $this->kpiComparisonService->compare(
+            $new,
+            $newPrevYear,
+            DashboardKpiComparisonService::NEUTRAL
+        );
+        $inProgressYoY = $this->kpiComparisonService->compare(
+            $inProgress,
+            $inProgressPrevYear,
+            DashboardKpiComparisonService::LOWER_IS_BETTER
+        );
+        $resolvedYoY = $this->kpiComparisonService->compare(
+            $resolved,
+            $resolvedPrevYear,
+            DashboardKpiComparisonService::HIGHER_IS_BETTER
+        );
+        $slaRiskYoY = $this->kpiComparisonService->compare(
+            $slaRisk,
+            $slaRiskPrevYear,
+            DashboardKpiComparisonService::LOWER_IS_BETTER
+        );
 
         // ===== Today's Focus =====
         $focusAggregate = $this->ticketFocusAggregate($now);
@@ -245,8 +300,9 @@ class DashboardPayloadService
             'role' => $role,
             'kpi'  => [
                 'total' => [
-                    'value'      => $total,
-                    'prev_month' => $totalPrevMonth,
+                    'value'         => $total,
+                    'current_month' => $totalCurrentMonth,
+                    'prev_month'    => $totalPrevMonth,
                     'prev_year'  => $totalPrevYear,
                     'mom'        => $totalMoM,
                     'yoy'        => $totalYoY,
@@ -298,36 +354,6 @@ class DashboardPayloadService
                 'compliance' => $trendCompliance,
             ],
             'top_cases' => $topCases,
-        ];
-    }
-
-    /**
-     * Calculates dashboard growth without presenting an undefined percentage when the baseline is zero.
-     */
-    private function calculateGrowth(int $current, int $previous): array
-    {
-        if ($previous === 0) {
-            if ($current === 0) {
-                return [
-                    'value'     => 0,
-                    'label'     => '0%',
-                    'direction' => 'flat',
-                ];
-            }
-
-            return [
-                'value'     => null,
-                'label'     => 'New',
-                'direction' => 'new',
-            ];
-        }
-
-        $rounded = round((($current - $previous) / $previous) * 100, 1);
-
-        return [
-            'value'     => $rounded,
-            'label'     => ($rounded > 0 ? '+' : '') . $rounded . '%',
-            'direction' => $rounded > 0 ? 'up' : ($rounded < 0 ? 'down' : 'flat'),
         ];
     }
 

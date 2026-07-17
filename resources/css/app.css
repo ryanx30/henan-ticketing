@@ -37,6 +37,26 @@
 }
 
 /*
+  DASHBOARD KPI TRENDS
+  --------------------------------------------------------------
+  Colors represent the business impact of a KPI change, not only its direction.
+*/
+.kpi-trend-positive {
+    background-color: #dcfce7;
+    color: #15803d;
+}
+
+.kpi-trend-negative {
+    background-color: #fee2e2;
+    color: #b91c1c;
+}
+
+.kpi-trend-neutral {
+    background-color: #e2e8f0;
+    color: #334155;
+}
+
+/*
   GLOBAL BADGES
   --------------------------------------------------------------
   This section defines the base styles for all badges, 
